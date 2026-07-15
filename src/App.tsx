@@ -7,6 +7,7 @@ import {
   initialInvoices
 } from './data';
 import Registration from './components/Registration';
+import Homepage from './components/Homepage';  // <--- new import
 import Sidebar from './components/Sidebar';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
@@ -66,6 +67,9 @@ export default function App() {
   const [notificationCount, setNotificationCount] = useState(3);
   const [showNotificationList, setShowNotificationList] = useState(false);
 
+  // NEW: controls whether to show the authentication screens (login/register)
+  const [showAuth, setShowAuth] = useState(false);
+
   // --- 2. Persist State Changes in LocalStorage ---
   useEffect(() => {
     if (currentUser) {
@@ -107,11 +111,14 @@ export default function App() {
     setCurrentUser(newUser);
     // Set appropriate starting tab based on role
     setActiveTab(role === 'admin' ? 'reports' : 'payslips');
+    // If we came from homepage, hide auth screen
+    setShowAuth(false);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
+    setShowAuth(false); // go back to homepage on logout
   };
 
   // Demo bypass/toggle to let the user preview different screens immediately
@@ -273,9 +280,12 @@ export default function App() {
     }
   };
 
-  // --- 5. Unauthenticated State Render ---
+  // --- 5. Unauthenticated State Render (UPDATED) ---
   if (!currentUser) {
-    return <Registration onLogin={handleLogin} />;
+    if (showAuth) {
+      return <Registration onLogin={handleLogin} onBackHome={() => setShowAuth(false)} />;
+    }
+    return <Homepage onLoginClick={() => setShowAuth(true)} />;
   }
 
   // --- 6. Authenticated Shell Render ---

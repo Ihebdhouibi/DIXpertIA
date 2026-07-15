@@ -5,11 +5,12 @@ import { UserRole } from '../types';
 
 interface RegistrationProps {
   onLogin: (role: UserRole, email: string, firstName: string, lastName: string) => void;
+  onBackHome?: () => void;   // <--- new optional prop
 }
 
 type AuthScreen = 'register' | 'login' | 'forgot-password';
 
-export default function Registration({ onLogin }: RegistrationProps) {
+export default function Registration({ onLogin, onBackHome }: RegistrationProps) {
   const [screen, setScreen] = useState<AuthScreen>('register');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -145,7 +146,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                 </div>
 
                 <div className="flex gap-4">
-                  {/* First Name */}
                   <div className="flex flex-col gap-1.5 flex-1">
                     <label className="text-xs font-medium text-on-surface-variant" htmlFor="firstName">First name</label>
                     <div className="relative">
@@ -162,8 +162,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                       />
                     </div>
                   </div>
-                  
-                  {/* Last Name */}
                   <div className="flex flex-col gap-1.5 flex-1">
                     <label className="text-xs font-medium text-on-surface-variant" htmlFor="lastName">Last name</label>
                     <div className="relative">
@@ -182,7 +180,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   </div>
                 </div>
 
-                {/* Email */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-on-surface-variant" htmlFor="email">Email</label>
                   <div className="relative">
@@ -200,7 +197,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   </div>
                 </div>
 
-                {/* Password */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-on-surface-variant" htmlFor="password">Password</label>
                   <div className="relative">
@@ -219,7 +215,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   <p className="text-xs text-outline">Must be at least 8 characters.</p>
                 </div>
 
-                {/* Submit Button */}
                 <button
                   className="mt-4 w-full bg-primary hover:bg-primary/95 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   type="submit"
@@ -229,8 +224,16 @@ export default function Registration({ onLogin }: RegistrationProps) {
                 </button>
               </form>
 
-              {/* Footer Links */}
+              {/* Footer Links with Back to Home */}
               <div className="text-center mt-2 pt-4 border-t border-outline-variant/30">
+                {onBackHome && (
+                  <button
+                    onClick={onBackHome}
+                    className="block mb-2 text-body-sm text-outline hover:text-primary transition-colors cursor-pointer"
+                  >
+                    ← Back to Home
+                  </button>
+                )}
                 <p className="text-body-sm text-on-surface-variant">
                   Already have an account?{' '}
                   <button
@@ -257,16 +260,13 @@ export default function Registration({ onLogin }: RegistrationProps) {
             <div className="h-2 w-full bg-primary"></div>
             <div className="p-8 flex flex-col gap-6">
 
-              {/* Header */}
               <div className="text-center">
                 <div className="font-sans text-h2 font-black text-primary tracking-tight mb-2">DIXpertIA</div>
                 <h1 className="font-sans text-h1 text-on-surface font-semibold">Sign In</h1>
                 <p className="text-body-sm text-on-surface-variant mt-2">Access your employee portal dashboard.</p>
               </div>
 
-              {/* Form */}
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                {/* Email */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-on-surface-variant" htmlFor="loginEmail">Email Address</label>
                   <div className="relative">
@@ -283,7 +283,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   </div>
                 </div>
 
-                {/* Password */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-medium text-on-surface-variant" htmlFor="loginPassword">Password</label>
@@ -309,7 +308,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <button
                   className="mt-4 w-full bg-primary hover:bg-primary/95 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   type="submit"
@@ -319,8 +317,16 @@ export default function Registration({ onLogin }: RegistrationProps) {
                 </button>
               </form>
 
-              {/* Footer Links */}
+              {/* Footer Links with Back to Home */}
               <div className="text-center mt-2 pt-4 border-t border-outline-variant/30">
+                {onBackHome && (
+                  <button
+                    onClick={onBackHome}
+                    className="block mb-2 text-body-sm text-outline hover:text-primary transition-colors cursor-pointer"
+                  >
+                    ← Back to Home
+                  </button>
+                )}
                 <p className="text-body-sm text-on-surface-variant">
                   Don't have an account?{' '}
                   <button
@@ -348,9 +354,7 @@ export default function Registration({ onLogin }: RegistrationProps) {
             <div className="p-8">
               
               {!resetSent ? (
-                /* Request Form State */
                 <div className="flex flex-col gap-6">
-                  {/* Brand / Logo */}
                   <div className="text-center">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-container text-primary mb-4 shadow-sm">
                       <Lock className="w-6 h-6" />
@@ -385,7 +389,6 @@ export default function Registration({ onLogin }: RegistrationProps) {
                   </form>
                 </div>
               ) : (
-                /* Success State */
                 <div className="text-center space-y-6 py-4">
                   <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-secondary-fixed/30 text-secondary mb-4">
                     <CheckCircle className="w-10 h-10 text-[#137333]" />
@@ -416,8 +419,16 @@ export default function Registration({ onLogin }: RegistrationProps) {
                 </div>
               )}
 
-              {/* Back to login */}
+              {/* Back to login / Home */}
               <div className="mt-8 pt-6 border-t border-outline-variant/30 text-center">
+                {onBackHome && (
+                  <button
+                    onClick={onBackHome}
+                    className="block mb-2 text-body-sm text-outline hover:text-primary transition-colors cursor-pointer"
+                  >
+                    ← Back to Home
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setResetSent(false);
