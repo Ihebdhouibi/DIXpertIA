@@ -1,0 +1,6 @@
+{
+  "name": "DIXpertIA Employee Portal",
+  "description": "Portail d'employés DIXpertIA pour la gestion des fiches de paie, demandes de congés, factures et gestion d'équipe.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
