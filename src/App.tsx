@@ -14,7 +14,8 @@ import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
-import ProjectsView from './components/ProjectsView'; // NEW
+import ProjectsView from './components/ProjectsView';
+import DashboardView from './components/DashboardView'; // NEW
 import { 
   Bell, 
   Menu, 
@@ -62,19 +63,20 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialInvoices;
   });
 
-  // --- Projects state ---
   const [projects, setProjects] = useState<Project[]>(() => {
     const saved = localStorage.getItem('dixpertia_projects');
     return saved ? JSON.parse(saved) : initialProjects;
   });
 
+  // Default active tab: dashboard
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = localStorage.getItem('dixpertia_user');
     if (savedUser) {
       const parsed: User = JSON.parse(savedUser);
-      return parsed.role === 'admin' ? 'reports' : 'payslips';
+      // Use dashboard as default for all users
+      return 'dashboard';
     }
-    return 'payslips';
+    return 'dashboard';
   });
 
   const [isOpenMobile, setIsOpenMobile] = useState(false);
@@ -146,7 +148,6 @@ export default function App() {
     localStorage.setItem('dixpertia_invoices', JSON.stringify(invoices));
   }, [invoices]);
 
-  // --- Persist projects ---
   useEffect(() => {
     localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
   }, [projects]);
@@ -165,7 +166,7 @@ export default function App() {
         : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
     };
     setCurrentUser(newUser);
-    setActiveTab(role === 'admin' ? 'reports' : 'payslips');
+    setActiveTab('dashboard'); // default to dashboard
     setShowAuth(false);
   };
 
@@ -190,10 +191,10 @@ export default function App() {
         : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
     };
     setCurrentUser(updatedUser);
-    setActiveTab(toggledRole === 'admin' ? 'reports' : 'payslips');
+    setActiveTab('dashboard');
   };
 
-  // --- Leave request handlers (with notifications) ---
+  // --- Leave request handlers ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -256,7 +257,7 @@ export default function App() {
     }
   };
 
-  // --- Other handlers ---
+  // --- Employee & Invoice handlers (unchanged) ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -297,7 +298,6 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setProjects([newProject, ...projects]);
-    // Optionally notify admin
     addNotification(
       `New project "${newProject.name}" created`,
       'success',
@@ -332,6 +332,26 @@ export default function App() {
     }
   };
 
+  // --- Dashboard quick actions ---
+  const handleQuickAction = (action: string) => {
+    switch (action) {
+      case 'approve-leaves':
+        setActiveTab('team');
+        break;
+      case 'create-invoice':
+        setActiveTab('reports');
+        break;
+      case 'add-project':
+        setActiveTab('projects');
+        break;
+      case 'download-payslip':
+        setActiveTab('payslips');
+        break;
+      default:
+        break;
+    }
+  };
+
   const handleGoHome = () => setShowHomepage(true);
   const handleGoToDashboard = () => setShowHomepage(false);
 
@@ -340,6 +360,23 @@ export default function App() {
     if (!currentUser) return null;
 
     switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardView
+            user={currentUser}
+            projects={projects}
+            invoices={invoices}
+            leaveRequests={leaveRequests}
+            teamMembers={teamMembers}
+            notifications={notifications}
+            onNavigate={(tab: string) => {
+              setActiveTab(tab);
+              setShowNotificationList(false);
+            }}
+            onQuickAction={handleQuickAction}
+          />
+        );
+
       case 'payslips':
         if (currentUser.role === 'admin') {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
@@ -369,7 +406,7 @@ export default function App() {
           />
         );
       
-      case 'projects':  // NEW
+      case 'projects':
         return (
           <ProjectsView
             projects={projects}
@@ -393,10 +430,10 @@ export default function App() {
                 The interactive module <strong className="text-primary">{activeTab}</strong> is currently in secure deployment testing.
               </p>
               <button
-                onClick={() => setActiveTab(currentUser.role === 'admin' ? 'reports' : 'payslips')}
+                onClick={() => setActiveTab('dashboard')}
                 className="bg-primary text-white font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
               >
-                Back to Active Features
+                Back to Dashboard
               </button>
             </div>
           </div>

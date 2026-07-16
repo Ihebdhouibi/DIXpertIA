@@ -35,7 +35,7 @@ export default function Sidebar({
   const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || 'D'}`;
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: true },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: false },
     { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false },
     {
       id: 'reports',
