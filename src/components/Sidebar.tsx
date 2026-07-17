@@ -22,7 +22,7 @@ interface SidebarProps {
   onToggleRole: () => void;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
-  onGoHome: () => void;  // <-- ADD THIS
+  onGoHome: () => void;
 }
 
 export default function Sidebar({
@@ -33,7 +33,7 @@ export default function Sidebar({
   onToggleRole,
   isOpenMobile,
   setIsOpenMobile,
-  onGoHome, // <-- DESTRUCTURE IT
+  onGoHome,
 }: SidebarProps) {
   
   const handleTabClick = (tabId: string) => {
@@ -43,7 +43,9 @@ export default function Sidebar({
 
   const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || 'D'}`;
 
+  // --- Reordered: Home first, then Dashboard, Projects, etc. ---
   const navItems = [
+    { id: 'home', label: 'Home', icon: Home, isMock: false, isHome: true },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: false },
     { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false },
     { id: 'reports', label: currentUser.role === 'admin' ? 'Invoices' : 'Leave Requests', icon: BarChart3, isMock: false },
@@ -51,7 +53,6 @@ export default function Sidebar({
     { id: 'team', label: currentUser.role === 'admin' ? 'Team' : 'Team Overview', icon: Users, isMock: false },
     { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
     { id: 'settings', label: 'Settings', icon: Settings, isMock: true },
-    { id: 'home', label: 'Home', icon: Home, isMock: false, isHome: true }
   ];
 
   const sidebarContent = (
@@ -86,6 +87,7 @@ export default function Sidebar({
         {navItems.map((item) => {
           if (item.hideForRole === currentUser.role) return null;
           
+          // --- Special handling for Home button ---
           if (item.isHome) {
             return (
               <button
