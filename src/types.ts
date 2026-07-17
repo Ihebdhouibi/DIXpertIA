@@ -58,3 +58,13 @@ export interface Invoice {
     total: number;
   }[];
 }
+export interface Project {
+  id: string;
+  name: string;
+  client: string;
+  description?: string;
+  status: 'Active' | 'In Progress' | 'Completed' | 'On Hold';
+  deadline: string;
+  teamMembers: string[];
+  createdAt: string;
+}
