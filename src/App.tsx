@@ -82,7 +82,7 @@ export default function App() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [showHomepage, setShowHomepage] = useState(false);
+  const [showHomepage, setShowHomepage] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false); // NEW
 
   // --- Notifications state ---
@@ -173,7 +173,7 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
     setShowAuth(false);
-    setShowHomepage(false);
+    setShowHomepage(true);
     setShowUserDropdown(false);
   };
 
@@ -478,7 +478,7 @@ export default function App() {
         onLogin={handleLogin}
         onBackHome={() => {
           setShowAuth(false);
-          setShowHomepage(true);
+          setShowHomepage(false);
         }}
       />
     );
