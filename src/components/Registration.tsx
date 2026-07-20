@@ -24,16 +24,13 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName || !lastName || !email || !password) return;
-    // The selected role is used to set the user's role upon creation
     onLogin(roleSelection, email, firstName, lastName);
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
-    // Simple role detection based on email (for demo purposes)
     const selectedRole: UserRole = email.toLowerCase().includes('admin') ? 'admin' : 'employee';
-    // Use the entered first/last name or fallback to 'User'/'Demo'
     const displayFirst = firstName || 'User';
     const displayLast = lastName || 'Demo';
     onLogin(selectedRole, email, displayFirst, displayLast);
@@ -52,17 +49,14 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#e0f2fe] relative overflow-hidden bg-pattern">
-      {/* Decorative background gradients (unchanged) */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-primary-container/20 blur-3xl"></div>
         <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-secondary-fixed/30 blur-3xl"></div>
       </div>
 
       <main className="w-full max-w-[480px] relative z-10">
+        {/* -- QUICK DEMO ACCESS REMOVED -- */}
 
-        {/* --- QUICK DEMO ACCESS REMOVED --- */}
-
-        {/* Register Screen */}
         {screen === 'register' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -79,7 +73,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
               </div>
 
               <form onSubmit={handleRegister} className="flex flex-col gap-4">
-                {/* Role Switcher */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-on-surface-variant">Desired Role</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -206,7 +199,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
           </motion.div>
         )}
 
-        {/* Login Screen */}
         {screen === 'login' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -296,7 +288,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
           </motion.div>
         )}
 
-        {/* Forgot Password Screen (unchanged) */}
         {screen === 'forgot-password' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
