@@ -65,12 +65,11 @@ export default function DashboardView({
 
   // Employee-specific: leave balance
   const employeeLeaveRequests = leaveRequests.filter(r => r.employeeId === user.id);
-  const approvedLeaves = employeeLeaveRequests.filter(r => r.status === 'Approved');
   const upcomingLeave = employeeLeaveRequests
     .filter(r => r.status === 'Approved')
     .sort((a, b) => new Date(a.dates.split('-')[0].trim()).getTime() - new Date(b.dates.split('-')[0].trim()).getTime())[0];
 
-  // Latest payslip
+  // Latest payslip (read from localStorage)
   const latestPayslip = user.role === 'employee' 
     ? JSON.parse(localStorage.getItem('dixpertia_payslips') || '[]')[0] 
     : null;

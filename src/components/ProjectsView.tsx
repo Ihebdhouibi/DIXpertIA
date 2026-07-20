@@ -25,7 +25,6 @@ export default function ProjectsView({
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Form state
   const [name, setName] = useState('');
   const [client, setClient] = useState('');
   const [description, setDescription] = useState('');
@@ -38,7 +37,6 @@ export default function ProjectsView({
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Reset form
   const resetForm = () => {
     setName('');
     setClient('');
@@ -49,13 +47,11 @@ export default function ProjectsView({
     setEditingProject(null);
   };
 
-  // Open modal for create
   const handleOpenCreate = () => {
     resetForm();
     setShowModal(true);
   };
 
-  // Open modal for edit
   const handleOpenEdit = (project: Project) => {
     setEditingProject(project);
     setName(project.name);
@@ -67,7 +63,6 @@ export default function ProjectsView({
     setShowModal(true);
   };
 
-  // Submit form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !client.trim() || !deadline) {
@@ -96,7 +91,6 @@ export default function ProjectsView({
     resetForm();
   };
 
-  // Delete handler
   const handleDelete = (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete the project "${name}"?`)) {
       onDeleteProject(id);
@@ -104,7 +98,6 @@ export default function ProjectsView({
     }
   };
 
-  // Filter projects
   const filteredProjects = projects.filter((p) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch =
@@ -115,7 +108,6 @@ export default function ProjectsView({
     return matchesSearch && matchesStatus;
   });
 
-  // Get status color
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
       case 'Active':
@@ -129,7 +121,6 @@ export default function ProjectsView({
     }
   };
 
-  // Get team member names
   const getTeamNames = (ids: string[]) => {
     return ids
       .map((id) => {
@@ -141,7 +132,6 @@ export default function ProjectsView({
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {/* Toast */}
       {toast && (
         <div
           className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
@@ -159,7 +149,6 @@ export default function ProjectsView({
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Projects</h1>
@@ -178,7 +167,6 @@ export default function ProjectsView({
         )}
       </div>
 
-      {/* Filters & Search */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
@@ -208,7 +196,6 @@ export default function ProjectsView({
         </div>
       </div>
 
-      {/* Projects Table */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">

@@ -64,7 +64,7 @@ export interface Project {
   client: string;
   description?: string;
   status: 'Active' | 'In Progress' | 'Completed' | 'On Hold';
-  deadline: string; 
-  teamMembers: string[]; 
+  deadline: string;
+  teamMembers: string[];
   createdAt: string;
 }

@@ -15,7 +15,8 @@ import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
 import ProjectsView from './components/ProjectsView';
-import DashboardView from './components/DashboardView'; // NEW
+import DashboardView from './components/DashboardView';
+import NotificationsView from './components/NotificationsView';
 import { 
   Bell, 
   Menu, 
@@ -73,7 +74,6 @@ export default function App() {
     const savedUser = localStorage.getItem('dixpertia_user');
     if (savedUser) {
       const parsed: User = JSON.parse(savedUser);
-      // Use dashboard as default for all users
       return 'dashboard';
     }
     return 'dashboard';
@@ -166,7 +166,7 @@ export default function App() {
         : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
     };
     setCurrentUser(newUser);
-    setActiveTab('dashboard'); // default to dashboard
+    setActiveTab('dashboard');
     setShowAuth(false);
   };
 
@@ -257,7 +257,7 @@ export default function App() {
     }
   };
 
-  // --- Employee & Invoice handlers (unchanged) ---
+  // --- Employee & Invoice handlers ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -347,6 +347,9 @@ export default function App() {
       case 'download-payslip':
         setActiveTab('payslips');
         break;
+      case 'view-notifications':
+        setActiveTab('notifications');
+        break;
       default:
         break;
     }
@@ -354,6 +357,12 @@ export default function App() {
 
   const handleGoHome = () => setShowHomepage(true);
   const handleGoToDashboard = () => setShowHomepage(false);
+
+  // --- Filter notifications by role ---
+  const visibleNotifications = notifications.filter(n => {
+    if (!n.targetRole) return true;
+    return n.targetRole === currentUser?.role;
+  });
 
   // --- Render content helper ---
   const renderTabContent = () => {
@@ -368,12 +377,39 @@ export default function App() {
             invoices={invoices}
             leaveRequests={leaveRequests}
             teamMembers={teamMembers}
-            notifications={notifications}
+            notifications={visibleNotifications}
             onNavigate={(tab: string) => {
               setActiveTab(tab);
               setShowNotificationList(false);
             }}
             onQuickAction={handleQuickAction}
+          />
+        );
+
+      case 'notifications':
+        return (
+          <NotificationsView
+            notifications={visibleNotifications}
+            onMarkRead={(id) => {
+              setNotifications(prev =>
+                prev.map(n => n.id === id ? { ...n, read: true } : n)
+              );
+            }}
+            onMarkAllRead={() => {
+              setNotifications(prev =>
+                prev.map(n => ({ ...n, read: true }))
+              );
+            }}
+            onClearAll={() => {
+              if (window.confirm('Delete all notifications?')) {
+                setNotifications([]);
+              }
+            }}
+            onNavigate={(link) => {
+              setActiveTab(link);
+              setShowNotificationList(false);
+            }}
+            userRole={currentUser.role}
           />
         );
 
@@ -452,12 +488,6 @@ export default function App() {
   if (showHomepage) {
     return <Homepage onLoginClick={handleGoToDashboard} showDashboardButton={true} />;
   }
-
-  // --- Filter notifications by role ---
-  const visibleNotifications = notifications.filter(n => {
-    if (!n.targetRole) return true;
-    return n.targetRole === currentUser.role;
-  });
 
   // --- Authenticated Dashboard ---
   return (
@@ -560,11 +590,8 @@ export default function App() {
                             setNotifications(prev =>
                               prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
                             );
-                            if (notif.link === 'team') {
-                              setActiveTab('team');
-                              setShowNotificationList(false);
-                            } else if (notif.link === 'projects') {
-                              setActiveTab('projects');
+                            if (notif.link) {
+                              setActiveTab(notif.link);
                               setShowNotificationList(false);
                             }
                           }}

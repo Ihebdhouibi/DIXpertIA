@@ -1,9 +1,18 @@
 import React from 'react';
 import { 
-  LayoutDashboard, Briefcase, BarChart3, FileText, Users, Settings, 
-  LogOut, ShieldAlert, UserCheck, Home 
+  LayoutDashboard, 
+  Briefcase, 
+  BarChart3, 
+  FileText, 
+  Users, 
+  Settings, 
+  LogOut, 
+  ShieldAlert, 
+  UserCheck, 
+  Home,
+  Bell
 } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 
 interface SidebarProps {
   currentUser: User;
@@ -13,7 +22,7 @@ interface SidebarProps {
   onToggleRole: () => void;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
-  onGoHome: () => void;  // new
+  onGoHome: () => void;
 }
 
 export default function Sidebar({
@@ -24,7 +33,7 @@ export default function Sidebar({
   onToggleRole,
   isOpenMobile,
   setIsOpenMobile,
-  onGoHome,  // new
+  onGoHome,
 }: SidebarProps) {
   
   const handleTabClick = (tabId: string) => {
@@ -34,30 +43,16 @@ export default function Sidebar({
 
   const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || 'D'}`;
 
+  // --- Reordered: Home first, then Dashboard, Projects, etc. ---
   const navItems = [
+    { id: 'home', label: 'Home', icon: Home, isMock: false, isHome: true },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: false },
     { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false },
-    {
-      id: 'reports',
-      label: currentUser.role === 'admin' ? 'Invoices (Reports)' : 'Leave Requests (Reports)',
-      icon: BarChart3,
-      isMock: false
-    },
-    {
-      id: 'payslips',
-      label: 'Payslips',
-      icon: FileText,
-      isMock: false,
-      hideForRole: 'admin'
-    },
-    {
-      id: 'team',
-      label: currentUser.role === 'admin' ? 'Team' : 'Team Overview',
-      icon: Users,
-      isMock: false
-    },
+    { id: 'reports', label: currentUser.role === 'admin' ? 'Invoices' : 'Leave Requests', icon: BarChart3, isMock: false },
+    { id: 'payslips', label: 'Payslips', icon: FileText, isMock: false, hideForRole: 'admin' },
+    { id: 'team', label: currentUser.role === 'admin' ? 'Team' : 'Team Overview', icon: Users, isMock: false },
+    { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
     { id: 'settings', label: 'Settings', icon: Settings, isMock: true },
-    { id: 'home', label: 'Home', icon: Home, isMock: false, isHome: true }  // new home item
   ];
 
   const sidebarContent = (
@@ -92,7 +87,7 @@ export default function Sidebar({
         {navItems.map((item) => {
           if (item.hideForRole === currentUser.role) return null;
           
-          // Special case: Home item
+          // --- Special handling for Home button ---
           if (item.isHome) {
             return (
               <button
