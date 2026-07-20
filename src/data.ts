@@ -1,4 +1,4 @@
-import { Payslip, LeaveRequest, TeamMember, Invoice } from './types';
+import { Payslip, LeaveRequest, TeamMember, Invoice , Project} from './types';
 
 export const initialPayslips: Payslip[] = [
   {
@@ -100,6 +100,30 @@ export const initialLeaveRequests: LeaveRequest[] = [
     status: 'Pending',
     reason: 'Urgent family matter'
   }
+];
+
+
+export const initialProjects: Project[] = [
+  {
+    id: 'PRJ-001',
+    name: 'Cloud Migration for Acme Corp',
+    client: 'Acme Corp',
+    description: 'Migrate on‑premise infrastructure to AWS with zero downtime.',
+    status: 'In Progress',
+    deadline: '2024-11-30',
+    teamMembers: ['EMP-102', 'TM-001', 'TM-002'],
+    createdAt: '2024-09-01',
+  },
+  {
+    id: 'PRJ-002',
+    name: 'Cybersecurity Audit – Global Tech',
+    client: 'Global Tech',
+    description: 'Full security audit and compliance review for ISO 27001.',
+    status: 'Active',
+    deadline: '2024-12-15',
+    teamMembers: ['TM-004', 'ADMIN-01'],
+    createdAt: '2024-10-01',
+  },
 ];
 
 export const initialTeamMembers: TeamMember[] = [

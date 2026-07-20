@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice } from './types';
+import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice, Project } from './types';
 import {
   initialPayslips,
   initialLeaveRequests,
   initialTeamMembers,
-  initialInvoices
+  initialInvoices,
+  initialProjects
 } from './data';
 import Registration from './components/Registration';
 import Homepage from './components/Homepage';
@@ -13,6 +14,7 @@ import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
+import ProjectsView from './components/ProjectsView'; // NEW
 import { 
   Bell, 
   Menu, 
@@ -22,6 +24,7 @@ import {
   X
 } from 'lucide-react';
 
+// --- Notification type ---
 interface Notification {
   id: string;
   message: string;
@@ -29,11 +32,11 @@ interface Notification {
   read: boolean;
   timestamp: number;
   link?: string;
-  targetRole?: 'admin' | 'employee'; // 👈 role targeting
+  targetRole?: 'admin' | 'employee';
 }
 
 export default function App() {
-  // --- State (same as before) ---
+  // --- State ---
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('dixpertia_user');
     return saved ? JSON.parse(saved) : null;
@@ -57,6 +60,12 @@ export default function App() {
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     const saved = localStorage.getItem('dixpertia_invoices');
     return saved ? JSON.parse(saved) : initialInvoices;
+  });
+
+  // --- Projects state ---
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem('dixpertia_projects');
+    return saved ? JSON.parse(saved) : initialProjects;
   });
 
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -112,7 +121,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // --- Persist other state (unchanged) ---
+  // --- Persist other state ---
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
@@ -136,6 +145,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dixpertia_invoices', JSON.stringify(invoices));
   }, [invoices]);
+
+  // --- Persist projects ---
+  useEffect(() => {
+    localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
+  }, [projects]);
 
   // --- Handlers ---
   const handleLogin = (role: UserRole, email: string, firstName: string, lastName: string) => {
@@ -179,7 +193,7 @@ export default function App() {
     setActiveTab(toggledRole === 'admin' ? 'reports' : 'payslips');
   };
 
-  // --- Leave request: admin‑only notification ---
+  // --- Leave request handlers (with notifications) ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -195,17 +209,15 @@ export default function App() {
     };
     setLeaveRequests([req, ...leaveRequests]);
 
-    // 👇 notification ONLY for admin
     const employeeName = `${currentUser.firstName} ${currentUser.lastName}`;
     addNotification(
       `New leave request from ${employeeName} (${req.type})`,
       'warning',
       'team',
-      'admin'   // ✅ only admins will see this
+      'admin'
     );
   };
 
-  // --- Approve: employee‑only notification ---
   const handleApproveLeave = (id: string) => {
     setLeaveRequests(prev =>
       prev.map(req =>
@@ -219,13 +231,12 @@ export default function App() {
           `Your leave request (${req.type}) has been approved`,
           'success',
           undefined,
-          'employee'   // ✅ only the employee sees this
+          'employee'
         );
       }
     }
   };
 
-  // --- Reject: employee‑only notification ---
   const handleRejectLeave = (id: string, comment: string) => {
     setLeaveRequests(prev =>
       prev.map(req =>
@@ -239,13 +250,13 @@ export default function App() {
           `Your leave request (${req.type}) has been rejected`,
           'error',
           undefined,
-          'employee'   // ✅ only the employee sees this
+          'employee'
         );
       }
     }
   };
 
-  // --- Other handlers (unchanged) ---
+  // --- Other handlers ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -273,10 +284,58 @@ export default function App() {
     setInvoices([inv, ...invoices]);
   };
 
+  // --- Projects handlers ---
+  const handleAddProject = (project: Partial<Project>) => {
+    const newProject: Project = {
+      id: `PRJ-00${projects.length + 1}`,
+      name: project.name || 'Untitled',
+      client: project.client || 'Unknown',
+      description: project.description || '',
+      status: project.status || 'Active',
+      deadline: project.deadline || new Date().toISOString().split('T')[0],
+      teamMembers: project.teamMembers || [],
+      createdAt: new Date().toISOString(),
+    };
+    setProjects([newProject, ...projects]);
+    // Optionally notify admin
+    addNotification(
+      `New project "${newProject.name}" created`,
+      'success',
+      'projects',
+      'admin'
+    );
+  };
+
+  const handleEditProject = (id: string, updates: Partial<Project>) => {
+    setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+    const proj = projects.find(p => p.id === id);
+    if (proj) {
+      addNotification(
+        `Project "${proj.name}" updated`,
+        'info',
+        'projects',
+        'admin'
+      );
+    }
+  };
+
+  const handleDeleteProject = (id: string) => {
+    const proj = projects.find(p => p.id === id);
+    setProjects(prev => prev.filter(p => p.id !== id));
+    if (proj) {
+      addNotification(
+        `Project "${proj.name}" deleted`,
+        'error',
+        undefined,
+        'admin'
+      );
+    }
+  };
+
   const handleGoHome = () => setShowHomepage(true);
   const handleGoToDashboard = () => setShowHomepage(false);
 
-  // --- Render helper (unchanged) ---
+  // --- Render content helper ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
@@ -307,6 +366,18 @@ export default function App() {
             onAddEmployee={handleAddEmployee}
             onApproveLeave={handleApproveLeave}
             onRejectLeave={handleRejectLeave}
+          />
+        );
+      
+      case 'projects':  // NEW
+        return (
+          <ProjectsView
+            projects={projects}
+            onAddProject={handleAddProject}
+            onEditProject={handleEditProject}
+            onDeleteProject={handleDeleteProject}
+            userRole={currentUser.role}
+            teamMembers={teamMembers}
           />
         );
 
@@ -345,11 +416,9 @@ export default function App() {
     return <Homepage onLoginClick={handleGoToDashboard} showDashboardButton={true} />;
   }
 
-  // --- Filter notifications by role (strict) ---
+  // --- Filter notifications by role ---
   const visibleNotifications = notifications.filter(n => {
-    // If no targetRole set → show to everyone (e.g., system messages)
     if (!n.targetRole) return true;
-    // Otherwise, only show if it matches the current user's role
     return n.targetRole === currentUser.role;
   });
 
@@ -456,6 +525,9 @@ export default function App() {
                             );
                             if (notif.link === 'team') {
                               setActiveTab('team');
+                              setShowNotificationList(false);
+                            } else if (notif.link === 'projects') {
+                              setActiveTab('projects');
                               setShowNotificationList(false);
                             }
                           }}
