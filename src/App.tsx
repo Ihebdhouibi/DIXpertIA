@@ -17,13 +17,17 @@ import InvoicesView from './components/InvoicesView';
 import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
+import SettingsView from './components/SettingsView'; // NEW
 import { 
   Bell, 
   Menu, 
   HelpCircle, 
   AlertCircle,
   CheckCircle,
-  X
+  X,
+  User as UserIcon,   // <-- renamed to avoid conflict with User type
+  Settings,
+  LogOut
 } from 'lucide-react';
 
 // --- Notification type ---
@@ -69,29 +73,24 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialProjects;
   });
 
-  // Default active tab: dashboard
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = localStorage.getItem('dixpertia_user');
-    if (savedUser) {
-      const parsed: User = JSON.parse(savedUser);
-      return 'dashboard';
-    }
-    return 'dashboard';
+    return savedUser ? 'dashboard' : 'dashboard';
   });
 
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [showHomepage, setShowHomepage] = useState(false);
+  const [showHomepage, setShowHomepage] = useState(true);
+  const [showUserDropdown, setShowUserDropdown] = useState(false); // NEW
 
   // --- Notifications state ---
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     const saved = localStorage.getItem('dixpertia_notifications');
     if (saved) {
       const parsed = JSON.parse(saved);
-      const unread = parsed.filter((n: Notification) => !n.read).length;
-      setNotificationCount(unread);
+      setNotificationCount(parsed.filter((n: Notification) => !n.read).length);
       return parsed;
     }
     return [];
@@ -100,11 +99,10 @@ export default function App() {
   // --- Persist notifications ---
   useEffect(() => {
     localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
-    const unread = notifications.filter(n => !n.read).length;
-    setNotificationCount(unread);
+    setNotificationCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 
-  // --- Helper: add notification with target role ---
+  // --- Helper: add notification ---
   const addNotification = (
     message: string,
     type: Notification['type'] = 'info',
@@ -168,12 +166,15 @@ export default function App() {
     setCurrentUser(newUser);
     setActiveTab('dashboard');
     setShowAuth(false);
+    setShowHomepage(false);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
     setShowAuth(false);
+    setShowHomepage(true);
+    setShowUserDropdown(false);
   };
 
   const handleToggleRole = () => {
@@ -194,7 +195,7 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  // --- Leave request handlers ---
+  // --- Leave handlers ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -209,10 +210,8 @@ export default function App() {
       reason: newReq.reason || ''
     };
     setLeaveRequests([req, ...leaveRequests]);
-
-    const employeeName = `${currentUser.firstName} ${currentUser.lastName}`;
     addNotification(
-      `New leave request from ${employeeName} (${req.type})`,
+      `New leave request from ${currentUser.firstName} ${currentUser.lastName} (${req.type})`,
       'warning',
       'team',
       'admin'
@@ -225,16 +224,14 @@ export default function App() {
         req.id === id ? { ...req, status: 'Approved' as const } : req
       )
     );
-    if (currentUser && currentUser.role === 'admin') {
-      const req = leaveRequests.find(r => r.id === id);
-      if (req) {
-        addNotification(
-          `Your leave request (${req.type}) has been approved`,
-          'success',
-          undefined,
-          'employee'
-        );
-      }
+    const req = leaveRequests.find(r => r.id === id);
+    if (req && currentUser?.role === 'admin') {
+      addNotification(
+        `Your leave request (${req.type}) has been approved`,
+        'success',
+        undefined,
+        'employee'
+      );
     }
   };
 
@@ -244,20 +241,18 @@ export default function App() {
         req.id === id ? { ...req, status: 'Rejected' as const, rejectionReason: comment } : req
       )
     );
-    if (currentUser && currentUser.role === 'admin') {
-      const req = leaveRequests.find(r => r.id === id);
-      if (req) {
-        addNotification(
-          `Your leave request (${req.type}) has been rejected`,
-          'error',
-          undefined,
-          'employee'
-        );
-      }
+    const req = leaveRequests.find(r => r.id === id);
+    if (req && currentUser?.role === 'admin') {
+      addNotification(
+        `Your leave request (${req.type}) has been rejected`,
+        'error',
+        undefined,
+        'employee'
+      );
     }
   };
 
-  // --- Employee & Invoice handlers ---
+  // --- Other handlers ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -285,7 +280,7 @@ export default function App() {
     setInvoices([inv, ...invoices]);
   };
 
-  // --- Projects handlers ---
+  // --- Project handlers ---
   const handleAddProject = (project: Partial<Project>) => {
     const newProject: Project = {
       id: `PRJ-00${projects.length + 1}`,
@@ -332,33 +327,29 @@ export default function App() {
     }
   };
 
-  // --- Dashboard quick actions ---
+  // --- Quick actions ---
   const handleQuickAction = (action: string) => {
     switch (action) {
-      case 'approve-leaves':
-        setActiveTab('team');
-        break;
-      case 'create-invoice':
-        setActiveTab('reports');
-        break;
-      case 'add-project':
-        setActiveTab('projects');
-        break;
-      case 'download-payslip':
-        setActiveTab('payslips');
-        break;
-      case 'view-notifications':
-        setActiveTab('notifications');
-        break;
-      default:
-        break;
+      case 'approve-leaves': setActiveTab('team'); break;
+      case 'create-invoice': setActiveTab('reports'); break;
+      case 'add-project': setActiveTab('projects'); break;
+      case 'download-payslip': setActiveTab('payslips'); break;
+      case 'view-notifications': setActiveTab('notifications'); break;
+      default: break;
     }
   };
 
-  const handleGoHome = () => setShowHomepage(true);
-  const handleGoToDashboard = () => setShowHomepage(false);
+  const handleGoHome = () => {
+    setShowHomepage(true);
+    setShowAuth(false);
+    setShowUserDropdown(false);
+  };
 
-  // --- Filter notifications by role ---
+  const handleGoToDashboard = () => {
+    setShowHomepage(false);
+  };
+
+  // --- Notification filter ---
   const visibleNotifications = notifications.filter(n => {
     if (!n.targetRole) return true;
     return n.targetRole === currentUser?.role;
@@ -412,6 +403,9 @@ export default function App() {
             userRole={currentUser.role}
           />
         );
+
+      case 'settings':
+        return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
       case 'payslips':
         if (currentUser.role === 'admin') {
@@ -477,19 +471,28 @@ export default function App() {
     }
   };
 
-  // --- Unauthenticated render ---
+  // --- Authentication & navigation logic ---
+  if (showAuth) {
+    return (
+      <Registration
+        onLogin={handleLogin}
+        onBackHome={() => {
+          setShowAuth(false);
+          setShowHomepage(false);
+        }}
+      />
+    );
+  }
+
   if (!currentUser) {
-    if (showAuth) {
-      return <Registration onLogin={handleLogin} onBackHome={() => setShowAuth(false)} />;
-    }
     return <Homepage onLoginClick={() => setShowAuth(true)} />;
   }
 
   if (showHomepage) {
-    return <Homepage onLoginClick={handleGoToDashboard} showDashboardButton={true} />;
+    return <Homepage onLoginClick={() => { setShowAuth(true); setShowHomepage(false); }} />;
   }
 
-  // --- Authenticated Dashboard ---
+  // --- Main dashboard layout ---
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
       
@@ -522,6 +525,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 relative">
+            {/* Role badge */}
             <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
               <span className="text-[11px] font-black uppercase text-primary tracking-wider">
@@ -620,8 +624,55 @@ export default function App() {
               )}
             </div>
 
-            <div className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm select-none">
-              {currentUser.firstName[0]}{currentUser.lastName[0]}
+            {/* User Avatar with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
+                title="User menu"
+              >
+                {currentUser.firstName[0]}{currentUser.lastName[0]}
+              </button>
+
+              {showUserDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
+                  <div className="px-4 py-2 border-b border-outline-variant/30">
+                    <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
+                    <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                  <hr className="border-outline-variant/30 my-1" />
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm text-error hover:bg-error-container/30 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
