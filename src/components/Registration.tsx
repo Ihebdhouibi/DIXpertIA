@@ -5,7 +5,7 @@ import { UserRole } from '../types';
 
 interface RegistrationProps {
   onLogin: (role: UserRole, email: string, firstName: string, lastName: string) => void;
-  onBackHome?: () => void;   // <--- new optional prop
+  onBackHome?: () => void;
 }
 
 type AuthScreen = 'register' | 'login' | 'forgot-password';
@@ -21,81 +21,42 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
   const [isResending, setIsResending] = useState(false);
   const [roleSelection, setRoleSelection] = useState<UserRole>('employee');
 
-  // Register Handler
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName || !lastName || !email || !password) return;
-    // Auto-login with selected role
     onLogin(roleSelection, email, firstName, lastName);
   };
 
-  // Login Handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
-    // Check if admin email for demo purposes
     const selectedRole: UserRole = email.toLowerCase().includes('admin') ? 'admin' : 'employee';
     const displayFirst = firstName || 'User';
     const displayLast = lastName || 'Demo';
     onLogin(selectedRole, email, displayFirst, displayLast);
   };
 
-  // Forgot Password Handler
   const handleForgotPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail) return;
     setResetSent(true);
   };
 
-  // Resend Handler
   const handleResend = () => {
     setIsResending(true);
-    setTimeout(() => {
-      setIsResending(false);
-    }, 1200);
-  };
-
-  // Shortcut/Bypass login for testing convenience
-  const handleQuickBypass = (selectedRole: UserRole) => {
-    if (selectedRole === 'admin') {
-      onLogin('admin', 'admin@dixpertia.com', 'Admin', 'User');
-    } else {
-      onLogin('employee', 'john.doe@dixpertia.com', 'John', 'Doe');
-    }
+    setTimeout(() => setIsResending(false), 1200);
   };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#e0f2fe] relative overflow-hidden bg-pattern">
-      
-      {/* Decorative background gradients */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-primary-container/20 blur-3xl"></div>
         <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-secondary-fixed/30 blur-3xl"></div>
       </div>
 
-      {/* Main Container */}
       <main className="w-full max-w-[480px] relative z-10">
-        
-        {/* Role Quick Selector for the Agent Workspace Preview */}
-        <div className="mb-4 text-center bg-white/70 backdrop-blur-md rounded-lg p-2.5 border border-outline-variant/30 shadow-sm">
-          <p className="text-xs text-on-surface-variant font-semibold mb-2">Quick Demo Access (Workspace Tester):</p>
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={() => handleQuickBypass('employee')}
-              className="px-3 py-1 bg-primary text-white hover:bg-primary/90 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
-            >
-              Employee Mode (John Doe)
-            </button>
-            <button
-              onClick={() => handleQuickBypass('admin')}
-              className="px-3 py-1 bg-secondary text-white hover:bg-secondary/90 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
-            >
-              Admin HR Mode (Invoices & Team)
-            </button>
-          </div>
-        </div>
+        {/* -- QUICK DEMO ACCESS REMOVED -- */}
 
-        {/* 1. Register Screen */}
         {screen === 'register' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -105,18 +66,13 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
           >
             <div className="h-2 w-full bg-primary"></div>
             <div className="p-8 flex flex-col gap-6">
-              
-              {/* Header */}
               <div className="text-center">
                 <div className="font-sans text-h2 font-black text-primary tracking-tight mb-2">DIXpertIA</div>
                 <h1 className="font-sans text-h1 text-on-surface font-semibold">Create Account</h1>
                 <p className="text-body-sm text-on-surface-variant mt-2">Enter your details to get started.</p>
               </div>
 
-              {/* Form */}
               <form onSubmit={handleRegister} className="flex flex-col gap-4">
-                
-                {/* Role Switcher in registration for direct role setting */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-on-surface-variant">Desired Role</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -153,7 +109,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                       <input
                         className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors text-body-sm text-on-surface placeholder:text-outline-variant"
                         id="firstName"
-                        name="firstName"
                         placeholder="John"
                         required
                         type="text"
@@ -169,7 +124,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                       <input
                         className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors text-body-sm text-on-surface placeholder:text-outline-variant"
                         id="lastName"
-                        name="lastName"
                         placeholder="Doe"
                         required
                         type="text"
@@ -187,7 +141,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                     <input
                       className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors text-body-sm text-on-surface placeholder:text-outline-variant"
                       id="email"
-                      name="email"
                       placeholder="john.doe@example.com"
                       required
                       type="email"
@@ -204,7 +157,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                     <input
                       className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors text-body-sm text-on-surface placeholder:text-outline-variant"
                       id="password"
-                      name="password"
                       placeholder="••••••••"
                       required
                       type="password"
@@ -224,7 +176,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                 </button>
               </form>
 
-              {/* Footer Links with Back to Home */}
               <div className="text-center mt-2 pt-4 border-t border-outline-variant/30">
                 {onBackHome && (
                   <button
@@ -244,12 +195,10 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                   </button>
                 </p>
               </div>
-
             </div>
           </motion.div>
         )}
 
-        {/* 2. Login Screen */}
         {screen === 'login' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -259,7 +208,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
           >
             <div className="h-2 w-full bg-primary"></div>
             <div className="p-8 flex flex-col gap-6">
-
               <div className="text-center">
                 <div className="font-sans text-h2 font-black text-primary tracking-tight mb-2">DIXpertIA</div>
                 <h1 className="font-sans text-h1 text-on-surface font-semibold">Sign In</h1>
@@ -317,7 +265,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                 </button>
               </form>
 
-              {/* Footer Links with Back to Home */}
               <div className="text-center mt-2 pt-4 border-t border-outline-variant/30">
                 {onBackHome && (
                   <button
@@ -337,12 +284,10 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                   </button>
                 </p>
               </div>
-
             </div>
           </motion.div>
         )}
 
-        {/* 3. Forgot Password Screen */}
         {screen === 'forgot-password' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -352,7 +297,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
           >
             <div className="h-2 w-full bg-primary"></div>
             <div className="p-8">
-              
               {!resetSent ? (
                 <div className="flex flex-col gap-6">
                   <div className="text-center">
@@ -362,7 +306,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                     <h1 className="font-sans text-h1 text-primary font-semibold mb-2">Forgot Password</h1>
                     <p className="text-body-sm text-on-surface-variant">Enter your email address to receive a password reset link.</p>
                   </div>
-
                   <form onSubmit={handleForgotPassword} className="space-y-6">
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold text-on-surface" htmlFor="forgotEmail">Email Address</label>
@@ -379,7 +322,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                         />
                       </div>
                     </div>
-                    
                     <button
                       className="w-full flex justify-center items-center py-3 px-4 rounded-lg font-semibold text-white bg-primary hover:bg-primary/95 transition-all cursor-pointer shadow-sm"
                       type="submit"
@@ -398,7 +340,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                     We have sent a password reset link to <br />
                     <span className="font-bold text-on-surface break-all">{forgotEmail}</span>
                   </p>
-                  
                   <div className="pt-4 border-t border-outline-variant/30">
                     <p className="text-xs text-on-surface-variant mb-2">Didn't receive the email? Check your spam folder or</p>
                     <button
@@ -418,8 +359,6 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                   </div>
                 </div>
               )}
-
-              {/* Back to login / Home */}
               <div className="mt-8 pt-6 border-t border-outline-variant/30 text-center">
                 {onBackHome && (
                   <button
@@ -440,11 +379,9 @@ export default function Registration({ onLogin, onBackHome }: RegistrationProps)
                   Back to login
                 </button>
               </div>
-
             </div>
           </motion.div>
         )}
-
       </main>
     </div>
   );
