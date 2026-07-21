@@ -1,14 +1,70 @@
 import os
 import json
+import secrets
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel, EmailStr
+from jose import JWTError, jwt
+import bcrypt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
 DB_FILE = os.path.join(os.getcwd(), 'db.json')
 
-# Initial seed data
+# --- Password hashing (direct bcrypt) ---
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+# --- JWT settings ---
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# --- Email sending (SMTP) ---
+def send_email(to_email: str, subject: str, body: str):
+    try:
+        smtp_host = os.getenv("SMTP_HOST")
+        smtp_port = int(os.getenv("SMTP_PORT", 587))
+        smtp_user = os.getenv("SMTP_USER")
+        smtp_password = os.getenv("SMTP_PASSWORD")
+        from_email = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
+
+        if not smtp_host or not smtp_user or not smtp_password:
+            print("⚠️ SMTP credentials missing. Email not sent.")
+            return False
+
+        msg = MIMEMultipart()
+        msg['From'] = from_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+
+        print(f"✅ Email sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"❌ Email error: {e}")
+        return False
+
+# --- Initial seed data (keep as in the original file) ---
 initial_payslips = [
   { "id": 'PS-001', "period": 'September 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Sep 30, 2024' },
   { "id": 'PS-002', "period": 'August 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Aug 31, 2024' },
@@ -173,9 +229,11 @@ default_db = {
   "payslips": initial_payslips,
   "leaveRequests": initial_leave_requests,
   "teamMembers": initial_team_members,
-  "invoices": initial_invoices
+  "invoices": initial_invoices,
+  "users": []
 }
 
+# --- DB helpers ---
 def read_db():
     try:
         if not os.path.exists(DB_FILE):
@@ -185,7 +243,7 @@ def read_db():
         with open(DB_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print(f"Error reading database file: {e}")
+        print(f"Error reading DB: {e}")
         return default_db
 
 def write_db(data):
@@ -193,9 +251,33 @@ def write_db(data):
         with open(DB_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
     except Exception as e:
-        print(f"Error writing database file: {e}")
+        print(f"Error writing DB: {e}")
 
-# Pydantic models for incoming requests
+# --- JWT helpers ---
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    db = read_db()
+    user = next((u for u in db.get('users', []) if u['id'] == payload.get('sub')), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+# --- Pydantic models ---
 class LeaveRequestCreate(BaseModel):
     employeeId: str
     employeeName: str
@@ -233,6 +315,82 @@ class InvoiceCreate(BaseModel):
     status: Optional[str] = 'Sent'
     items: Optional[List[InvoiceItem]] = []
 
+class UserCreate(BaseModel):
+    email: EmailStr
+    firstName: str
+    lastName: str
+    role: str   # "admin" or "employee"
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+# --- Auth endpoints ---
+@app.post('/api/login')
+def login(req: LoginRequest):
+    db = read_db()
+    user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not verify_password(req.password, user['hashedPassword']):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token(data={"sub": user['id'], "role": user['role']})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {k: v for k, v in user.items() if k != 'hashedPassword'}
+    }
+
+@app.post('/api/users', status_code=201)
+def create_user(req: UserCreate, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only administrators can create users")
+    db = read_db()
+    if 'users' not in db:
+        db['users'] = []
+    if any(u['email'] == req.email for u in db['users']):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    alphabet = string.ascii_letters + string.digits
+    temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+    hashed = get_password_hash(temp_password)
+    new_user = {
+        "id": f"USR-{len(db['users'])+1:03d}",
+        "email": req.email,
+        "firstName": req.firstName,
+        "lastName": req.lastName,
+        "role": req.role,
+        "hashedPassword": hashed,
+        "isActive": True,
+        "isVerified": False,
+        "createdAt": datetime.now().isoformat()
+    }
+    db['users'].append(new_user)
+    write_db(db)
+
+    # Send email via SMTP
+    email_body = f"""
+Hello {req.firstName},
+
+Your DIXpertIA employee account has been created.
+
+Login email: {req.email}
+Temporary password: {temp_password}
+
+Please log in and change your password immediately.
+
+Regards,
+DIXpertIA Team
+"""
+    send_email(req.email, "Your DIXpertIA Account Credentials", email_body)
+
+    return {
+        "message": "User created successfully",
+        "id": new_user['id'],
+        "email": req.email,
+        "tempPassword": temp_password
+    }
+
+# --- Existing endpoints (payslips, leave, invoices, team) ---
 @app.get('/api/data')
 def get_data():
     return read_db()
@@ -265,10 +423,8 @@ def approve_leave_request(req_id: str):
             found = True
             item['status'] = 'Approved'
         new_requests.append(item)
-    
     if not found:
         raise HTTPException(status_code=404, detail="Leave request not found")
-        
     db['leaveRequests'] = new_requests
     write_db(db)
     return {"message": "Leave request approved successfully"}
@@ -284,10 +440,8 @@ def reject_leave_request(req_id: str, body: RejectLeaveRequest):
             item['status'] = 'Rejected'
             item['rejectionReason'] = body.comment or ''
         new_requests.append(item)
-        
     if not found:
         raise HTTPException(status_code=404, detail="Leave request not found")
-        
     db['leaveRequests'] = new_requests
     write_db(db)
     return {"message": "Leave request rejected successfully"}
@@ -297,7 +451,6 @@ def create_team_member(req: TeamMemberCreate):
     db = read_db()
     email = req.email or f"{req.firstName.lower()}.{req.lastName.lower()}@dixpertia.com"
     initials = req.initials or f"{req.firstName[0]}{req.lastName[0]}".upper()
-    
     created_emp = {
         "id": f"TM-00{len(db['teamMembers']) + 1}",
         "firstName": req.firstName,
@@ -316,11 +469,9 @@ def create_team_member(req: TeamMemberCreate):
 def create_invoice(req: InvoiceCreate):
     db = read_db()
     from datetime import datetime, timedelta
-    
     date_issued = req.dateIssued or datetime.now().strftime('%b %d, %Y')
     due_date = req.dueDate or (datetime.now() + timedelta(days=30)).strftime('%b %d, %Y')
     client_initials = req.clientInitials or req.client[:2].upper()
-    
     created_inv = {
         "id": req.id or f"INV-2024-00{len(db['invoices']) + 1}",
         "client": req.client,

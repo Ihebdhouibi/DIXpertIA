@@ -53,6 +53,7 @@ export default function Sidebar({
     { id: 'team', label: currentUser.role === 'admin' ? 'Team' : 'Team Overview', icon: Users, isMock: false },
     { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
     { id: 'settings', label: 'Settings', icon: Settings, isMock: false },
+    { id: 'users', label: 'Users', icon: Users, isMock: false, hideForRole: 'employee' },
   ];
 
   const sidebarContent = (
