@@ -17,9 +17,8 @@ import InvoicesView from './components/InvoicesView';
 import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
-import SettingsView from './components/SettingsView'; 
+import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
-
 import { 
   Bell, 
   Menu, 
@@ -27,12 +26,11 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  User as UserIcon,  
+  User as UserIcon,
   Settings,
   LogOut
 } from 'lucide-react';
 
-// --- Notification type ---
 interface Notification {
   id: string;
   message: string;
@@ -42,6 +40,7 @@ interface Notification {
   link?: string;
   targetRole?: 'admin' | 'employee';
 }
+
 interface AppUser extends User {
   isActive: boolean;
   isVerified: boolean;
@@ -50,7 +49,7 @@ interface AppUser extends User {
 
 export default function App() {
   // --- State ---
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('dixpertia_user');
     return saved ? JSON.parse(saved) : null;
   });
@@ -80,17 +79,18 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialProjects;
   });
 
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const savedUser = localStorage.getItem('dixpertia_user');
-    return savedUser ? 'dashboard' : 'dashboard';
+  const [users, setUsers] = useState<AppUser[]>(() => {
+    const saved = localStorage.getItem('dixpertia_users');
+    return saved ? JSON.parse(saved) : [];
   });
 
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
-  const [showUserDropdown, setShowUserDropdown] = useState(false); // NEW
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   // --- Notifications state ---
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -103,13 +103,11 @@ export default function App() {
     return [];
   });
 
-  // --- Persist notifications ---
   useEffect(() => {
     localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
     setNotificationCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 
-  // --- Helper: add notification ---
   const addNotification = (
     message: string,
     type: Notification['type'] = 'info',
@@ -128,7 +126,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // --- Persist other state ---
+  // --- Persist state ---
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
@@ -157,40 +155,89 @@ export default function App() {
     localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
   }, [projects]);
 
-  // --- Handlers ---
-  const handleLogin = (role: UserRole, email: string, firstName: string, lastName: string) => {
-    const newUser: AppUser = {
-      id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName,
-      lastName,
-      email,
-      role,
-      department: role === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: role === 'admin' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+  useEffect(() => {
+    localStorage.setItem('dixpertia_users', JSON.stringify(users));
+  }, [users]);
+
+  // --- Handlers (with real API calls) ---
+
+  const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
+    try {
+      if (password) {
+        // Real login via backend
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
+          return;
+        }
+        const data = await response.json();
+        // Store the JWT token
+        localStorage.setItem('token', data.access_token);
+        const user = data.user;
+        const appUser: AppUser = {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department || 'Operations',
+          avatarUrl: user.avatarUrl || undefined,
+          isActive: user.isActive,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        setCurrentUser(appUser);
+        setActiveTab('dashboard');
+        setShowHomepage(false);
+        setShowLogin(false);
+        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+        return;
+      }
+
+      // Fallback to mock (if no password – e.g., for testing)
+      const newUser: AppUser = {
+        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
+        firstName,
+        lastName,
+        email,
+        role,
+        department: role === 'admin' ? 'Human Resources' : 'Engineering',
+        avatarUrl: role === 'admin' 
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
+          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
         isActive: true,
         isVerified: true,
         createdAt: new Date().toISOString()
-    };
-    setCurrentUser(newUser);
-    setActiveTab('dashboard');
-    setShowAuth(false);
-    setShowHomepage(false);
+      };
+      // For mock, set a dummy token (backend will reject if used, but for demo)
+      localStorage.setItem('token', 'mock-admin-token');
+      setCurrentUser(newUser);
+      setActiveTab('dashboard');
+      setShowHomepage(false);
+      setShowLogin(false);
+    } catch (error) {
+      addNotification('Network error during login', 'error');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
-    setShowAuth(false);
+    localStorage.removeItem('token');
     setShowHomepage(true);
     setShowUserDropdown(false);
+    setShowLogin(false);
   };
 
   const handleToggleRole = () => {
     if (!currentUser) return;
     const toggledRole: UserRole = currentUser.role === 'admin' ? 'employee' : 'admin';
-    const updatedUser: User = {
+    const updatedUser: AppUser = {
       ...currentUser,
       role: toggledRole,
       id: toggledRole === 'admin' ? 'ADMIN-01' : 'EMP-102',
@@ -205,7 +252,7 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  // --- Leave handlers ---
+  // --- Leave handlers (unchanged) ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -262,7 +309,7 @@ export default function App() {
     }
   };
 
-  // --- Other handlers ---
+  // --- Other handlers (unchanged) ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -290,7 +337,7 @@ export default function App() {
     setInvoices([inv, ...invoices]);
   };
 
-  // --- Project handlers ---
+  // --- Project handlers (unchanged) ---
   const handleAddProject = (project: Partial<Project>) => {
     const newProject: Project = {
       id: `PRJ-00${projects.length + 1}`,
@@ -351,12 +398,13 @@ export default function App() {
 
   const handleGoHome = () => {
     setShowHomepage(true);
-    setShowAuth(false);
     setShowUserDropdown(false);
+    setShowLogin(false);
   };
 
   const handleGoToDashboard = () => {
     setShowHomepage(false);
+    setShowLogin(false);
   };
 
   // --- Notification filter ---
@@ -365,7 +413,69 @@ export default function App() {
     return n.targetRole === currentUser?.role;
   });
 
-  // --- Render content helper ---
+  // --- User management handlers (admin only) – REAL API ---
+  const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        addNotification('You are not logged in. Please log in again.', 'error');
+        return;
+      }
+
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          role: newUser.role || 'employee'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const user: AppUser = {
+          id: data.id,
+          email: data.email,
+          firstName: newUser.firstName!,
+          lastName: newUser.lastName!,
+          role: newUser.role || 'employee',
+          isActive: true,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          department: 'Operations',
+          avatarUrl: undefined,
+        };
+        setUsers(prev => [...prev, user]);
+        addNotification(
+          `User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`,
+          'success'
+        );
+        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+      } else {
+        const error = await response.json();
+        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
+      }
+    } catch (error) {
+      addNotification('Network error. Please try again.', 'error');
+    }
+  };
+
+  const handleEditUser = (id: string, updates: Partial<AppUser>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    const user = users.find(u => u.id === id);
+    setUsers(prev => prev.filter(u => u.id !== id));
+    if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
+  };
+
+  // --- Render content helper (unchanged) ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
@@ -417,6 +527,27 @@ export default function App() {
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
+      case 'users':
+        if (currentUser.role !== 'admin') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage users.</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <UsersView
+            users={users}
+            onAddUser={handleAddUser}
+            onEditUser={handleEditUser}
+            onDeleteUser={handleDeleteUser}
+            userRole={currentUser.role}
+          />
+        );
+
       case 'payslips':
         if (currentUser.role === 'admin') {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
@@ -431,7 +562,6 @@ export default function App() {
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
             onAddRequest={handleAddLeaveRequest} 
-            userRole={currentUser.role} 
           />
         );
       
@@ -482,31 +612,21 @@ export default function App() {
     }
   };
 
-  // --- Authentication & navigation logic ---
-  if (showAuth) {
-    return (
-      <Login
-        onLogin={handleLogin}
-        onBackHome={() => {
-          setShowAuth(false);
-          setShowHomepage(false);
-        }}
-      />
-    );
+  // --- RENDERING LOGIC ---
+  if (showLogin) {
+    return <Login onLogin={handleLogin} onBackHome={() => { setShowLogin(false); setShowHomepage(true); }} />;
   }
 
   if (!currentUser) {
-    return <Homepage onLoginClick={() => setShowAuth(true)} />;
+    return <Homepage onLoginClick={() => setShowLogin(true)} />;
   }
 
   if (showHomepage) {
-    return <Homepage onLoginClick={() => { setShowAuth(true); setShowHomepage(false); }} />;
+    return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
   }
 
-  // --- Main dashboard layout ---
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
-      
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
@@ -520,6 +640,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-surface-container-lowest border-b border-outline-variant px-6 flex items-center justify-between sticky top-0 z-40 shrink-0">
+          {/* ... header unchanged ... */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsOpenMobile(true)}
@@ -536,7 +657,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 relative">
-            {/* Role badge */}
             <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
               <span className="text-[11px] font-black uppercase text-primary tracking-wider">
@@ -559,7 +679,6 @@ export default function App() {
                 )}
               </button>
 
-              {/* Notification Popover */}
               {showNotificationList && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">

@@ -55,6 +55,7 @@ export default function Sidebar({
     { id: 'users', label: 'Users', icon: UserCog, isMock: false, showFor: ['admin', 'accountant'] },
     { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
     { id: 'settings', label: 'Settings', icon: Settings, isMock: false },
+    { id: 'users', label: 'Users', icon: Users, isMock: false, hideForRole: 'employee' },
   ];
 
   const navItems = allNavItems.filter(item => {
