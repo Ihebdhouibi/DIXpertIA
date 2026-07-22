@@ -88,6 +88,7 @@ export default function App() {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -162,69 +163,66 @@ export default function App() {
   // --- Handlers (with real API calls) ---
 
   const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
-    try {
-      if (password) {
-        // Real login via backend
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
-          return;
-        }
-        const data = await response.json();
-        // Store the JWT token
-        localStorage.setItem('token', data.access_token);
-        const user = data.user;
-        const appUser: AppUser = {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          department: user.department || 'Operations',
-          avatarUrl: user.avatarUrl || undefined,
-          isActive: user.isActive,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt || new Date().toISOString()
-        };
-        setCurrentUser(appUser);
-        setActiveTab('dashboard');
-        setShowHomepage(false);
-        setShowLogin(false);
-        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+  try {
+    if (password) {
+      console.log('🔍 Login attempt:', { email, password });
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
         return;
       }
-
-      // Fallback to mock (if no password – e.g., for testing)
-      const newUser: AppUser = {
-        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-        firstName,
-        lastName,
-        email,
-        role,
-        department: role === 'admin' ? 'Human Resources' : 'Engineering',
-        avatarUrl: role === 'admin' 
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-        isActive: true,
-        isVerified: true,
-        createdAt: new Date().toISOString()
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      const user = data.user;
+      const appUser: AppUser = {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,   // <-- gets the real role from backend
+        department: user.department || 'Operations',
+        avatarUrl: user.avatarUrl || undefined,
+        isActive: user.isActive,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt || new Date().toISOString()
       };
-      // For mock, set a dummy token (backend will reject if used, but for demo)
-      localStorage.setItem('token', 'mock-admin-token');
-      setCurrentUser(newUser);
+      setCurrentUser(appUser);
       setActiveTab('dashboard');
       setShowHomepage(false);
       setShowLogin(false);
-    } catch (error) {
-      addNotification('Network error during login', 'error');
+      setShowAuth(false);
+      addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+      return;
     }
-  };
-
+    // Fallback mock (if no password – for testing)
+    const newUser: AppUser = {
+      id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
+      firstName,
+      lastName,
+      email,
+      role,
+      department: role === 'admin' ? 'Human Resources' : 'Engineering',
+      avatarUrl: role === 'admin' 
+        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+      isActive: true,
+      isVerified: true,
+      createdAt: new Date().toISOString()
+    };
+    localStorage.setItem('token', 'mock-admin-token');
+    setCurrentUser(newUser);
+    setActiveTab('dashboard');
+    setShowHomepage(false);
+    setShowAuth(false);
+  } catch (error) {
+    addNotification('Network error during login', 'error');
+  }
+};
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
@@ -415,56 +413,50 @@ export default function App() {
 
   // --- User management handlers (admin only) – REAL API ---
   const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        addNotification('You are not logged in. Please log in again.', 'error');
-        return;
-      }
-
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          role: newUser.role || 'employee'
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const user: AppUser = {
-          id: data.id,
-          email: data.email,
-          firstName: newUser.firstName!,
-          lastName: newUser.lastName!,
-          role: newUser.role || 'employee',
-          isActive: true,
-          isVerified: false,
-          createdAt: new Date().toISOString(),
-          department: 'Operations',
-          avatarUrl: undefined,
-        };
-        setUsers(prev => [...prev, user]);
-        addNotification(
-          `User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`,
-          'success'
-        );
-        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
-      } else {
-        const error = await response.json();
-        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
-      }
-    } catch (error) {
-      addNotification('Network error. Please try again.', 'error');
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      addNotification('You are not logged in. Please log in again.', 'error');
+      return;
     }
-  };
-
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        role: newUser.role || 'employee'
+      })
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const user: AppUser = {
+        id: data.id,
+        email: data.email,
+        firstName: newUser.firstName!,
+        lastName: newUser.lastName!,
+        role: newUser.role || 'employee',
+        isActive: true,
+        isVerified: false,
+        createdAt: new Date().toISOString(),
+        department: 'Operations',
+        avatarUrl: undefined,
+      };
+      setUsers(prev => [...prev, user]);
+      addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
+      console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+    } else {
+      const error = await response.json();
+      addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
+    }
+  } catch (error) {
+    addNotification('Network error. Please try again.', 'error');
+  }
+};
   const handleEditUser = (id: string, updates: Partial<AppUser>) => {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
   };
