@@ -1,13 +1,16 @@
-export type UserRole = 'employee' | 'admin';
+export type UserRole = 'admin' | 'employee' | 'accountant';
 
 export interface User {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  avatarUrl?: string;
   role: UserRole;
   department?: string;
+  avatarUrl?: string;
+  isActive: boolean;
+  isVerified: boolean;
+  createdAt: string;
 }
 
 export interface Payslip {
@@ -16,8 +19,9 @@ export interface Payslip {
   grossPay: number;
   netPay: number;
   issuedOn: string;
-  pdfUrl?: string;
 }
+
+export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface LeaveRequest {
   id: string;
@@ -27,7 +31,7 @@ export interface LeaveRequest {
   type: 'Annual Leave' | 'Sick Leave' | 'Personal Day' | 'Unpaid Leave';
   dates: string;
   duration: number;
-  status: 'Approved' | 'Pending' | 'Rejected';
+  status: LeaveStatus;
   reason?: string;
   rejectionReason?: string;
 }
@@ -39,8 +43,15 @@ export interface TeamMember {
   email: string;
   role: string;
   status: 'Active' | 'Inactive';
-  avatarUrl?: string;
   initials?: string;
+  avatarUrl?: string;
+}
+
+export interface InvoiceItem {
+  description: string;
+  qty: number;
+  price: number;
+  total: number;
 }
 
 export interface Invoice {
@@ -51,13 +62,9 @@ export interface Invoice {
   dateIssued: string;
   dueDate: string;
   status: 'Draft' | 'Sent' | 'Paid' | 'Overdue';
-  items: {
-    description: string;
-    qty: number;
-    price: number;
-    total: number;
-  }[];
+  items: InvoiceItem[];
 }
+
 export interface Project {
   id: string;
   name: string;

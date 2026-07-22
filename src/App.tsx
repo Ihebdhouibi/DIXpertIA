@@ -7,7 +7,7 @@ import {
   initialInvoices,
   initialProjects
 } from './data';
-import Registration from './components/Registration';
+import Login from './components/Login';
 import Homepage from './components/Homepage';
 import Sidebar from './components/Sidebar';
 import PayslipsView from './components/PayslipsView';
@@ -17,7 +17,9 @@ import InvoicesView from './components/InvoicesView';
 import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
-import SettingsView from './components/SettingsView'; // NEW
+import SettingsView from './components/SettingsView'; 
+import UsersView from './components/UsersView';
+
 import { 
   Bell, 
   Menu, 
@@ -25,7 +27,7 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  User as UserIcon,   // <-- renamed to avoid conflict with User type
+  User as UserIcon,  
   Settings,
   LogOut
 } from 'lucide-react';
@@ -39,6 +41,11 @@ interface Notification {
   timestamp: number;
   link?: string;
   targetRole?: 'admin' | 'employee';
+}
+interface AppUser extends User {
+  isActive: boolean;
+  isVerified: boolean;
+  createdAt: string;
 }
 
 export default function App() {
@@ -152,7 +159,7 @@ export default function App() {
 
   // --- Handlers ---
   const handleLogin = (role: UserRole, email: string, firstName: string, lastName: string) => {
-    const newUser: User = {
+    const newUser: AppUser = {
       id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
       firstName,
       lastName,
@@ -161,7 +168,10 @@ export default function App() {
       department: role === 'admin' ? 'Human Resources' : 'Engineering',
       avatarUrl: role === 'admin' 
         ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+        isActive: true,
+        isVerified: true,
+        createdAt: new Date().toISOString()
     };
     setCurrentUser(newUser);
     setActiveTab('dashboard');
@@ -421,6 +431,7 @@ export default function App() {
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
             onAddRequest={handleAddLeaveRequest} 
+            userRole={currentUser.role} 
           />
         );
       
@@ -474,7 +485,7 @@ export default function App() {
   // --- Authentication & navigation logic ---
   if (showAuth) {
     return (
-      <Registration
+      <Login
         onLogin={handleLogin}
         onBackHome={() => {
           setShowAuth(false);

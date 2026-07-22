@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { UserRole } from '../types';
 
 interface Notification {
   id: string;
@@ -29,7 +30,7 @@ interface NotificationsViewProps {
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onNavigate: (link: string) => void;
-  userRole: 'admin' | 'employee';
+  userRole: UserRole;
 }
 
 export default function NotificationsView({
@@ -44,7 +45,6 @@ export default function NotificationsView({
   const [filterRead, setFilterRead] = useState<'all' | 'read' | 'unread'>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Filter notifications
   const filtered = notifications.filter(n => {
     const matchType = filterType === 'all' || n.type === filterType;
     const matchRead = filterRead === 'all' || (filterRead === 'read' ? n.read : !n.read);
@@ -68,15 +68,6 @@ export default function NotificationsView({
   const handleMarkSelectedRead = () => {
     selectedIds.forEach(id => onMarkRead(id));
     setSelectedIds([]);
-  };
-
-  const handleClearSelected = () => {
-    if (window.confirm('Delete selected notifications?')) {
-      selectedIds.forEach(id => onClearAll()); // we need a clear selected function
-      // We'll add a clearSelected prop later; for now, we call onClearAll
-      // Better: add onClearSelected prop.
-      setSelectedIds([]);
-    }
   };
 
   const getIcon = (type: Notification['type']) => {
@@ -104,7 +95,6 @@ export default function NotificationsView({
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Notifications</h1>
@@ -134,7 +124,6 @@ export default function NotificationsView({
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Filter className="w-4 h-4 text-outline" />
@@ -175,7 +164,6 @@ export default function NotificationsView({
         )}
       </div>
 
-      {/* Notification List */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-on-surface-variant">
@@ -185,7 +173,6 @@ export default function NotificationsView({
           </div>
         ) : (
           <>
-            {/* Select all header */}
             <div className="px-4 py-2 border-b border-outline-variant/30 bg-surface-container-lowest flex items-center gap-3">
               <input
                 type="checkbox"
@@ -195,8 +182,6 @@ export default function NotificationsView({
               />
               <span className="text-caption font-medium text-on-surface-variant">Select all</span>
             </div>
-
-            {/* List */}
             <ul className="divide-y divide-outline-variant/30">
               {filtered.map((notif) => (
                 <li
@@ -244,7 +229,6 @@ export default function NotificationsView({
         )}
       </div>
 
-      {/* Pagination (optional – just a placeholder) */}
       <div className="flex justify-between items-center text-caption text-on-surface-variant">
         <span>Showing {filtered.length} notifications</span>
         <div className="flex gap-2">

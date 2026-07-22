@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, X, Check, AlertCircle, Calendar, Users } from 'lucide-react';
-import { Project } from '../types';
+import { Project, UserRole } from '../types';
 
 interface ProjectsViewProps {
   projects: Project[];
   onAddProject: (project: Partial<Project>) => void;
   onEditProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
-  userRole: 'admin' | 'employee';
+  userRole: UserRole;
   teamMembers: { id: string; firstName: string; lastName: string }[];
 }
 
@@ -19,6 +19,7 @@ export default function ProjectsView({
   userRole,
   teamMembers,
 }: ProjectsViewProps) {
+  const isAdmin = userRole === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'All'>('All');
   const [showModal, setShowModal] = useState(false);
@@ -48,11 +49,13 @@ export default function ProjectsView({
   };
 
   const handleOpenCreate = () => {
+    if (!isAdmin) return;
     resetForm();
     setShowModal(true);
   };
 
   const handleOpenEdit = (project: Project) => {
+    if (!isAdmin) return;
     setEditingProject(project);
     setName(project.name);
     setClient(project.client);
@@ -65,11 +68,11 @@ export default function ProjectsView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!name.trim() || !client.trim() || !deadline) {
       showToast('Please fill in all required fields.', 'error');
       return;
     }
-
     const projectData: Partial<Project> = {
       name: name.trim(),
       client: client.trim(),
@@ -78,7 +81,6 @@ export default function ProjectsView({
       deadline,
       teamMembers: selectedTeam,
     };
-
     if (editingProject) {
       onEditProject(editingProject.id, projectData);
       showToast(`Project "${name}" updated successfully.`, 'success');
@@ -86,12 +88,12 @@ export default function ProjectsView({
       onAddProject(projectData);
       showToast(`Project "${name}" created successfully.`, 'success');
     }
-
     setShowModal(false);
     resetForm();
   };
 
   const handleDelete = (id: string, name: string) => {
+    if (!isAdmin) return;
     if (window.confirm(`Are you sure you want to delete the project "${name}"?`)) {
       onDeleteProject(id);
       showToast(`Project "${name}" deleted.`, 'success');
@@ -140,11 +142,7 @@ export default function ProjectsView({
               : 'bg-red-50 text-red-800 border-red-200'
           }`}
         >
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 shrink-0" />
-          )}
+          {toast.type === 'success' ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
           <span>{toast.message}</span>
         </div>
       )}
@@ -153,10 +151,10 @@ export default function ProjectsView({
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Projects</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">
-            Manage all active and past projects.
+            {isAdmin ? 'Manage all active and past projects.' : 'View projects.'}
           </p>
         </div>
-        {userRole === 'admin' && (
+        {isAdmin && (
           <button
             onClick={handleOpenCreate}
             className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
@@ -206,7 +204,7 @@ export default function ProjectsView({
                 <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
                 <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Deadline</th>
                 <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Team</th>
-                {userRole === 'admin' && (
+                {isAdmin && (
                   <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
                 )}
               </tr>
@@ -247,7 +245,7 @@ export default function ProjectsView({
                         </span>
                       </div>
                     </td>
-                    {userRole === 'admin' && (
+                    {isAdmin && (
                       <td className="py-4 px-6 text-right">
                         <div className="flex justify-end gap-2">
                           <button
@@ -267,15 +265,18 @@ export default function ProjectsView({
                         </div>
                       </td>
                     )}
+                    {!isAdmin && (
+                      <td className="py-4 px-6 text-right text-caption text-on-surface-variant">—</td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td
-                    colSpan={userRole === 'admin' ? 6 : 5}
+                    colSpan={isAdmin ? 6 : 5}
                     className="py-12 px-6 text-center text-on-surface-variant font-medium"
                   >
-                    No projects found. {userRole === 'admin' ? 'Create one now!' : ''}
+                    No projects found.
                   </td>
                 </tr>
               )}
@@ -284,8 +285,7 @@ export default function ProjectsView({
         </div>
       </div>
 
-      {/* Create/Edit Modal */}
-      {showModal && (
+      {isAdmin && showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
           <div className="relative bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-lg max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
