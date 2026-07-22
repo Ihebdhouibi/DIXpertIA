@@ -240,6 +240,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                 >
                   <option value="employee">Employee</option>
                   <option value="admin">Admin</option>
+                  <option value="accountant">Accountant</option>
                 </select>
               </div>
 

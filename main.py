@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from jose import JWTError, jwt
 import bcrypt
@@ -17,6 +18,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
+
+# --- CORS (allow frontend) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DB_FILE = os.path.join(os.getcwd(), 'db.json')
 
@@ -67,22 +77,162 @@ def send_email(to_email: str, subject: str, body: str):
 # --- Initial seed data (unchanged) ---
 initial_payslips = [
   { "id": 'PS-001', "period": 'September 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Sep 30, 2024' },
-  # ... (keep the rest as in the original)
+  { "id": 'PS-002', "period": 'August 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Aug 31, 2024' },
+  { "id": 'PS-003', "period": 'July 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jul 31, 2024' },
+  { "id": 'PS-004', "period": 'June 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jun 30, 2024' },
+  { "id": 'PS-005', "period": 'May 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'May 31, 2024' },
+  { "id": 'PS-006', "period": 'April 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Apr 30, 2024' },
+  { "id": 'PS-007', "period": 'March 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Mar 31, 2024' },
+  { "id": 'PS-008', "period": 'February 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Feb 29, 2024' },
+  { "id": 'PS-009', "period": 'January 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jan 31, 2024' }
 ]
 
 initial_leave_requests = [
-  { "id": 'LR-001', "employeeId": 'EMP-01', "employeeName": 'Alice Smith', "department": 'Engineering', "type": 'Annual Leave', "dates": 'Oct 12 - Oct 16, 2024', "duration": 5, "status": 'Approved', "reason": 'Family trip to the mountains' },
-  # ...
+  {
+    "id": 'LR-001',
+    "employeeId": 'EMP-01',
+    "employeeName": 'Alice Smith',
+    "department": 'Engineering',
+    "type": 'Annual Leave',
+    "dates": 'Oct 12 - Oct 16, 2024',
+    "duration": 5,
+    "status": 'Approved',
+    "reason": 'Family trip to the mountains'
+  },
+  {
+    "id": 'LR-002',
+    "employeeId": 'EMP-02',
+    "employeeName": 'John Doe',
+    "department": 'Marketing',
+    "type": 'Sick Leave',
+    "dates": 'Sep 01, 2024',
+    "duration": 1,
+    "status": 'Approved',
+    "reason": 'Medical appointment'
+  },
+  {
+    "id": 'LR-003',
+    "employeeId": 'EMP-02',
+    "employeeName": 'John Doe',
+    "department": 'Marketing',
+    "type": 'Personal Day',
+    "dates": 'Nov 20, 2024',
+    "duration": 1,
+    "status": 'Pending',
+    "reason": 'Urgent family matter'
+  }
 ]
 
 initial_team_members = [
-  { "id": 'TM-001', "firstName": 'Sarah', "lastName": 'Jenkins', "email": 'sarah.j@dixpertia.com', "role": 'Senior Developer', "status": 'Active', "avatarUrl": 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=150&auto=format&fit=crop' },
-  # ...
+  {
+    "id": 'TM-001',
+    "firstName": 'Sarah',
+    "lastName": 'Jenkins',
+    "email": 'sarah.j@dixpertia.com',
+    "role": 'Senior Developer',
+    "status": 'Active',
+    "avatarUrl": 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=150&auto=format&fit=crop'
+  },
+  {
+    "id": 'TM-002',
+    "firstName": 'Marcus',
+    "lastName": 'Rodriguez',
+    "email": 'm.rodriguez@dixpertia.com',
+    "role": 'Project Manager',
+    "status": 'Active',
+    "initials": 'MR'
+  },
+  {
+    "id": 'TM-003',
+    "firstName": 'David',
+    "lastName": 'Chen',
+    "email": 'd.chen@dixpertia.com',
+    "role": 'System Administrator',
+    "status": 'Inactive',
+    "avatarUrl": 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=150&auto=format&fit=crop'
+  },
+  {
+    "id": 'TM-004',
+    "firstName": 'Amina',
+    "lastName": 'Khalid',
+    "email": 'a.khalid@dixpertia.com',
+    "role": 'Security Analyst',
+    "status": 'Active',
+    "initials": 'AK'
+  },
+  {
+    "id": 'TM-005',
+    "firstName": 'John',
+    "lastName": 'Doe',
+    "email": 'john.doe@dixpertia.com',
+    "role": 'Junior Developer',
+    "status": 'Active',
+    "avatarUrl": 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=150&auto=format&fit=crop'
+  },
+  {
+    "id": 'TM-006',
+    "firstName": 'Alice',
+    "lastName": 'Smith',
+    "email": 'alice.smith@dixpertia.com',
+    "role": 'DevOps Engineer',
+    "status": 'Active',
+    "initials": 'AS'
+  }
 ]
 
 initial_invoices = [
-  { "id": 'INV-2024-001', "client": 'Acme Corp', "clientInitials": 'AC', "amount": 12450.00, "dateIssued": 'Oct 12, 2024', "dueDate": 'Nov 11, 2024', "status": 'Sent', "items": [ { "description": 'Cloud Infrastructure Setup', "qty": 1, "price": 5000.00, "total": 5000.00 }, { "description": 'Security Audit Phase 1', "qty": 1, "price": 3450.00, "total": 3450.00 }, { "description": 'Enterprise Support (Monthly)', "qty": 2, "price": 2000.00, "total": 4000.00 } ] },
-  # ...
+  {
+    "id": 'INV-2024-001',
+    "client": 'Acme Corp',
+    "clientInitials": 'AC',
+    "amount": 12450.00,
+    "dateIssued": 'Oct 12, 2024',
+    "dueDate": 'Nov 11, 2024',
+    "status": 'Sent',
+    "items": [
+      { "description": 'Cloud Infrastructure Setup', "qty": 1, "price": 5000.00, "total": 5000.00 },
+      { "description": 'Security Audit Phase 1', "qty": 1, "price": 3450.00, "total": 3450.00 },
+      { "description": 'Enterprise Support (Monthly)', "qty": 2, "price": 2000.00, "total": 4000.00 }
+    ]
+  },
+  {
+    "id": 'INV-2024-002',
+    "client": 'Global Tech',
+    "clientInitials": 'G',
+    "amount": 8200.00,
+    "dateIssued": 'Oct 15, 2024',
+    "dueDate": 'Oct 25, 2024',
+    "status": 'Overdue',
+    "items": [
+      { "description": 'React Frontend Development', "qty": 40, "price": 150.00, "total": 6000.00 },
+      { "description": 'Figma UX Design Consultation', "qty": 10, "price": 220.00, "total": 2200.00 }
+    ]
+  },
+  {
+    "id": 'INV-2024-003',
+    "client": 'Stark Industries',
+    "clientInitials": 'S',
+    "amount": 45000.00,
+    "dateIssued": 'Oct 01, 2024',
+    "dueDate": 'Oct 31, 2024',
+    "status": 'Paid',
+    "items": [
+      { "description": 'AI Logic Model Training & Validation', "qty": 1, "price": 30000.00, "total": 30000.00 },
+      { "description": 'Kubernetes Cluster Provisioning', "qty": 3, "price": 5000.00, "total": 15000.00 }
+    ]
+  },
+  {
+    "id": 'INV-2024-004',
+    "client": 'Wayne Ent.',
+    "clientInitials": 'W',
+    "amount": 3500.00,
+    "dateIssued": '-',
+    "dueDate": '-',
+    "status": 'Draft',
+    "items": [
+      { "description": 'Security Patch Compliance Audit', "qty": 1, "price": 3500.00, "total": 3500.00 }
+    ]
+  }
 ]
 
 default_db = {
@@ -189,12 +339,17 @@ class LoginRequest(BaseModel):
 @app.post('/api/login')
 def login(req: LoginRequest):
     db = read_db()
-    # Find the first user with this email (if multiple, the first one is returned)
+    print(f"🔍 Login attempt for email: {req.email}")
     user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
     if not user:
+        print("❌ User not found")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    print(f"✅ User found, role: {user['role']}")
+    print(f"Stored hash: {user['hashedPassword']}")
     if not verify_password(req.password, user['hashedPassword']):
+        print("❌ Password verification failed")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    print("✅ Password verified")
     token = create_access_token(data={"sub": user['id'], "role": user['role']})
     return {
         "access_token": token,
@@ -209,7 +364,7 @@ def create_user(req: UserCreate, current_user: dict = Depends(get_current_user))
     db = read_db()
     if 'users' not in db:
         db['users'] = []
-    # Removed duplicate email check – multiple users can now share the same email
+    # Duplicate email check removed – multiple users can share the same email
     alphabet = string.ascii_letters + string.digits
     temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
     hashed = get_password_hash(temp_password)
