@@ -176,7 +176,11 @@ export default function App() {
         addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
         return;
       }
+      console.log('Login response status:', response.status);
+
       const data = await response.json();
+      console.log('Login response data:', data);
+      console.log('Setting current user with role:', data.user.role);
       localStorage.setItem('token', data.access_token);
       const user = data.user;
       const appUser: AppUser = {
@@ -192,7 +196,9 @@ export default function App() {
         createdAt: user.createdAt || new Date().toISOString()
       };
       setCurrentUser(appUser);
+      console.log('Current user set:', appUser);
       setActiveTab('dashboard');
+      console.log('Active tab set to dashboard');
       setShowHomepage(false);
       setShowLogin(false);
       setShowAuth(false);
@@ -518,7 +524,8 @@ export default function App() {
 
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
-
+      case 'invoices':
+        return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
       case 'users':
         if (currentUser.role !== 'admin') {
           return (
@@ -542,13 +549,13 @@ export default function App() {
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice}  userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} />;
       
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice}  userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView 
