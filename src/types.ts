@@ -1,4 +1,4 @@
-export type UserRole = 'employee' | 'admin';
+export type UserRole = 'employee' | 'admin' | 'accountant';
 
 export interface User {
   id: string;
@@ -8,6 +8,9 @@ export interface User {
   avatarUrl?: string;
   role: UserRole;
   department?: string;
+  isActive: boolean;      
+  isVerified: boolean;  
+  createdAt: string; 
 }
 
 export interface Payslip {

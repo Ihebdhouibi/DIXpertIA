@@ -494,6 +494,17 @@ export default function App() {
             onQuickAction={handleQuickAction}
           />
         );
+        case 'leave-requests':
+          if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
+           return <div>Access Denied</div>;
+  }
+         return (
+            <LeaveRequestsView
+               leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+               onAddRequest={handleAddLeaveRequest}
+               userRole={currentUser.role}
+    />
+  );
 
       case 'notifications':
         return (
@@ -561,6 +572,7 @@ export default function App() {
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
             onAddRequest={handleAddLeaveRequest} 
+            userRole={currentUser.role} 
           />
         );
       
