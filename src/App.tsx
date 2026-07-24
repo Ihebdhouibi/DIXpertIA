@@ -562,7 +562,7 @@ export default function App() {
         if (currentUser.role === 'admin') {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice}  userRole={currentUser.role} />;
         }
-        return <PayslipsView payslips={payslips} />;
+        return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
       
       case 'reports':
         if (currentUser.role === 'admin') {

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { FileText, Download, Calendar, DollarSign, Wallet, CreditCard, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Payslip } from '../types';
+import { Payslip, UserRole } from '../types';
 
 interface PayslipsViewProps {
   payslips: Payslip[];
+  userRole: UserRole;
 }
 
-export default function PayslipsView({ payslips }: PayslipsViewProps) {
+export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) {
   const [selectedYear, setSelectedYear] = useState('2024');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -20,12 +21,32 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleDownload = (id: string, period: string) => {
-    setDownloadingId(id);
-    setTimeout(() => {
-      setDownloadingId(null);
-      showToast(`Fiche de paie de ${period} téléchargée avec succès (PDF).`);
-    }, 1000);
+  const handleDownload = (slip: Payslip) => {
+    // Use print fallback to generate a simple PDF
+    const win = window.open('', '_blank');
+    if (!win) {
+      showToast('Please allow pop-ups to download the payslip.');
+      return;
+    }
+
+    const content = `
+      <html>
+        <head><title>Payslip ${slip.period}</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 40px;">
+          <h1>DIXpertIA Payslip</h1>
+          <p><strong>Period:</strong> ${slip.period}</p>
+          <p><strong>Gross Pay:</strong> $${slip.grossPay.toFixed(2)}</p>
+          <p><strong>Net Pay:</strong> $${slip.netPay.toFixed(2)}</p>
+          <p><strong>Issued On:</strong> ${slip.issuedOn}</p>
+          <p><em>Generated from DIXpertIA</em></p>
+        </body>
+      </html>
+    `;
+
+    win.document.write(content);
+    win.document.close();
+    win.print();
+    showToast(`Payslip ${slip.period} opened for printing.`);
   };
 
   // Filter and paginated list
@@ -38,6 +59,11 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
   };
+
+  // Only employees, accountants and admins can see payslips
+  if (userRole !== 'employee' && userRole !== 'accountant' && userRole !== 'admin') {
+    return <div className="p-8 text-center text-on-surface-variant">Access Denied</div>;
+  }
 
   return (
     <div className="flex-1 flex flex-col gap-6">
@@ -53,8 +79,14 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">My Payslips</h1>
-          <p className="text-body-lg text-on-surface-variant mt-1">View and download your monthly salary statements.</p>
+          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">
+            {userRole === 'admin' || userRole === 'accountant' ? 'All Payslips' : 'My Payslips'}
+          </h1>
+          <p className="text-body-lg text-on-surface-variant mt-1">
+            {userRole === 'admin' || userRole === 'accountant'
+              ? 'View and download all employee payslips.'
+              : 'View and download your monthly salary statements.'}
+          </p>
         </div>
         
         {/* Period Filter */}
@@ -77,8 +109,6 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
 
       {/* Bento Style Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Card 1: Gross Pay */}
         <div className="bg-white rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-primary group-hover:scale-110 transition-transform">
             <Wallet className="w-20 h-20" />
@@ -88,7 +118,6 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
           <div className="text-xs text-outline mt-1 font-medium">Cumulé brut pour l'année {selectedYear}</div>
         </div>
 
-        {/* Card 2: Net Pay */}
         <div className="bg-white rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-secondary group-hover:scale-110 transition-transform">
             <DollarSign className="w-20 h-20" />
@@ -98,7 +127,6 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
           <div className="text-xs text-outline mt-1 font-medium">Cumulé net pour l'année {selectedYear}</div>
         </div>
 
-        {/* Card 3: Next Pay Date */}
         <div className="bg-primary-container text-white rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1px,transparent_1px)] bg-[size:16px_16px]"></div>
           <div className="absolute top-0 right-0 p-4 opacity-25">
@@ -149,18 +177,11 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <button
-                        onClick={() => handleDownload(slip.id, slip.period)}
-                        disabled={downloadingId === slip.id}
-                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-primary hover:bg-primary/10 transition-colors cursor-pointer ${
-                          downloadingId === slip.id ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        onClick={() => handleDownload(slip)}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-primary hover:bg-primary/10 transition-colors cursor-pointer"
                         title="Download PDF"
                       >
-                        {downloadingId === slip.id ? (
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        ) : (
-                          <Download className="w-5 h-5" />
-                        )}
+                        <Download className="w-5 h-5" />
                       </button>
                     </td>
                   </tr>
@@ -168,7 +189,7 @@ export default function PayslipsView({ payslips }: PayslipsViewProps) {
               ) : (
                 <tr>
                   <td colSpan={5} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    Aucune fiche de paie trouvée pour l'année sélectionnée.
+                    No payslips found for the selected year.
                   </td>
                 </tr>
               )}
