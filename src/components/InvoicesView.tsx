@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, X, Download, ZoomIn, ZoomOut, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Invoice, UserRole } from '../types';
-
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 interface InvoicesViewProps {
   invoices: Invoice[];
   onAddInvoice: (invoice: Partial<Invoice>) => void;
@@ -29,10 +30,41 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleDownload = (id: string) => {
-    showToast(`Downloading invoice ${id}...`);
-  };
+  const handleDownload = (invoice: Invoice) => {
+  // Open a new window with the invoice content
+  const win = window.open('', '_blank');
+  if (!win) {
+    showToast('Please allow pop-ups to download the invoice.');
+    return;
+  }
 
+  const content = `
+    <html>
+      <head><title>Invoice ${invoice.id}</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 40px;">
+        <h1>DIXpertIA Invoice</h1>
+        <p><strong>Invoice #:</strong> ${invoice.id}</p>
+        <p><strong>Client:</strong> ${invoice.client}</p>
+        <p><strong>Date Issued:</strong> ${invoice.dateIssued}</p>
+        <p><strong>Due Date:</strong> ${invoice.dueDate}</p>
+        <p><strong>Status:</strong> ${invoice.status}</p>
+        <h2>Items</h2>
+        <table border="1" cellpadding="5" style="width:100%;border-collapse:collapse;">
+          <tr><th>Description</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+          ${invoice.items.map(item => `
+            <tr><td>${item.description}</td><td>${item.qty}</td><td>$${item.price.toFixed(2)}</td><td>$${item.total.toFixed(2)}</td></tr>
+          `).join('')}
+        </table>
+        <h3>Total Amount: $${invoice.amount.toFixed(2)}</h3>
+        <p><em>Generated from DIXpertIA</em></p>
+      </body>
+    </html>
+  `;
+
+  win.document.write(content);
+  win.document.close();
+  win.print();
+};
   const handleNewInvoiceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName || !amount) {
@@ -190,10 +222,11 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     </td>
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => handleDownload(inv.id)}
+                        onClick={() => handleDownload(inv)}
                         className="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer"
+                        title="Download PDF"
                       >
-                        <MoreVertical className="w-5 h-5" />
+                        <Download className="w-5 h-5" />
                       </button>
                     </td>
                   </tr>
@@ -239,7 +272,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleDownload(selectedInvoice.id)}
+                  onClick={() => handleDownload(selectedInvoice)}
                   className="px-4 py-2 text-primary font-bold text-body-sm hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> Download
