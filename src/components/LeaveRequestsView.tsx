@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { Calendar, Plus, Filter, Plane, HeartPulse, MoreVertical, X, Check } from 'lucide-react';
 import { LeaveRequest, UserRole } from '../types';
+import CalendarView from './CalendarView';
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
   onAddRequest: (newReq: Partial<LeaveRequest>) => void;
   userRole: UserRole;
+  currentUserId?: string;   // <-- added to filter employee's own requests in calendar
 }
 
-export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRole }: LeaveRequestsViewProps) {
+export default function LeaveRequestsView({ 
+  leaveRequests, 
+  onAddRequest, 
+  userRole, 
+  currentUserId 
+}: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [leaveType, setLeaveType] = useState<'Annual Leave' | 'Sick Leave' | 'Personal Day' | 'Unpaid Leave'>('Annual Leave');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -17,8 +25,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
 
-  // Allow both employee and accountant to create new requests
-  const canCreate = userRole === 'employee' ;
+  const isEmployee = userRole === 'employee';
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -89,6 +96,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
     }
   };
 
+  // Mock balances
   const annualLeft = 14;
   const sickLeft = 5;
   const personalLeft = 2;
@@ -99,6 +107,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
 
   return (
     <div className="flex-1 flex flex-col gap-6">
+      {/* Toast notification */}
       {toastMessage && (
         <div className="fixed bottom-4 right-4 z-50 bg-primary text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/15">
           <Check className="w-5 h-5 shrink-0" />
@@ -106,12 +115,13 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
         </div>
       )}
 
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Leave Requests</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">Manage and track your time off</p>
         </div>
-        {canCreate && (
+        {isEmployee && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-primary text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
@@ -122,6 +132,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
         )}
       </div>
 
+      {/* Balance cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/5 rounded-full transition-transform group-hover:scale-110"></div>
@@ -148,7 +159,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
           </div>
         </div>
         <div
-          onClick={() => showToast('Calendar view coming soon.')}
+          onClick={() => setShowCalendar(true)}
           className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors select-none"
         >
           <Calendar className="text-primary mb-2 w-7 h-7" />
@@ -156,6 +167,7 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
         </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-outline-variant bg-white flex justify-between items-center">
           <h2 className="font-bold text-body-lg text-on-surface">Recent Requests</h2>
@@ -221,7 +233,18 @@ export default function LeaveRequestsView({ leaveRequests, onAddRequest, userRol
         </div>
       </div>
 
-      {canCreate && isModalOpen && (
+      {/* Calendar Modal */}
+      {showCalendar && (
+        <CalendarView
+          leaveRequests={leaveRequests}
+          userRole={userRole}
+          currentUserId={currentUserId}
+          onClose={() => setShowCalendar(false)}
+        />
+      )}
+
+      {/* New Request Modal */}
+      {isEmployee && isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
           <div className="relative w-full max-w-lg bg-white rounded-xl shadow-lg border border-outline-variant overflow-hidden flex flex-col max-h-full animate-scale-up">
