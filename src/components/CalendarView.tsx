@@ -32,49 +32,69 @@ interface CalendarEvent {
 
 export default function CalendarView({ leaveRequests, userRole, currentUserId, onClose }: CalendarViewProps) {
   const events = useMemo(() => {
-    // Filter requests based on role
     let filtered = leaveRequests;
     if (userRole === 'employee' && currentUserId) {
       filtered = leaveRequests.filter(req => req.employeeId === currentUserId);
     }
 
-    return filtered.map((req): CalendarEvent => {
-      // Parse dates from the "dates" string (e.g., "Oct 12 - Oct 16, 2024")
-      const dateParts = req.dates.split(' - ');
-      const startStr = dateParts[0];
-      const endStr = dateParts.length > 1 ? dateParts[1] : startStr;
-      // Append year if missing (we assume current year)
-      const year = new Date().getFullYear();
-      const startDate = parse(`${startStr}, ${year}`, 'MMM dd, yyyy', new Date());
-      const endDate = parse(`${endStr}, ${year}`, 'MMM dd, yyyy', new Date());
-      // For single day, end date should be same day (calendar needs end exclusive, so we add a day)
-      const endDateAdjusted = new Date(endDate);
-      if (endDateAdjusted.getTime() === startDate.getTime()) {
-        endDateAdjusted.setDate(endDateAdjusted.getDate() + 1);
-      }
+    console.log('📥 Filtered leave requests:', filtered);
 
-      return {
-        id: req.id,
-        title: `${req.employeeName} - ${req.type}`,
-        start: startDate,
-        end: endDateAdjusted,
-        status: req.status,
-        resource: req,
-      };
-    });
+    return filtered
+      .map((req): CalendarEvent | null => {
+        // Extract year from the date string (e.g., "Aug 10 - Aug 20, 2026")
+        const yearMatch = req.dates.match(/\d{4}/);
+        const year = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
+
+        // Split the date range
+        const parts = req.dates.split(' - ');
+        const startStr = parts[0].trim();
+        const endStr = parts.length > 1 ? parts[1].trim() : startStr;
+
+        // Build full date strings with year
+        const startFull = `${startStr}, ${year}`;
+        const endFull = `${endStr}, ${year}`;
+
+        // Parse using JavaScript Date (works for "Aug 10, 2026")
+        const startDate = new Date(startFull);
+        const endDate = new Date(endFull);
+
+        // Validate
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          console.warn('⚠️ Invalid date for request:', req.id, req.dates);
+          return null;
+        }
+
+        // For single-day events, add one day to make it a full-day event
+        const endDateAdjusted = new Date(endDate);
+        if (endDateAdjusted.getTime() === startDate.getTime()) {
+          endDateAdjusted.setDate(endDateAdjusted.getDate() + 1);
+        }
+
+        return {
+          id: req.id,
+          title: `${req.employeeName} - ${req.type}`,
+          start: startDate,
+          end: endDateAdjusted,
+          status: req.status,
+          resource: req,
+        };
+      })
+      .filter((event): event is CalendarEvent => event !== null);
   }, [leaveRequests, userRole, currentUserId]);
 
+  console.log('📅 Generated events:', events);
+
   const eventStyleGetter = (event: CalendarEvent) => {
-    let backgroundColor = '#6b7280'; // default gray
+    let backgroundColor = '#6b7280';
     switch (event.status) {
       case 'Approved':
-        backgroundColor = '#10b981'; // green
+        backgroundColor = '#10b981';
         break;
       case 'Pending':
-        backgroundColor = '#f59e0b'; // yellow
+        backgroundColor = '#f59e0b';
         break;
       case 'Rejected':
-        backgroundColor = '#ef4444'; // red
+        backgroundColor = '#ef4444';
         break;
     }
     return {
@@ -91,7 +111,14 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
 
   const handleSelectEvent = (event: CalendarEvent) => {
     const req = event.resource;
-    alert(`Leave Request: ${req.employeeName}\nType: ${req.type}\nDates: ${req.dates}\nDuration: ${req.duration} days\nStatus: ${req.status}\nReason: ${req.reason || 'N/A'}`);
+    alert(
+      `Leave Request: ${req.employeeName}\n` +
+      `Type: ${req.type}\n` +
+      `Dates: ${req.dates}\n` +
+      `Duration: ${req.duration} days\n` +
+      `Status: ${req.status}\n` +
+      `Reason: ${req.reason || 'N/A'}`
+    );
   };
 
   return (
@@ -112,6 +139,7 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
             events={events}
             startAccessor="start"
             endAccessor="end"
+            defaultDate={new Date()}
             style={{ height: '100%', minHeight: '500px' }}
             views={[Views.MONTH, Views.WEEK, Views.DAY]}
             defaultView={Views.MONTH}

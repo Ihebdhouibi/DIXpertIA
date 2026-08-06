@@ -45,8 +45,7 @@ export default function LeaveRequestsView({
 
     const formatDateStr = (date: Date) =>
       date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-    const dateRangeStr = `${formatDateStr(start)} - ${formatDateStr(end)}, 2024`;
-
+    const dateRangeStr = `${formatDateStr(start)} - ${formatDateStr(end)}, ${start.getFullYear()}`;
     onAddRequest({
       type: leaveType,
       dates: dateRangeStr,
