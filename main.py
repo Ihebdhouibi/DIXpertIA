@@ -335,6 +335,14 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+# --- NEW: Forgot / Reset Password models ---
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    newPassword: str
+
 # --- Auth endpoints ---
 @app.post('/api/login')
 def login(req: LoginRequest):
@@ -404,6 +412,87 @@ DIXpertIA Team
         "email": req.email,
         "tempPassword": temp_password
     }
+
+# --- NEW: Forgot Password ---
+@app.post('/api/forgot-password')
+def forgot_password(req: ForgotPasswordRequest):
+    db = read_db()
+    user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
+    if not user:
+        # Return 200 even if user not found to avoid email enumeration
+        return {"message": "If your email is registered, you will receive a password reset link."}
+
+    # Generate reset token (JWT with short expiry)
+    expiry = datetime.utcnow() + timedelta(hours=1)
+    token_data = {"sub": user['id'], "exp": expiry, "purpose": "reset"}
+    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+
+    # Save token and expiry to the user record
+    user['resetToken'] = token
+    user['resetTokenExpiry'] = expiry.isoformat()
+    write_db(db)
+
+    # Send email with reset link
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+    email_body = f"""
+Hello {user['firstName']},
+
+You requested a password reset for your DIXpertIA account.
+
+Click the link below to set a new password (valid for 1 hour):
+
+{reset_link}
+
+If you did not request this, please ignore this email.
+
+Regards,
+DIXpertIA Team
+"""
+    send_email(user['email'], "Password Reset Request", email_body)
+
+    return {"message": "If your email is registered, you will receive a password reset link."}
+
+# --- NEW: Reset Password ---
+@app.post('/api/reset-password')
+def reset_password(req: ResetPasswordRequest):
+    db = read_db()
+    # Decode token
+    try:
+        payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Reset token has expired.")
+    except jwt.JWTError:
+        raise HTTPException(status_code=400, detail="Invalid token.")
+
+    user_id = payload.get('sub')
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid token.")
+
+    user = next((u for u in db.get('users', []) if u['id'] == user_id), None)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found.")
+
+    # Verify token matches stored token
+    if user.get('resetToken') != req.token:
+        raise HTTPException(status_code=400, detail="Invalid token.")
+
+    # Check expiry
+    expiry = user.get('resetTokenExpiry')
+    if expiry:
+        expiry_dt = datetime.fromisoformat(expiry)
+        if datetime.utcnow() > expiry_dt:
+            raise HTTPException(status_code=400, detail="Token has expired.")
+
+    # Update password
+    hashed = get_password_hash(req.newPassword)
+    user['hashedPassword'] = hashed
+    # Clear reset token fields
+    user.pop('resetToken', None)
+    user.pop('resetTokenExpiry', None)
+    write_db(db)
+
+    return {"message": "Password updated successfully."}
 
 # --- Existing endpoints (payslips, leave, invoices, team) ---
 @app.get('/api/data')

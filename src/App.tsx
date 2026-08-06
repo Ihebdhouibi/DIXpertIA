@@ -19,6 +19,8 @@ import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
+import ForgotPassword from './components/ForgotPassword';   // NEW
+import ResetPassword from './components/ResetPassword';     // NEW
 import { 
   Bell, 
   Menu, 
@@ -51,7 +53,16 @@ export default function App() {
   // --- State ---
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('dixpertia_user');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        isActive: parsed.isActive !== undefined ? parsed.isActive : true,
+        isVerified: parsed.isVerified !== undefined ? parsed.isVerified : true,
+        createdAt: parsed.createdAt || new Date().toISOString()
+      };
+    }
+    return null;
   });
 
   const [payslips, setPayslips] = useState<Payslip[]>(() => {
@@ -92,6 +103,18 @@ export default function App() {
   const [showHomepage, setShowHomepage] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
+  const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
+
+  // --- Detect reset token from URL ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setResetToken(token);
+      setShowForgotPassword(false);
+    }
+  }, []);
 
   // --- Notifications state ---
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -160,75 +183,70 @@ export default function App() {
     localStorage.setItem('dixpertia_users', JSON.stringify(users));
   }, [users]);
 
-  // --- Handlers (with real API calls) ---
+  // --- Handlers with real API calls ---
 
   const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
-  try {
-    if (password) {
-      console.log('🔍 Login attempt:', { email, password });
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
+    try {
+      if (password) {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
+          return;
+        }
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        const user = data.user;
+        const appUser: AppUser = {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department || 'Operations',
+          avatarUrl: user.avatarUrl || undefined,
+          isActive: user.isActive,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        setCurrentUser(appUser);
+        setActiveTab('dashboard');
+        setShowHomepage(false);
+        setShowAuth(false);
+        setShowLogin(false);
+        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
         return;
       }
-      console.log('Login response status:', response.status);
-
-      const data = await response.json();
-      console.log('Login response data:', data);
-      console.log('Setting current user with role:', data.user.role);
-      localStorage.setItem('token', data.access_token);
-      const user = data.user;
-      const appUser: AppUser = {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,   // <-- gets the real role from backend
-        department: user.department || 'Operations',
-        avatarUrl: user.avatarUrl || undefined,
-        isActive: user.isActive,
-        isVerified: user.isVerified,
-        createdAt: user.createdAt || new Date().toISOString()
+      // Fallback mock (if no password – for testing)
+      const newUser: AppUser = {
+        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
+        firstName,
+        lastName,
+        email,
+        role,
+        department: role === 'admin' ? 'Human Resources' : 'Engineering',
+        avatarUrl: role === 'admin' 
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
+          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+        isActive: true,
+        isVerified: true,
+        createdAt: new Date().toISOString()
       };
-      setCurrentUser(appUser);
-      console.log('Current user set:', appUser);
+      localStorage.setItem('token', 'mock-admin-token');
+      setCurrentUser(newUser);
       setActiveTab('dashboard');
-      console.log('Active tab set to dashboard');
       setShowHomepage(false);
-      setShowLogin(false);
       setShowAuth(false);
-      addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
-      return;
+      setShowLogin(false);
+    } catch (error) {
+      addNotification('Network error during login', 'error');
     }
-    // Fallback mock (if no password – for testing)
-    const newUser: AppUser = {
-      id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName,
-      lastName,
-      email,
-      role,
-      department: role === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: role === 'admin' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-      isActive: true,
-      isVerified: true,
-      createdAt: new Date().toISOString()
-    };
-    localStorage.setItem('token', 'mock-admin-token');
-    setCurrentUser(newUser);
-    setActiveTab('dashboard');
-    setShowHomepage(false);
-    setShowAuth(false);
-  } catch (error) {
-    addNotification('Network error during login', 'error');
-  }
-};
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
@@ -250,13 +268,16 @@ export default function App() {
       department: toggledRole === 'admin' ? 'Human Resources' : 'Engineering',
       avatarUrl: toggledRole === 'admin'
         ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+      isActive: true,
+      isVerified: true,
+      createdAt: currentUser.createdAt || new Date().toISOString()
     };
     setCurrentUser(updatedUser);
     setActiveTab('dashboard');
   };
 
-  // --- Leave handlers (unchanged) ---
+  // --- Leave handlers ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -313,7 +334,7 @@ export default function App() {
     }
   };
 
-  // --- Other handlers (unchanged) ---
+  // --- Other handlers ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -341,7 +362,7 @@ export default function App() {
     setInvoices([inv, ...invoices]);
   };
 
-  // --- Project handlers (unchanged) ---
+  // --- Project handlers ---
   const handleAddProject = (project: Partial<Project>) => {
     const newProject: Project = {
       id: `PRJ-00${projects.length + 1}`,
@@ -419,50 +440,51 @@ export default function App() {
 
   // --- User management handlers (admin only) – REAL API ---
   const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      addNotification('You are not logged in. Please log in again.', 'error');
-      return;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        addNotification('You are not logged in. Please log in again.', 'error');
+        return;
+      }
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          role: newUser.role || 'employee'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const user: AppUser = {
+          id: data.id,
+          email: data.email,
+          firstName: newUser.firstName!,
+          lastName: newUser.lastName!,
+          role: newUser.role || 'employee',
+          isActive: true,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          department: 'Operations',
+          avatarUrl: undefined,
+        };
+        setUsers(prev => [...prev, user]);
+        addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
+        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+      } else {
+        const error = await response.json();
+        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
+      }
+    } catch (error) {
+      addNotification('Network error. Please try again.', 'error');
     }
-    const response = await fetch('/api/users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        role: newUser.role || 'employee'
-      })
-    });
-    if (response.ok) {
-      const data = await response.json();
-      const user: AppUser = {
-        id: data.id,
-        email: data.email,
-        firstName: newUser.firstName!,
-        lastName: newUser.lastName!,
-        role: newUser.role || 'employee',
-        isActive: true,
-        isVerified: false,
-        createdAt: new Date().toISOString(),
-        department: 'Operations',
-        avatarUrl: undefined,
-      };
-      setUsers(prev => [...prev, user]);
-      addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
-      console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
-    } else {
-      const error = await response.json();
-      addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
-    }
-  } catch (error) {
-    addNotification('Network error. Please try again.', 'error');
-  }
-};
+  };
+
   const handleEditUser = (id: string, updates: Partial<AppUser>) => {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
   };
@@ -473,7 +495,7 @@ export default function App() {
     if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
   };
 
-  // --- Render content helper (unchanged) ---
+  // --- Render content helper ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
@@ -494,17 +516,6 @@ export default function App() {
             onQuickAction={handleQuickAction}
           />
         );
-        case 'leave-requests':
-          if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
-           return <div>Access Denied</div>;
-  }
-         return (
-            <LeaveRequestsView
-               leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
-               onAddRequest={handleAddLeaveRequest}
-               userRole={currentUser.role}
-    />
-  );
 
       case 'notifications':
         return (
@@ -535,44 +546,66 @@ export default function App() {
 
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
+
       case 'invoices':
         return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
-      case 'users':
-        if (currentUser.role !== 'admin') {
+
+      case 'leave-requests':
+        if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
               <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
                 <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage users.</p>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
               </div>
             </div>
           );
         }
         return (
+          <LeaveRequestsView
+            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
+          />
+        );
+
+      case 'users':
+        if (currentUser.role !== 'admin' && currentUser.role !== 'accountant') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+              </div>
+            </div>
+          );
+        }
+        const isAdmin = currentUser.role === 'admin';
+        return (
           <UsersView
             users={users}
-            onAddUser={handleAddUser}
-            onEditUser={handleEditUser}
-            onDeleteUser={handleDeleteUser}
+            onAddUser={isAdmin ? handleAddUser : undefined}
+            onEditUser={isAdmin ? handleEditUser : undefined}
+            onDeleteUser={isAdmin ? handleDeleteUser : undefined}
             userRole={currentUser.role}
           />
         );
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice}  userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
-        return <PayslipsView payslips={payslips} />;
+        return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
       
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice}  userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
-            onAddRequest={handleAddLeaveRequest} 
-            userRole={currentUser.role} 
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
           />
         );
       
@@ -589,6 +622,16 @@ export default function App() {
         );
       
       case 'projects':
+        if (currentUser.role !== 'admin') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
+              </div>
+            </div>
+          );
+        }
         return (
           <ProjectsView
             projects={projects}
@@ -623,19 +666,49 @@ export default function App() {
     }
   };
 
-  // --- RENDERING LOGIC ---
-  if (showLogin) {
-    return <Login onLogin={handleLogin} onBackHome={() => { setShowLogin(false); setShowHomepage(true); }} />;
+  // --- RENDERING LOGIC (NEW ORDER) ---
+
+  // 1. If resetToken is present, show ResetPassword
+  if (resetToken) {
+    return (
+      <ResetPassword
+        token={resetToken}
+        onComplete={() => {
+          setResetToken(null);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setShowLogin(true);
+        }}
+      />
+    );
   }
 
+  // 2. If showForgotPassword is true, show ForgotPassword
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
+
+  // 3. If showLogin is true, show Login
+  if (showLogin) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
+        onForgotPassword={() => setShowForgotPassword(true)}
+      />
+    );
+  }
+
+  // 4. If not logged in, show homepage
   if (!currentUser) {
     return <Homepage onLoginClick={() => setShowLogin(true)} />;
   }
 
+  // 5. If logged in and showHomepage is true, show homepage with "Go to Dashboard"
   if (showHomepage) {
     return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
   }
 
+  // 6. Otherwise, show the dashboard
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
       <Sidebar
@@ -651,7 +724,6 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-surface-container-lowest border-b border-outline-variant px-6 flex items-center justify-between sticky top-0 z-40 shrink-0">
-          {/* ... header unchanged ... */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsOpenMobile(true)}
@@ -671,7 +743,7 @@ export default function App() {
             <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
               <span className="text-[11px] font-black uppercase text-primary tracking-wider">
-                {currentUser.role === 'admin' ? 'HR Admin' : 'Employee'} View
+                {currentUser.role === 'admin' ? 'HR Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Employee'} View
               </span>
             </div>
 
