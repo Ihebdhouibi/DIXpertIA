@@ -566,6 +566,7 @@ export default function App() {
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
+            currentUserId={currentUser.id}
           />
         );
 

@@ -19,7 +19,7 @@ export const initialLeaveRequests: LeaveRequest[] = [
     "employeeName": 'Alice Smith',
     "department": 'Engineering',
     "type": 'Annual Leave',
-    "dates": 'Oct 12 - Oct 16, 2024',
+    "dates": 'Oct 12 - Oct 16, 2026',
     "duration": 5,
     "status": 'Approved',
     "reason": 'Family trip to the mountains'
@@ -30,7 +30,7 @@ export const initialLeaveRequests: LeaveRequest[] = [
     "employeeName": 'John Doe',
     "department": 'Marketing',
     "type": 'Sick Leave',
-    "dates": 'Sep 01, 2024',
+    "dates": 'Sep 01, 2026',
     "duration": 1,
     "status": 'Approved',
     "reason": 'Medical appointment'
@@ -41,7 +41,7 @@ export const initialLeaveRequests: LeaveRequest[] = [
     "employeeName": 'John Doe',
     "department": 'Marketing',
     "type": 'Personal Day',
-    "dates": 'Nov 20, 2024',
+    "dates": 'Nov 20, 2026',
     "duration": 1,
     "status": 'Pending',
     "reason": 'Urgent family matter'
