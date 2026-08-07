@@ -37,11 +37,10 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
       filtered = leaveRequests.filter(req => req.employeeId === currentUserId);
     }
 
-    console.log('📥 Filtered leave requests:', filtered);
+    console.log(' Filtered leave requests:', filtered);
 
     return filtered
       .map((req): CalendarEvent | null => {
-        // Extract year from the date string (e.g., "Aug 10 - Aug 20, 2026")
         const yearMatch = req.dates.match(/\d{4}/);
         const year = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
 
@@ -54,13 +53,13 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
         const startFull = `${startStr}, ${year}`;
         const endFull = `${endStr}, ${year}`;
 
-        // Parse using JavaScript Date (works for "Aug 10, 2026")
+        // Parse using JavaScript Date
         const startDate = new Date(startFull);
         const endDate = new Date(endFull);
 
         // Validate
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          console.warn('⚠️ Invalid date for request:', req.id, req.dates);
+          console.warn(' Invalid date for request:', req.id, req.dates);
           return null;
         }
 
@@ -82,7 +81,7 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
       .filter((event): event is CalendarEvent => event !== null);
   }, [leaveRequests, userRole, currentUserId]);
 
-  console.log('📅 Generated events:', events);
+  console.log(' Generated events:', events);
 
   const eventStyleGetter = (event: CalendarEvent) => {
     let backgroundColor = '#6b7280';
