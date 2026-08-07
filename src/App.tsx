@@ -7,7 +7,7 @@ import {
   initialInvoices,
   initialProjects
 } from './data';
-import Registration from './components/Registration';
+import Login from './components/Login';
 import Homepage from './components/Homepage';
 import Sidebar from './components/Sidebar';
 import PayslipsView from './components/PayslipsView';
@@ -17,7 +17,10 @@ import InvoicesView from './components/InvoicesView';
 import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
-import SettingsView from './components/SettingsView'; // NEW
+import SettingsView from './components/SettingsView';
+import UsersView from './components/UsersView';
+import ForgotPassword from './components/ForgotPassword';   // NEW
+import ResetPassword from './components/ResetPassword';     // NEW
 import { 
   Bell, 
   Menu, 
@@ -25,12 +28,11 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  User as UserIcon,   // <-- renamed to avoid conflict with User type
+  User as UserIcon,
   Settings,
   LogOut
 } from 'lucide-react';
 
-// --- Notification type ---
 interface Notification {
   id: string;
   message: string;
@@ -41,11 +43,26 @@ interface Notification {
   targetRole?: 'admin' | 'employee';
 }
 
+interface AppUser extends User {
+  isActive: boolean;
+  isVerified: boolean;
+  createdAt: string;
+}
+
 export default function App() {
   // --- State ---
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('dixpertia_user');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        isActive: parsed.isActive !== undefined ? parsed.isActive : true,
+        isVerified: parsed.isVerified !== undefined ? parsed.isVerified : true,
+        createdAt: parsed.createdAt || new Date().toISOString()
+      };
+    }
+    return null;
   });
 
   const [payslips, setPayslips] = useState<Payslip[]>(() => {
@@ -73,17 +90,31 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialProjects;
   });
 
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const savedUser = localStorage.getItem('dixpertia_user');
-    return savedUser ? 'dashboard' : 'dashboard';
+  const [users, setUsers] = useState<AppUser[]>(() => {
+    const saved = localStorage.getItem('dixpertia_users');
+    return saved ? JSON.parse(saved) : [];
   });
 
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
-  const [showUserDropdown, setShowUserDropdown] = useState(false); // NEW
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
+  const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
+
+  // --- Detect reset token from URL ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setResetToken(token);
+      setShowForgotPassword(false);
+    }
+  }, []);
 
   // --- Notifications state ---
   const [notifications, setNotifications] = useState<Notification[]>(() => {
@@ -96,13 +127,11 @@ export default function App() {
     return [];
   });
 
-  // --- Persist notifications ---
   useEffect(() => {
     localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
     setNotificationCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 
-  // --- Helper: add notification ---
   const addNotification = (
     message: string,
     type: Notification['type'] = 'info',
@@ -121,7 +150,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // --- Persist other state ---
+  // --- Persist state ---
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
@@ -150,37 +179,87 @@ export default function App() {
     localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
   }, [projects]);
 
-  // --- Handlers ---
-  const handleLogin = (role: UserRole, email: string, firstName: string, lastName: string) => {
-    const newUser: User = {
-      id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName,
-      lastName,
-      email,
-      role,
-      department: role === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: role === 'admin' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
-    };
-    setCurrentUser(newUser);
-    setActiveTab('dashboard');
-    setShowAuth(false);
-    setShowHomepage(false);
+  useEffect(() => {
+    localStorage.setItem('dixpertia_users', JSON.stringify(users));
+  }, [users]);
+
+  // --- Handlers with real API calls ---
+
+  const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
+    try {
+      if (password) {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
+          return;
+        }
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        const user = data.user;
+        const appUser: AppUser = {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department || 'Operations',
+          avatarUrl: user.avatarUrl || undefined,
+          isActive: user.isActive,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        setCurrentUser(appUser);
+        setActiveTab('dashboard');
+        setShowHomepage(false);
+        setShowAuth(false);
+        setShowLogin(false);
+        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+        return;
+      }
+      // Fallback mock (if no password – for testing)
+      const newUser: AppUser = {
+        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
+        firstName,
+        lastName,
+        email,
+        role,
+        department: role === 'admin' ? 'Human Resources' : 'Engineering',
+        avatarUrl: role === 'admin' 
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
+          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+        isActive: true,
+        isVerified: true,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('token', 'mock-admin-token');
+      setCurrentUser(newUser);
+      setActiveTab('dashboard');
+      setShowHomepage(false);
+      setShowAuth(false);
+      setShowLogin(false);
+    } catch (error) {
+      addNotification('Network error during login', 'error');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
-    setShowAuth(false);
+    localStorage.removeItem('token');
     setShowHomepage(true);
     setShowUserDropdown(false);
+    setShowLogin(false);
   };
 
   const handleToggleRole = () => {
     if (!currentUser) return;
     const toggledRole: UserRole = currentUser.role === 'admin' ? 'employee' : 'admin';
-    const updatedUser: User = {
+    const updatedUser: AppUser = {
       ...currentUser,
       role: toggledRole,
       id: toggledRole === 'admin' ? 'ADMIN-01' : 'EMP-102',
@@ -189,7 +268,10 @@ export default function App() {
       department: toggledRole === 'admin' ? 'Human Resources' : 'Engineering',
       avatarUrl: toggledRole === 'admin'
         ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+      isActive: true,
+      isVerified: true,
+      createdAt: currentUser.createdAt || new Date().toISOString()
     };
     setCurrentUser(updatedUser);
     setActiveTab('dashboard');
@@ -341,12 +423,13 @@ export default function App() {
 
   const handleGoHome = () => {
     setShowHomepage(true);
-    setShowAuth(false);
     setShowUserDropdown(false);
+    setShowLogin(false);
   };
 
   const handleGoToDashboard = () => {
     setShowHomepage(false);
+    setShowLogin(false);
   };
 
   // --- Notification filter ---
@@ -354,6 +437,63 @@ export default function App() {
     if (!n.targetRole) return true;
     return n.targetRole === currentUser?.role;
   });
+
+  // --- User management handlers (admin only) – REAL API ---
+  const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        addNotification('You are not logged in. Please log in again.', 'error');
+        return;
+      }
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          role: newUser.role || 'employee'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const user: AppUser = {
+          id: data.id,
+          email: data.email,
+          firstName: newUser.firstName!,
+          lastName: newUser.lastName!,
+          role: newUser.role || 'employee',
+          isActive: true,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          department: 'Operations',
+          avatarUrl: undefined,
+        };
+        setUsers(prev => [...prev, user]);
+        addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
+        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+      } else {
+        const error = await response.json();
+        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
+      }
+    } catch (error) {
+      addNotification('Network error. Please try again.', 'error');
+    }
+  };
+
+  const handleEditUser = (id: string, updates: Partial<AppUser>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    const user = users.find(u => u.id === id);
+    setUsers(prev => prev.filter(u => u.id !== id));
+    if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
+  };
 
   // --- Render content helper ---
   const renderTabContent = () => {
@@ -407,20 +547,66 @@ export default function App() {
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
+      case 'invoices':
+        return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+
+      case 'leave-requests':
+        if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <LeaveRequestsView
+            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
+            currentUserId={currentUser.id}
+          />
+        );
+
+      case 'users':
+        if (currentUser.role !== 'admin' && currentUser.role !== 'accountant') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+              </div>
+            </div>
+          );
+        }
+        const isAdmin = currentUser.role === 'admin';
+        return (
+          <UsersView
+            users={users}
+            onAddUser={isAdmin ? handleAddUser : undefined}
+            onEditUser={isAdmin ? handleEditUser : undefined}
+            onDeleteUser={isAdmin ? handleDeleteUser : undefined}
+            userRole={currentUser.role}
+          />
+        );
+
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
-        return <PayslipsView payslips={payslips} />;
+        return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
       
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
-            onAddRequest={handleAddLeaveRequest} 
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
           />
         );
       
@@ -437,6 +623,16 @@ export default function App() {
         );
       
       case 'projects':
+        if (currentUser.role !== 'admin') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
+              </div>
+            </div>
+          );
+        }
         return (
           <ProjectsView
             projects={projects}
@@ -471,31 +667,51 @@ export default function App() {
     }
   };
 
-  // --- Authentication & navigation logic ---
-  if (showAuth) {
+  // --- RENDERING LOGIC (NEW ORDER) ---
+
+  // 1. If resetToken is present, show ResetPassword
+  if (resetToken) {
     return (
-      <Registration
-        onLogin={handleLogin}
-        onBackHome={() => {
-          setShowAuth(false);
-          setShowHomepage(false);
+      <ResetPassword
+        token={resetToken}
+        onComplete={() => {
+          setResetToken(null);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setShowLogin(true);
         }}
       />
     );
   }
 
+  // 2. If showForgotPassword is true, show ForgotPassword
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
+
+  // 3. If showLogin is true, show Login
+  if (showLogin) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
+        onForgotPassword={() => setShowForgotPassword(true)}
+      />
+    );
+  }
+
+  // 4. If not logged in, show homepage
   if (!currentUser) {
-    return <Homepage onLoginClick={() => setShowAuth(true)} />;
+    return <Homepage onLoginClick={() => setShowLogin(true)} />;
   }
 
+  // 5. If logged in and showHomepage is true, show homepage with "Go to Dashboard"
   if (showHomepage) {
-    return <Homepage onLoginClick={() => { setShowAuth(true); setShowHomepage(false); }} />;
+    return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
   }
 
-  // --- Main dashboard layout ---
+  // 6. Otherwise, show the dashboard
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
-      
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
@@ -525,11 +741,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 relative">
-            {/* Role badge */}
             <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
               <span className="text-[11px] font-black uppercase text-primary tracking-wider">
-                {currentUser.role === 'admin' ? 'HR Admin' : 'Employee'} View
+                {currentUser.role === 'admin' ? 'HR Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Employee'} View
               </span>
             </div>
 
@@ -548,7 +763,6 @@ export default function App() {
                 )}
               </button>
 
-              {/* Notification Popover */}
               {showNotificationList && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">

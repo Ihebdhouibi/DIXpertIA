@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, X, Check, AlertCircle, Calendar, Users } from 'lucide-react';
-import { Project } from '../types';
+import { Project, UserRole  } from '../types';
 
 interface ProjectsViewProps {
   projects: Project[];
   onAddProject: (project: Partial<Project>) => void;
   onEditProject: (id: string, updates: Partial<Project>) => void;
   onDeleteProject: (id: string) => void;
-  userRole: 'admin' | 'employee';
+  userRole: UserRole;
   teamMembers: { id: string; firstName: string; lastName: string }[];
 }
 

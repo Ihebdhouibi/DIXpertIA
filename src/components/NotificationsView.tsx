@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { UserRole } from '../types';
+
 import {
   Bell,
   CheckCircle,
@@ -29,7 +31,7 @@ interface NotificationsViewProps {
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onNavigate: (link: string) => void;
-  userRole: 'admin' | 'employee';
+  userRole: UserRole; 
 }
 
 export default function NotificationsView({
