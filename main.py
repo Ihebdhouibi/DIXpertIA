@@ -74,7 +74,7 @@ def send_email(to_email: str, subject: str, body: str):
         print(f"❌ Email error: {e}")
         return False
 
-# --- Initial seed data (unchanged) ---
+# --- Initial seed data ---
 initial_payslips = [
   { "id": 'PS-001', "period": 'September 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Sep 30, 2024' },
   { "id": 'PS-002', "period": 'August 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Aug 31, 2024' },
@@ -235,12 +235,17 @@ initial_invoices = [
   }
 ]
 
+# --- NEW: Initial devices (empty) ---
+initial_devices = []
+
+# --- default_db includes 'devices' ---
 default_db = {
-  "payslips": initial_payslips,
-  "leaveRequests": initial_leave_requests,
-  "teamMembers": initial_team_members,
-  "invoices": initial_invoices,
-  "users": []
+    "payslips": initial_payslips,
+    "leaveRequests": initial_leave_requests,
+    "teamMembers": initial_team_members,
+    "invoices": initial_invoices,
+    "users": [],
+    "devices": initial_devices
 }
 
 # --- DB helpers ---
@@ -315,6 +320,7 @@ class InvoiceItem(BaseModel):
     price: float
     total: float
 
+# --- UPDATED InvoiceCreate with deviceIds ---
 class InvoiceCreate(BaseModel):
     id: Optional[str] = None
     client: str
@@ -324,6 +330,7 @@ class InvoiceCreate(BaseModel):
     dueDate: Optional[str] = None
     status: Optional[str] = 'Sent'
     items: Optional[List[InvoiceItem]] = []
+    deviceIds: Optional[List[str]] = []   # NEW
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -335,13 +342,21 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-# --- NEW: Forgot / Reset Password models ---
+# --- Forgot / Reset Password models ---
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
     token: str
     newPassword: str
+
+# --- NEW: Device model ---
+class DeviceCreate(BaseModel):
+    name: str
+    model: str
+    serialNumber: str
+    price: float
+    status: Optional[str] = 'Available'  # "Available", "Sold", "In Repair"
 
 # --- Auth endpoints ---
 @app.post('/api/login')
@@ -372,7 +387,6 @@ def create_user(req: UserCreate, current_user: dict = Depends(get_current_user))
     db = read_db()
     if 'users' not in db:
         db['users'] = []
-    # Duplicate email check removed – multiple users can share the same email
     alphabet = string.ascii_letters + string.digits
     temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
     hashed = get_password_hash(temp_password)
@@ -390,7 +404,6 @@ def create_user(req: UserCreate, current_user: dict = Depends(get_current_user))
     db['users'].append(new_user)
     write_db(db)
 
-    # Send email via SMTP
     email_body = f"""
 Hello {req.firstName},
 
@@ -413,26 +426,19 @@ DIXpertIA Team
         "tempPassword": temp_password
     }
 
-# --- NEW: Forgot Password ---
 @app.post('/api/forgot-password')
 def forgot_password(req: ForgotPasswordRequest):
     db = read_db()
     user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
     if not user:
-        # Return 200 even if user not found to avoid email enumeration
         return {"message": "If your email is registered, you will receive a password reset link."}
-
-    # Generate reset token (JWT with short expiry)
     expiry = datetime.utcnow() + timedelta(hours=1)
     token_data = {"sub": user['id'], "exp": expiry, "purpose": "reset"}
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
-
-    # Save token and expiry to the user record
     user['resetToken'] = token
     user['resetTokenExpiry'] = expiry.isoformat()
     write_db(db)
 
-    # Send email with reset link
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     reset_link = f"{frontend_url}/reset-password?token={token}"
     email_body = f"""
@@ -450,51 +456,38 @@ Regards,
 DIXpertIA Team
 """
     send_email(user['email'], "Password Reset Request", email_body)
-
     return {"message": "If your email is registered, you will receive a password reset link."}
 
-# --- NEW: Reset Password ---
 @app.post('/api/reset-password')
 def reset_password(req: ResetPasswordRequest):
     db = read_db()
-    # Decode token
     try:
         payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=400, detail="Reset token has expired.")
     except jwt.JWTError:
         raise HTTPException(status_code=400, detail="Invalid token.")
-
     user_id = payload.get('sub')
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid token.")
-
     user = next((u for u in db.get('users', []) if u['id'] == user_id), None)
     if not user:
         raise HTTPException(status_code=400, detail="User not found.")
-
-    # Verify token matches stored token
     if user.get('resetToken') != req.token:
         raise HTTPException(status_code=400, detail="Invalid token.")
-
-    # Check expiry
     expiry = user.get('resetTokenExpiry')
     if expiry:
         expiry_dt = datetime.fromisoformat(expiry)
         if datetime.utcnow() > expiry_dt:
             raise HTTPException(status_code=400, detail="Token has expired.")
-
-    # Update password
     hashed = get_password_hash(req.newPassword)
     user['hashedPassword'] = hashed
-    # Clear reset token fields
     user.pop('resetToken', None)
     user.pop('resetTokenExpiry', None)
     write_db(db)
-
     return {"message": "Password updated successfully."}
 
-# --- Existing endpoints (payslips, leave, invoices, team) ---
+# --- Existing endpoints (payslips, leave, team) ---
 @app.get('/api/data')
 def get_data():
     return read_db()
@@ -569,8 +562,12 @@ def create_team_member(req: TeamMemberCreate):
     write_db(db)
     return created_emp
 
+# --- UPDATED Invoice endpoint with device integration ---
 @app.post('/api/invoices', status_code=201)
-def create_invoice(req: InvoiceCreate):
+def create_invoice(req: InvoiceCreate, current_user: dict = Depends(get_current_user)):
+    # Only admins can create invoices (accountants are read‑only)
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only administrators can create invoices")
     db = read_db()
     from datetime import datetime, timedelta
     date_issued = req.dateIssued or datetime.now().strftime('%b %d, %Y')
@@ -584,8 +581,74 @@ def create_invoice(req: InvoiceCreate):
         "dateIssued": date_issued,
         "dueDate": due_date,
         "status": req.status,
-        "items": [item.dict() for item in req.items] if req.items else []
+        "items": [item.dict() for item in req.items] if req.items else [],
+        "deviceIds": req.deviceIds or [],
+        "createdAt": datetime.now().isoformat()
     }
     db['invoices'] = [created_inv] + db['invoices']
-    write_db(db)
+
+    # Update device status to "Sold" if device IDs are provided
+    if req.deviceIds:
+        devices = db.get('devices', [])
+        for dev_id in req.deviceIds:
+            dev = next((d for d in devices if d['id'] == dev_id), None)
+            if dev and dev.get('status') != 'Sold':
+                dev['status'] = 'Sold'
+        write_db(db)
+    else:
+        write_db(db)
     return created_inv
+
+#Device CRUD endpoints ---
+@app.get('/api/devices')
+def get_devices(current_user: dict = Depends(get_current_user)):
+    # Allow admin, accountant, and employee to view devices
+    if current_user['role'] not in ['admin', 'accountant', 'employee']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = read_db()
+    return db.get('devices', [])
+
+@app.post('/api/devices', status_code=201)
+def create_device(req: DeviceCreate, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
+    db = read_db()
+    if 'devices' not in db:
+        db['devices'] = []
+    new_device = {
+        "id": f"DEV-{len(db['devices'])+1:03d}",
+        "name": req.name,
+        "model": req.model,
+        "serialNumber": req.serialNumber,
+        "price": req.price,
+        "status": req.status or "Available",
+        "createdAt": datetime.now().isoformat()
+    }
+    db['devices'].append(new_device)
+    write_db(db)
+    return new_device
+
+@app.put('/api/devices/{device_id}')
+def update_device(device_id: str, req: DeviceCreate, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
+    db = read_db()
+    device = next((d for d in db.get('devices', []) if d['id'] == device_id), None)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    device.update(req.dict())
+    write_db(db)
+    return device
+
+@app.delete('/api/devices/{device_id}')
+def delete_device(device_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
+    db = read_db()
+    devices = db.get('devices', [])
+    device = next((d for d in devices if d['id'] == device_id), None)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    db['devices'] = [d for d in devices if d['id'] != device_id]
+    write_db(db)
+    return {"message": "Device deleted"}

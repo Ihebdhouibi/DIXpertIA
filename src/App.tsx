@@ -21,6 +21,7 @@ import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
 import ResetPassword from './components/ResetPassword';     // NEW
+import DevicesView from './components/DevicesView';
 import { 
   Bell, 
   Menu, 
@@ -591,7 +592,8 @@ export default function App() {
             userRole={currentUser.role}
           />
         );
-
+      case 'devices':
+        return <DevicesView userRole={currentUser.role} />;
       case 'payslips':
         if (currentUser.role === 'admin') {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;

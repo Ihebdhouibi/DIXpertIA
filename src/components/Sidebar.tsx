@@ -15,7 +15,7 @@ import {
   UserCog
 } from 'lucide-react';
 import { User } from '../types';
-
+import { Monitor } from 'lucide-react';
 interface SidebarProps {
   currentUser: User;
   activeTab: string;
@@ -60,6 +60,8 @@ export default function Sidebar({
     { id: 'team', label: currentUser.role === 'admin' ? 'Team Management' : 'Team', icon: Users, isMock: false, showFor: ['admin', 'employee'] },
     // Users: admin and accountant (read‑only for accountant)
     { id: 'users', label: 'Users', icon: UserCog, isMock: false, showFor: ['admin', 'accountant'] },
+    // Devices: visible to admin and accountant
+    { id: 'devices', label: 'Devices', icon: Monitor, isMock: false, showFor: ['admin', 'accountant'] },
     // Notifications and Settings: everyone
     { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
     { id: 'settings', label: 'Settings', icon: Settings, isMock: false },
