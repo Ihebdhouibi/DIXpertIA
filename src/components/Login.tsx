@@ -6,9 +6,10 @@ import { UserRole } from '../types';
 interface LoginProps {
   onLogin: (role: UserRole, email: string, firstName: string, lastName: string, password: string) => void;
   onBackHome?: () => void;
+  onForgotPassword?: () => void;  // NEW
 }
 
-export default function Login({ onLogin, onBackHome }: LoginProps) {
+export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
@@ -24,11 +25,9 @@ export default function Login({ onLogin, onBackHome }: LoginProps) {
       setError('Please fill in all fields.');
       return;
     }
-    // Determine role from email (for fallback)
     const role: UserRole = email.toLowerCase().includes('admin') ? 'admin' : 'employee';
     const firstName = email.split('@')[0] || 'User';
-    const lastName = ''; // For real login, the backend will provide full name.
-    // Pass the password to the parent (App.tsx) so it can call the real API.
+    const lastName = '';
     onLogin(role, email, firstName, lastName, password);
   };
 
@@ -92,7 +91,10 @@ export default function Login({ onLogin, onBackHome }: LoginProps) {
                     <label className="text-xs font-medium text-on-surface-variant" htmlFor="loginPassword">Password</label>
                     <button
                       type="button"
-                      onClick={() => setShowForgot(true)}
+                      onClick={() => {
+                        if (onForgotPassword) onForgotPassword();
+                        else setShowForgot(true);
+                      }}
                       className="text-xs text-secondary hover:underline cursor-pointer"
                     >
                       Forgot?

@@ -10,7 +10,9 @@ export interface User {
   department?: string;
   isActive: boolean;      
   isVerified: boolean;  
-  createdAt: string; 
+  createdAt: string;
+  resetToken?: string;   
+  resetTokenExpiry?: string; 
 }
 
 export interface Payslip {

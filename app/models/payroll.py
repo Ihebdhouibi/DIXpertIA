@@ -9,7 +9,7 @@ class Payslip(Base):
     __table_args__ = (UniqueConstraint("employee_id", "periode", name="uq_employee_periode"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(String, ForeignKey("users.id"), nullable=False) 
     periode = Column(Date, nullable=False)
     montant_brut = Column(Numeric(10, 2), nullable=False)
     montant_net = Column(Numeric(10, 2), nullable=False)
