@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, X, Download, ZoomIn, ZoomOut, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Invoice } from '../types';
+import { Invoice, UserRole } from '../types';
 
 interface InvoicesViewProps {
   invoices: Invoice[];
   onAddInvoice: (invoice: Partial<Invoice>) => void;
+  userRole: UserRole;   
 }
 
-export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewProps) {
+export default function InvoicesView({ invoices, onAddInvoice, userRole }: InvoicesViewProps) {
+  const isAdmin = userRole === 'admin';
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Draft' | 'Sent' | 'Paid' | 'Overdue'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -20,7 +22,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
   const [dueDate, setDueDate] = useState('');
   const [invoiceStatus, setInvoiceStatus] = useState<'Draft' | 'Sent' | 'Paid' | 'Overdue'>('Sent');
 
-  // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (message: string) => {
@@ -29,13 +30,13 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
   };
 
   const handleDownload = (id: string) => {
-    showToast(`Téléchargement de la facture ${id} en cours...`);
+    showToast(`Downloading invoice ${id}...`);
   };
 
   const handleNewInvoiceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName || !amount) {
-      showToast('Veuillez spécifier le client et le montant.');
+      showToast('Please specify client and amount.');
       return;
     }
 
@@ -59,10 +60,9 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
     setClientName('');
     setAmount('');
     setDueDate('');
-    showToast(`Facture ${nextId} créée avec succès.`);
+    showToast(`Invoice ${nextId} created.`);
   };
 
-  // Filter & Search Logic
   const filteredInvoices = invoices.filter(inv => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = inv.client.toLowerCase().includes(query) || inv.id.toLowerCase().includes(query);
@@ -90,8 +90,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
 
   return (
     <div className="flex-grow flex flex-col gap-6 animate-fade-in">
-
-      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-4 right-4 z-50 bg-[#137333] text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/10">
           <Check className="w-5 h-5 shrink-0" />
@@ -99,22 +97,23 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
         </div>
       )}
 
-      {/* Header section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Invoices</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">Manage and track billing across all projects.</p>
         </div>
-        <button
-          onClick={() => setIsNewInvoiceOpen(true)}
-          className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
-        >
-          <Plus className="w-5 h-5" />
-          <span>New Invoice</span>
-        </button>
+        {isAdmin && (   // ✅ Only show for admin
+          <button
+            onClick={() => setIsNewInvoiceOpen(true)}
+            className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-5 h-5" />
+            <span>New Invoice</span>
+          </button>
+        )}
       </div>
 
-      {/* Filter chips & search bar matching Screen 6 */}
+      {/* Filters and table – unchanged */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col gap-4">
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-caption font-bold text-on-surface-variant mr-2">Filter by Status:</span>
@@ -131,7 +130,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
               {f}
             </button>
           ))}
-          
           <div className="ml-auto relative w-full md:w-64 mt-2 md:mt-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
             <input
@@ -145,7 +143,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
         </div>
       </div>
 
-      {/* Table Container */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
@@ -161,58 +158,56 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
-              {filteredInvoices.map((inv) => (
-                <tr
-                  key={inv.id}
-                  onClick={() => setSelectedInvoice(inv)}
-                  className="hover:bg-surface-container-low transition-colors cursor-pointer group"
-                >
-                  <td className="py-4 px-6 font-mono text-body-sm font-semibold text-primary">{inv.id}</td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-caption shadow-sm">
-                        {inv.clientInitials}
+              {filteredInvoices.length > 0 ? (
+                filteredInvoices.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    onClick={() => setSelectedInvoice(inv)}
+                    className="hover:bg-surface-container-low transition-colors cursor-pointer group"
+                  >
+                    <td className="py-4 px-6 font-mono text-body-sm font-semibold text-primary">{inv.id}</td>
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-caption shadow-sm">
+                          {inv.clientInitials}
+                        </div>
+                        <span className="font-semibold text-body-sm text-on-surface">{inv.client}</span>
                       </div>
-                      <span className="font-semibold text-body-sm text-on-surface">{inv.client}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 font-semibold text-body-sm text-on-surface">
-                    {formatCurrency(inv.amount)}
-                  </td>
-                  <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">
-                    {inv.dateIssued}
-                  </td>
-                  <td className={`py-4 px-6 text-body-sm font-semibold ${inv.status === 'Overdue' ? 'text-error' : 'text-on-surface-variant'}`}>
-                    {inv.dueDate}
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(inv.status)}`}>
-                      {inv.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleDownload(inv.id)}
-                      className="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer"
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              
-              {filteredInvoices.length === 0 && (
+                    </td>
+                    <td className="py-4 px-6 font-semibold text-body-sm text-on-surface">
+                      {formatCurrency(inv.amount)}
+                    </td>
+                    <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">
+                      {inv.dateIssued}
+                    </td>
+                    <td className={`py-4 px-6 text-body-sm font-semibold ${inv.status === 'Overdue' ? 'text-error' : 'text-on-surface-variant'}`}>
+                      {inv.dueDate}
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(inv.status)}`}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleDownload(inv.id)}
+                        className="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer"
+                      >
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan={7} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    Aucune facture trouvée.
+                    No invoices found.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-
-        {/* Pagination Placeholder */}
         <div className="border-t border-outline-variant px-6 py-4 flex items-center justify-between bg-surface-container-lowest">
           <span className="text-caption text-on-surface-variant font-medium">
             Showing 1-{filteredInvoices.length} of {filteredInvoices.length} results
@@ -229,12 +224,10 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
         </div>
       </div>
 
-      {/* MODAL 1: Detail View Modal (Glassmorphism + Bento Faux PDF) */}
+      {/* Modal (unchanged) */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-on-background/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[92%] rounded-xl shadow-[0_8px_32px_rgba(31,56,100,0.2)] border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
-            
-            {/* Modal Header */}
             <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface shrink-0">
               <div className="flex items-center gap-4">
                 <h3 className="text-h2 font-black text-on-surface">
@@ -259,14 +252,10 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                 </button>
               </div>
             </div>
-
-            {/* Modal Body */}
             <div className="flex-1 overflow-auto p-6 bg-surface-container-low">
+              {/* ... invoice detail content (unchanged) ... */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Left Column: Details */}
                 <div className="lg:col-span-1 flex flex-col gap-6">
-                  {/* Summary Card */}
                   <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm">
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Summary</h4>
                     <div className="space-y-4">
@@ -288,8 +277,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                       </div>
                     </div>
                   </div>
-
-                  {/* Client Info Card */}
                   <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm">
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
                     <div className="flex items-center gap-3 mb-4">
@@ -308,11 +295,7 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                     </div>
                   </div>
                 </div>
-
-                {/* Right Column: Faux PDF Preview Box */}
                 <div className="lg:col-span-2 bg-white rounded-xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
-                  
-                  {/* Toolbar */}
                   <div className="h-12 bg-surface border-b border-outline-variant flex items-center justify-between px-4 select-none">
                     <div className="flex items-center gap-2 text-on-surface-variant font-medium">
                       <button onClick={() => setZoomLevel(prev => Math.max(prev - 10, 50))} className="p-1 hover:bg-surface-container-high rounded cursor-pointer">
@@ -325,21 +308,14 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                     </div>
                     <span className="text-caption text-on-surface-variant font-semibold">Page 1 of 1</span>
                   </div>
-
-                  {/* Faux Document Workspace Container */}
                   <div className="flex-1 bg-surface-variant overflow-auto p-4 md:p-8 flex items-start justify-center">
-                    
-                    {/* Invoice Paper layout */}
-                    <div 
+                    <div
                       style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
                       className="bg-white w-full max-w-[580px] shadow-lg aspect-[1/1.4] p-8 border border-outline-variant relative transition-transform"
                     >
-                      {/* PREVIEW Watermark banner */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
                         <span className="font-sans text-[90px] font-black rotate-45 text-on-surface">PREVIEW</span>
                       </div>
-
-                      {/* Paper Document Header */}
                       <div className="flex justify-between items-start mb-8 select-none">
                         <div>
                           <div className="font-sans text-h2 font-black text-primary mb-1">DIXpertIA</div>
@@ -353,8 +329,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                           <div className="text-caption text-on-surface-variant font-semibold">Date: {selectedInvoice.dateIssued}</div>
                         </div>
                       </div>
-
-                      {/* Paper Billing Parties */}
                       <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/50 pt-4 mb-8 text-caption select-none">
                         <div>
                           <span className="block text-outline font-bold uppercase tracking-wider mb-1">Billed To:</span>
@@ -368,8 +342,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                           <span className="block text-on-surface-variant">Status: {selectedInvoice.status}</span>
                         </div>
                       </div>
-
-                      {/* Paper Line Items Table */}
                       <div className="border-t border-b border-outline-variant py-2">
                         <div className="flex font-semibold text-caption text-on-surface-variant mb-2 select-none">
                           <div className="flex-grow">Description</div>
@@ -377,7 +349,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                           <div className="w-24 text-right">Price</div>
                           <div className="w-24 text-right">Total</div>
                         </div>
-                        
                         {selectedInvoice.items.map((item, index) => (
                           <div key={index} className="flex text-caption text-on-surface py-2.5 border-t border-outline-variant/20">
                             <div className="flex-grow font-semibold text-on-surface">{item.description}</div>
@@ -387,8 +358,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                           </div>
                         ))}
                       </div>
-
-                      {/* Paper Totals Calculation */}
                       <div className="mt-6 flex justify-end">
                         <div className="w-48 border-t border-outline-variant pt-3">
                           <div className="flex justify-between text-caption text-on-surface-variant font-medium py-1">
@@ -401,29 +370,25 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                           </div>
                         </div>
                       </div>
-
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: New Invoice Creation Form */}
-      {isNewInvoiceOpen && (
+      {/* New Invoice Modal – shown only for admin */}
+      {isAdmin && isNewInvoiceOpen && (
         <div className="fixed inset-0 z-50 bg-on-background/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">
-            
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface shrink-0">
               <h3 className="text-h2 font-black text-on-surface m-0">Create New Invoice</h3>
               <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition-colors cursor-pointer" onClick={() => setIsNewInvoiceOpen(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="p-6">
               <form onSubmit={handleNewInvoiceSubmit} className="space-y-4">
                 <div>
@@ -437,7 +402,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                     type="text"
                   />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-on-surface-variant mb-1">Amount ($)</label>
@@ -451,7 +415,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                       step="0.01"
                     />
                   </div>
-
                   <div>
                     <label className="block text-xs font-semibold text-on-surface-variant mb-1">Status</label>
                     <select
@@ -466,7 +429,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                     </select>
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-on-surface-variant mb-1">Due Date</label>
                   <input
@@ -476,7 +438,6 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                     type="date"
                   />
                 </div>
-
                 <div className="pt-4 border-t border-outline-variant/30 flex justify-end gap-3 shrink-0 mt-4">
                   <button
                     type="button"
@@ -494,11 +455,9 @@ export default function InvoicesView({ invoices, onAddInvoice }: InvoicesViewPro
                 </div>
               </form>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

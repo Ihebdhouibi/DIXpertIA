@@ -1,5 +1,7 @@
 import enum
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Date, Numeric, Enum
+from datetime import datetime
+
+from sqlalchemy import Column, Float , DateTime ,  Integer, String, Text, ForeignKey, Date, Numeric, Enum
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -30,17 +32,16 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero = Column(String(30), unique=True, nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)   # ← revert to Integer, FK to clients
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
-    montant_ht = Column(Numeric(10, 2), default=0)
-    montant_ttc = Column(Numeric(10, 2), default=0)
-    statut = Column(Enum(InvoiceStatus), default=InvoiceStatus.BROUILLON)
-    cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-
+    montant_ht = Column(Numeric(10, 2))
+    montant_ttc = Column(Numeric(10, 2))
+    statut = Column(Enum(InvoiceStatus))
+    cree_par_id = Column(String, ForeignKey("users.id"))   # ← keep as String to match User.id
+    # Keep the relationships
     client = relationship("Client", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
-
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
@@ -53,3 +54,14 @@ class InvoiceItem(Base):
     taux_tva = Column(Numeric(4, 2), default=19)
 
     invoice = relationship("Invoice", back_populates="items")
+
+
+class Device(Base):
+    __tablename__ = "devices"
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String)
+    model = Column(String)
+    serialNumber = Column(String)
+    price = Column(Float)
+    status = Column(String, default="Available")  
+    createdAt = Column(DateTime, default=datetime.utcnow)

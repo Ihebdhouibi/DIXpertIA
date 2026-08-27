@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { FileText, Download, Calendar, DollarSign, Wallet, CreditCard, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Payslip } from '../types';
+import { Payslip , UserRole } from '../types';
 
 interface PayslipsViewProps {
   payslips: Payslip[];
+  userRole: UserRole;
 }
 
 export default function PayslipsView({ payslips }: PayslipsViewProps) {

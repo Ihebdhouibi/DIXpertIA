@@ -1,37 +1,68 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice } from './types';
+import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice, Project } from './types';
 import {
   initialPayslips,
   initialLeaveRequests,
   initialTeamMembers,
-  initialInvoices
+  initialInvoices,
+  initialProjects
 } from './data';
-import Registration from './components/Registration';
-import Homepage from './components/Homepage';  // <--- new import
+import Login from './components/Login';
+import Homepage from './components/Homepage';
 import Sidebar from './components/Sidebar';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
+import ProjectsView from './components/ProjectsView';
+import DashboardView from './components/DashboardView';
+import NotificationsView from './components/NotificationsView';
+import SettingsView from './components/SettingsView';
+import UsersView from './components/UsersView';
+import ForgotPassword from './components/ForgotPassword';   // NEW
+import ResetPassword from './components/ResetPassword';     // NEW
 import { 
   Bell, 
-  Search, 
   Menu, 
-  Info, 
-  LogOut, 
   HelpCircle, 
-  UserCheck, 
   AlertCircle,
-  FileSpreadsheet,
-  Users,
-  Wallet2
+  CheckCircle,
+  X,
+  User as UserIcon,
+  Settings,
+  LogOut
 } from 'lucide-react';
 
+interface Notification {
+  id: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  timestamp: number;
+  link?: string;
+  targetRole?: 'admin' | 'employee';
+}
+
+interface AppUser extends User {
+  isActive: boolean;
+  isVerified: boolean;
+  createdAt: string;
+}
+
 export default function App() {
-  // --- 1. State Initialization (with localStorage hydration) ---
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  // --- State ---
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('dixpertia_user');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        isActive: parsed.isActive !== undefined ? parsed.isActive : true,
+        isVerified: parsed.isVerified !== undefined ? parsed.isVerified : true,
+        createdAt: parsed.createdAt || new Date().toISOString()
+      };
+    }
+    return null;
   });
 
   const [payslips, setPayslips] = useState<Payslip[]>(() => {
@@ -54,23 +85,72 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialInvoices;
   });
 
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const savedUser = localStorage.getItem('dixpertia_user');
-    if (savedUser) {
-      const parsed: User = JSON.parse(savedUser);
-      return parsed.role === 'admin' ? 'reports' : 'payslips';
-    }
-    return 'payslips';
+  const [projects, setProjects] = useState<Project[]>(() => {
+    const saved = localStorage.getItem('dixpertia_projects');
+    return saved ? JSON.parse(saved) : initialProjects;
   });
 
+  const [users, setUsers] = useState<AppUser[]>(() => {
+    const saved = localStorage.getItem('dixpertia_users');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
-
-  // NEW: controls whether to show the authentication screens (login/register)
   const [showAuth, setShowAuth] = useState(false);
+  const [showHomepage, setShowHomepage] = useState(true);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
+  const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
 
-  // --- 2. Persist State Changes in LocalStorage ---
+  // --- Detect reset token from URL ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setResetToken(token);
+      setShowForgotPassword(false);
+    }
+  }, []);
+
+  // --- Notifications state ---
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    const saved = localStorage.getItem('dixpertia_notifications');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setNotificationCount(parsed.filter((n: Notification) => !n.read).length);
+      return parsed;
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
+    setNotificationCount(notifications.filter(n => !n.read).length);
+  }, [notifications]);
+
+  const addNotification = (
+    message: string,
+    type: Notification['type'] = 'info',
+    link?: string,
+    targetRole?: 'admin' | 'employee'
+  ) => {
+    const newNotif: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      message,
+      type,
+      read: false,
+      timestamp: Date.now(),
+      link,
+      targetRole,
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  // --- Persist state ---
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
@@ -95,37 +175,91 @@ export default function App() {
     localStorage.setItem('dixpertia_invoices', JSON.stringify(invoices));
   }, [invoices]);
 
-  // --- 3. Handlers & Callbacks ---
-  const handleLogin = (role: UserRole, email: string, firstName: string, lastName: string) => {
-    const newUser: User = {
-      id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName,
-      lastName,
-      email,
-      role,
-      department: role === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: role === 'admin' 
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
-    };
-    setCurrentUser(newUser);
-    // Set appropriate starting tab based on role
-    setActiveTab(role === 'admin' ? 'reports' : 'payslips');
-    // If we came from homepage, hide auth screen
-    setShowAuth(false);
+  useEffect(() => {
+    localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
+  }, [projects]);
+
+  useEffect(() => {
+    localStorage.setItem('dixpertia_users', JSON.stringify(users));
+  }, [users]);
+
+  // --- Handlers with real API calls ---
+
+  const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
+    try {
+      if (password) {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
+          return;
+        }
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        const user = data.user;
+        const appUser: AppUser = {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          department: user.department || 'Operations',
+          avatarUrl: user.avatarUrl || undefined,
+          isActive: user.isActive,
+          isVerified: user.isVerified,
+          createdAt: user.createdAt || new Date().toISOString()
+        };
+        setCurrentUser(appUser);
+        setActiveTab('dashboard');
+        setShowHomepage(false);
+        setShowAuth(false);
+        setShowLogin(false);
+        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+        return;
+      }
+      // Fallback mock (if no password – for testing)
+      const newUser: AppUser = {
+        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
+        firstName,
+        lastName,
+        email,
+        role,
+        department: role === 'admin' ? 'Human Resources' : 'Engineering',
+        avatarUrl: role === 'admin' 
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
+          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+        isActive: true,
+        isVerified: true,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('token', 'mock-admin-token');
+      setCurrentUser(newUser);
+      setActiveTab('dashboard');
+      setShowHomepage(false);
+      setShowAuth(false);
+      setShowLogin(false);
+    } catch (error) {
+      addNotification('Network error during login', 'error');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('dixpertia_user');
-    setShowAuth(false); // go back to homepage on logout
+    localStorage.removeItem('token');
+    setShowHomepage(true);
+    setShowUserDropdown(false);
+    setShowLogin(false);
   };
 
-  // Demo bypass/toggle to let the user preview different screens immediately
   const handleToggleRole = () => {
     if (!currentUser) return;
     const toggledRole: UserRole = currentUser.role === 'admin' ? 'employee' : 'admin';
-    const updatedUser: User = {
+    const updatedUser: AppUser = {
       ...currentUser,
       role: toggledRole,
       id: toggledRole === 'admin' ? 'ADMIN-01' : 'EMP-102',
@@ -134,13 +268,16 @@ export default function App() {
       department: toggledRole === 'admin' ? 'Human Resources' : 'Engineering',
       avatarUrl: toggledRole === 'admin'
         ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
+      isActive: true,
+      isVerified: true,
+      createdAt: currentUser.createdAt || new Date().toISOString()
     };
     setCurrentUser(updatedUser);
-    setActiveTab(toggledRole === 'admin' ? 'reports' : 'payslips');
+    setActiveTab('dashboard');
   };
 
-  // Leave request additions
+  // --- Leave handlers ---
   const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
     if (!currentUser) return;
     const req: LeaveRequest = {
@@ -152,12 +289,52 @@ export default function App() {
       dates: newReq.dates || 'Oct 20, 2024',
       duration: newReq.duration || 1,
       status: 'Pending',
-      reason: newReq.reason
+      reason: newReq.reason || ''
     };
     setLeaveRequests([req, ...leaveRequests]);
+    addNotification(
+      `New leave request from ${currentUser.firstName} ${currentUser.lastName} (${req.type})`,
+      'warning',
+      'team',
+      'admin'
+    );
   };
 
-  // Employee additions
+  const handleApproveLeave = (id: string) => {
+    setLeaveRequests(prev =>
+      prev.map(req =>
+        req.id === id ? { ...req, status: 'Approved' as const } : req
+      )
+    );
+    const req = leaveRequests.find(r => r.id === id);
+    if (req && currentUser?.role === 'admin') {
+      addNotification(
+        `Your leave request (${req.type}) has been approved`,
+        'success',
+        undefined,
+        'employee'
+      );
+    }
+  };
+
+  const handleRejectLeave = (id: string, comment: string) => {
+    setLeaveRequests(prev =>
+      prev.map(req =>
+        req.id === id ? { ...req, status: 'Rejected' as const, rejectionReason: comment } : req
+      )
+    );
+    const req = leaveRequests.find(r => r.id === id);
+    if (req && currentUser?.role === 'admin') {
+      addNotification(
+        `Your leave request (${req.type}) has been rejected`,
+        'error',
+        undefined,
+        'employee'
+      );
+    }
+  };
+
+  // --- Other handlers ---
   const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
     const emp: TeamMember = {
       id: `TM-00${teamMembers.length + 1}`,
@@ -171,26 +348,6 @@ export default function App() {
     setTeamMembers([emp, ...teamMembers]);
   };
 
-  // Admin approvals & rejections
-  const handleApproveLeave = (id: string) => {
-    setLeaveRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        return { ...req, status: 'Approved' };
-      }
-      return req;
-    }));
-  };
-
-  const handleRejectLeave = (id: string, comment: string) => {
-    setLeaveRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        return { ...req, status: 'Rejected', rejectionReason: comment };
-      }
-      return req;
-    }));
-  };
-
-  // Invoice additions
   const handleAddInvoice = (newInv: Partial<Invoice>) => {
     const inv: Invoice = {
       id: newInv.id || `INV-2024-00${invoices.length + 1}`,
@@ -205,26 +362,251 @@ export default function App() {
     setInvoices([inv, ...invoices]);
   };
 
-  // --- 4. Render Logic Helper ---
+  // --- Project handlers ---
+  const handleAddProject = (project: Partial<Project>) => {
+    const newProject: Project = {
+      id: `PRJ-00${projects.length + 1}`,
+      name: project.name || 'Untitled',
+      client: project.client || 'Unknown',
+      description: project.description || '',
+      status: project.status || 'Active',
+      deadline: project.deadline || new Date().toISOString().split('T')[0],
+      teamMembers: project.teamMembers || [],
+      createdAt: new Date().toISOString(),
+    };
+    setProjects([newProject, ...projects]);
+    addNotification(
+      `New project "${newProject.name}" created`,
+      'success',
+      'projects',
+      'admin'
+    );
+  };
+
+  const handleEditProject = (id: string, updates: Partial<Project>) => {
+    setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+    const proj = projects.find(p => p.id === id);
+    if (proj) {
+      addNotification(
+        `Project "${proj.name}" updated`,
+        'info',
+        'projects',
+        'admin'
+      );
+    }
+  };
+
+  const handleDeleteProject = (id: string) => {
+    const proj = projects.find(p => p.id === id);
+    setProjects(prev => prev.filter(p => p.id !== id));
+    if (proj) {
+      addNotification(
+        `Project "${proj.name}" deleted`,
+        'error',
+        undefined,
+        'admin'
+      );
+    }
+  };
+
+  // --- Quick actions ---
+  const handleQuickAction = (action: string) => {
+    switch (action) {
+      case 'approve-leaves': setActiveTab('team'); break;
+      case 'create-invoice': setActiveTab('reports'); break;
+      case 'add-project': setActiveTab('projects'); break;
+      case 'download-payslip': setActiveTab('payslips'); break;
+      case 'view-notifications': setActiveTab('notifications'); break;
+      default: break;
+    }
+  };
+
+  const handleGoHome = () => {
+    setShowHomepage(true);
+    setShowUserDropdown(false);
+    setShowLogin(false);
+  };
+
+  const handleGoToDashboard = () => {
+    setShowHomepage(false);
+    setShowLogin(false);
+  };
+
+  // --- Notification filter ---
+  const visibleNotifications = notifications.filter(n => {
+    if (!n.targetRole) return true;
+    return n.targetRole === currentUser?.role;
+  });
+
+  // --- User management handlers (admin only) – REAL API ---
+  const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        addNotification('You are not logged in. Please log in again.', 'error');
+        return;
+      }
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          role: newUser.role || 'employee'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const user: AppUser = {
+          id: data.id,
+          email: data.email,
+          firstName: newUser.firstName!,
+          lastName: newUser.lastName!,
+          role: newUser.role || 'employee',
+          isActive: true,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          department: 'Operations',
+          avatarUrl: undefined,
+        };
+        setUsers(prev => [...prev, user]);
+        addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
+        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+      } else {
+        const error = await response.json();
+        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
+      }
+    } catch (error) {
+      addNotification('Network error. Please try again.', 'error');
+    }
+  };
+
+  const handleEditUser = (id: string, updates: Partial<AppUser>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    const user = users.find(u => u.id === id);
+    setUsers(prev => prev.filter(u => u.id !== id));
+    if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
+  };
+
+  // --- Render content helper ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
     switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardView
+            user={currentUser}
+            projects={projects}
+            invoices={invoices}
+            leaveRequests={leaveRequests}
+            teamMembers={teamMembers}
+            notifications={visibleNotifications}
+            onNavigate={(tab: string) => {
+              setActiveTab(tab);
+              setShowNotificationList(false);
+            }}
+            onQuickAction={handleQuickAction}
+          />
+        );
+
+      case 'notifications':
+        return (
+          <NotificationsView
+            notifications={visibleNotifications}
+            onMarkRead={(id) => {
+              setNotifications(prev =>
+                prev.map(n => n.id === id ? { ...n, read: true } : n)
+              );
+            }}
+            onMarkAllRead={() => {
+              setNotifications(prev =>
+                prev.map(n => ({ ...n, read: true }))
+              );
+            }}
+            onClearAll={() => {
+              if (window.confirm('Delete all notifications?')) {
+                setNotifications([]);
+              }
+            }}
+            onNavigate={(link) => {
+              setActiveTab(link);
+              setShowNotificationList(false);
+            }}
+            userRole={currentUser.role}
+          />
+        );
+
+      case 'settings':
+        return <SettingsView user={currentUser} onLogout={handleLogout} />;
+
+      case 'invoices':
+        return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+
+      case 'leave-requests':
+        if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <LeaveRequestsView
+            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
+            currentUserId={currentUser.id}
+          />
+        );
+
+      case 'users':
+        if (currentUser.role !== 'admin' && currentUser.role !== 'accountant') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+              </div>
+            </div>
+          );
+        }
+        const isAdmin = currentUser.role === 'admin';
+        return (
+          <UsersView
+            users={users}
+            onAddUser={isAdmin ? handleAddUser : undefined}
+            onEditUser={isAdmin ? handleEditUser : undefined}
+            onDeleteUser={isAdmin ? handleDeleteUser : undefined}
+            userRole={currentUser.role}
+          />
+        );
+
       case 'payslips':
         if (currentUser.role === 'admin') {
-          // Admins don't view personal payslips in this scope, swap to Invoices
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
-        return <PayslipsView payslips={payslips} />;
+        return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
       
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} />;
+          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView 
             leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
-            onAddRequest={handleAddLeaveRequest} 
+            onAddRequest={handleAddLeaveRequest}
+            userRole={currentUser.role}
           />
         );
       
@@ -239,11 +621,29 @@ export default function App() {
             onRejectLeave={handleRejectLeave}
           />
         );
-
-      // Simulated bento placeholders for other navigation items to make the portal feel whole and complete
-      case 'dashboard':
+      
       case 'projects':
-      case 'settings':
+        if (currentUser.role !== 'admin') {
+          return (
+            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <ProjectsView
+            projects={projects}
+            onAddProject={handleAddProject}
+            onEditProject={handleEditProject}
+            onDeleteProject={handleDeleteProject}
+            userRole={currentUser.role}
+            teamMembers={teamMembers}
+          />
+        );
+
       default:
         return (
           <div className="flex-1 flex flex-col gap-6 animate-fade-in">
@@ -251,28 +651,15 @@ export default function App() {
               <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                 <HelpCircle className="w-10 h-10" />
               </div>
-              <h2 className="text-h2 font-black text-on-surface">Module "{activeTab.toUpperCase()}" en cours de déploiement</h2>
+              <h2 className="text-h2 font-black text-on-surface">Module "{activeTab.toUpperCase()}" is being deployed</h2>
               <p className="text-body-sm text-on-surface-variant leading-relaxed">
-                Le module interactif <strong className="text-primary">{activeTab}</strong> de DIXpertIA est actuellement en phase de test de déploiement sécurisé. 
-                Toutes les spécifications visuelles du guide de style sont prêtes.
+                The interactive module <strong className="text-primary">{activeTab}</strong> is currently in secure deployment testing.
               </p>
-              <div className="p-4 bg-surface-container-low rounded-lg w-full text-left space-y-2 border border-outline-variant/30">
-                <p className="text-xs font-bold text-on-surface flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 text-secondary shrink-0" /> 
-                  Que pouvez-vous tester en temps réel ?
-                </p>
-                <ul className="list-disc list-inside text-xs text-on-surface-variant space-y-1 font-medium pl-1">
-                  <li><strong>Fiches de paie (Payslips)</strong> : Filtres par année, téléchargement et cumulatifs YTD.</li>
-                  <li><strong>Demandes de congés (Reports)</strong> : Soldes interactifs, demandes réelles et mise à jour du tableau.</li>
-                  <li><strong>Factures (Invoices)</strong> : Filtres par statut, création de factures, et aperçu PDF Faux complet !</li>
-                  <li><strong>Équipe (Team)</strong> : Ajout de collaborateurs et interface complète d'approbation RH avec refus commenté !</li>
-                </ul>
-              </div>
               <button
-                onClick={() => setActiveTab(currentUser.role === 'admin' ? 'reports' : 'payslips')}
+                onClick={() => setActiveTab('dashboard')}
                 className="bg-primary text-white font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
               >
-                Retourner aux Fonctionnalités Actives
+                Back to Dashboard
               </button>
             </div>
           </div>
@@ -280,19 +667,51 @@ export default function App() {
     }
   };
 
-  // --- 5. Unauthenticated State Render (UPDATED) ---
-  if (!currentUser) {
-    if (showAuth) {
-      return <Registration onLogin={handleLogin} onBackHome={() => setShowAuth(false)} />;
-    }
-    return <Homepage onLoginClick={() => setShowAuth(true)} />;
+  // --- RENDERING LOGIC (NEW ORDER) ---
+
+  // 1. If resetToken is present, show ResetPassword
+  if (resetToken) {
+    return (
+      <ResetPassword
+        token={resetToken}
+        onComplete={() => {
+          setResetToken(null);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setShowLogin(true);
+        }}
+      />
+    );
   }
 
-  // --- 6. Authenticated Shell Render ---
+  // 2. If showForgotPassword is true, show ForgotPassword
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
+
+  // 3. If showLogin is true, show Login
+  if (showLogin) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
+        onForgotPassword={() => setShowForgotPassword(true)}
+      />
+    );
+  }
+
+  // 4. If not logged in, show homepage
+  if (!currentUser) {
+    return <Homepage onLoginClick={() => setShowLogin(true)} />;
+  }
+
+  // 5. If logged in and showHomepage is true, show homepage with "Go to Dashboard"
+  if (showHomepage) {
+    return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
+  }
+
+  // 6. Otherwise, show the dashboard
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
-      
-      {/* Side Navigation panel (Drawer on mobile, stationary bar on desktop) */}
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
@@ -301,15 +720,11 @@ export default function App() {
         onToggleRole={handleToggleRole}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
+        onGoHome={handleGoHome}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Top Header Navigation bar */}
         <header className="h-16 bg-surface-container-lowest border-b border-outline-variant px-6 flex items-center justify-between sticky top-0 z-40 shrink-0">
-          
-          {/* Left: Mobile hamburger menu & screen contextual info */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsOpenMobile(true)}
@@ -318,7 +733,6 @@ export default function App() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            
             <div className="hidden sm:flex items-center gap-2">
               <span className="text-caption font-bold text-outline uppercase tracking-wider">DIXpertIA</span>
               <span className="text-caption text-outline-variant">/</span>
@@ -326,24 +740,18 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right: Quick actions, notifications, user tag */}
           <div className="flex items-center gap-4 relative">
-            
-            {/* Quick Demo Role Label */}
             <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
               <span className="text-[11px] font-black uppercase text-primary tracking-wider">
-                Vue {currentUser.role === 'admin' ? 'Admin RH' : 'Employé'}
+                {currentUser.role === 'admin' ? 'HR Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Employee'} View
               </span>
             </div>
 
-            {/* Notification Bell Badge */}
+            {/* Notification Bell */}
             <div className="relative">
               <button
-                onClick={() => {
-                  setShowNotificationList(!showNotificationList);
-                  setNotificationCount(0); // Mark read on click
-                }}
+                onClick={() => setShowNotificationList(!showNotificationList)}
                 className="p-1.5 hover:bg-surface-container text-on-surface-variant hover:text-on-surface rounded-full transition-all relative cursor-pointer"
                 title="Notifications"
               >
@@ -355,50 +763,138 @@ export default function App() {
                 )}
               </button>
 
-              {/* Simple Dynamic Notification Popover */}
               {showNotificationList && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">
-                    <span className="font-bold text-caption text-on-surface">Notifications récurrentes</span>
-                    <button 
-                      onClick={() => setShowNotificationList(false)}
-                      className="text-xs text-secondary hover:underline cursor-pointer"
-                    >
-                      Fermer
-                    </button>
+                    <span className="font-bold text-caption text-on-surface">Notifications</span>
+                    <div className="flex gap-2">
+                      {visibleNotifications.some(n => !n.read) && (
+                        <button
+                          onClick={() => {
+                            setNotifications(prev =>
+                              prev.map(n =>
+                                !n.targetRole || n.targetRole === currentUser.role
+                                  ? { ...n, read: true }
+                                  : n
+                              )
+                            );
+                          }}
+                          className="text-xs text-secondary hover:underline cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setShowNotificationList(false)}
+                        className="text-xs text-secondary hover:underline cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                   <div className="divide-y divide-outline-variant/30 max-h-64 overflow-y-auto">
-                    <div className="px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer">
-                      <p className="text-xs font-semibold text-on-surface">💵 Votre fiche de paie de Septembre est disponible</p>
-                      <p className="text-[10px] text-outline mt-1">Il y a 2 heures • Fiche de Paie</p>
-                    </div>
-                    <div className="px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer">
-                      <p className="text-xs font-semibold text-on-surface">🎉 Votre demande de congé annuel a été approuvée</p>
-                      <p className="text-[10px] text-outline mt-1">Hier • Congés</p>
-                    </div>
-                    <div className="px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer">
-                      <p className="text-xs font-semibold text-on-surface">🔒 Rappel de sécurité : renforcez votre mot de passe</p>
-                      <p className="text-[10px] text-outline mt-1">Il y a 3 jours • Système</p>
-                    </div>
+                    {visibleNotifications.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-on-surface-variant">
+                        No notifications
+                      </div>
+                    ) : (
+                      visibleNotifications.slice(0, 10).map((notif) => (
+                        <div
+                          key={notif.id}
+                          className={`px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer ${
+                            !notif.read ? 'bg-primary/5' : ''
+                          }`}
+                          onClick={() => {
+                            setNotifications(prev =>
+                              prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
+                            );
+                            if (notif.link) {
+                              setActiveTab(notif.link);
+                              setShowNotificationList(false);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start gap-2">
+                            {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
+                            {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />}
+                            {notif.type === 'error' && <X className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
+                            <div className="flex-1">
+                              <p className="text-xs font-semibold text-on-surface">{notif.message}</p>
+                              <p className="text-[10px] text-outline mt-1">
+                                {new Date(notif.timestamp).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Profile trigger backup box */}
-            <div className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm select-none">
-              {currentUser.firstName[0]}{currentUser.lastName[0]}
-            </div>
+            {/* User Avatar with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
+                title="User menu"
+              >
+                {currentUser.firstName[0]}{currentUser.lastName[0]}
+              </button>
 
+              {showUserDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
+                  <div className="px-4 py-2 border-b border-outline-variant/30">
+                    <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
+                    <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                  <hr className="border-outline-variant/30 my-1" />
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-body-sm text-error hover:bg-error-container/30 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
-        {/* Primary Page Canvas */}
         <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
           {renderTabContent()}
         </main>
       </div>
-
     </div>
   );
 }

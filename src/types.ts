@@ -1,4 +1,4 @@
-export type UserRole = 'employee' | 'admin';
+export type UserRole = 'employee' | 'admin' | 'accountant';
 
 export interface User {
   id: string;
@@ -8,6 +8,11 @@ export interface User {
   avatarUrl?: string;
   role: UserRole;
   department?: string;
+  isActive: boolean;      
+  isVerified: boolean;  
+  createdAt: string;
+  resetToken?: string;   
+  resetTokenExpiry?: string; 
 }
 
 export interface Payslip {
@@ -57,4 +62,14 @@ export interface Invoice {
     price: number;
     total: number;
   }[];
+}
+export interface Project {
+  id: string;
+  name: string;
+  client: string;
+  description?: string;
+  status: 'Active' | 'In Progress' | 'Completed' | 'On Hold';
+  deadline: string;
+  teamMembers: string[];
+  createdAt: string;
 }

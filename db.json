@@ -1,0 +1,43 @@
+{
+  "payslips": [],
+  "leaveRequests": [],
+  "teamMembers": [],
+  "invoices": [],
+  "users": [
+    {
+      "id": "USR-001",
+      "email": "admin@dixpertia.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "role": "admin",
+      "hashedPassword": "$2b$12$pGqfHl6P8Mywn91YSMBis.lzWf0Z9Yg7UuJ5Q3XEV7Yef8XF1Qd3S",
+      "isActive": true,
+      "isVerified": true,
+      "createdAt": "2024-01-01T00:00:00"
+    },
+    {
+      "id": "USR-003",
+      "email": "ihebdhouibidh@gmail.com",
+      "firstName": "iheb",
+      "lastName": "dhouibi",
+      "role": "admin",
+      "hashedPassword": "$2b$12$cNJpM0wXXO.1t1Vd9BkJBuO13uqfL59RqSAhG0mCBfouK36MP9SOm",
+      "isActive": true,
+      "isVerified": false,
+      "createdAt": "2026-07-21T20:23:16.720604",
+      "resetToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJVU1ItMDAzIiwiZXhwIjoxNzg2MDEwMzc5LCJwdXJwb3NlIjoicmVzZXQifQ.auspgZSXxPFuGnvu4TLjyk-OFMFSqNeolbObXloIFHw",
+      "resetTokenExpiry": "2026-08-06T09:59:39.426119"
+    },
+    {
+      "id": "USR-005",
+      "email": "omaymaabdessamed4@gmail.com",
+      "firstName": "Oumaima",
+      "lastName": "Abdessamed",
+      "role": "accountant",
+      "hashedPassword": "$2b$12$oMgbeegrtNm1P9Yx/88EsuNZ08K0Eruk.QMnvFzDXhyvvYNzQ0/wm",
+      "isActive": true,
+      "isVerified": false,
+      "createdAt": "2026-07-22T19:02:34.664112"
+    }
+  ]
+}

@@ -21,12 +21,12 @@ class LeaveRequest(Base):
     __tablename__ = "leave_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(String, ForeignKey("users.id"))    
     date_debut = Column(Date, nullable=False)
     date_fin = Column(Date, nullable=False)
     type_conge = Column(Enum(LeaveType), default=LeaveType.PAYE)
     motif = Column(Text, default="")
     statut = Column(Enum(LeaveStatus), default=LeaveStatus.EN_ATTENTE)
-    valide_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    valide_par_id = Column(String, ForeignKey("users.id"))
     commentaire_validation = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
