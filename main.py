@@ -198,7 +198,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @app.post('/api/users', status_code=201)
 def create_user(req: UserCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user['role'] != 'admin':
+    if current_user.role != 'admin':
         raise HTTPException(status_code=403, detail="Only administrators can create users")
     existing = db.query(User).filter(User.email == req.email).first()
     if existing:
