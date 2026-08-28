@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Download, Calendar, DollarSign, Wallet, CreditCard, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-<<<<<<< HEAD
 import { Payslip, UserRole } from '../types';
-=======
-import { Payslip , UserRole } from '../types';
->>>>>>> develop
 
 interface PayslipsViewProps {
   payslips: Payslip[];
