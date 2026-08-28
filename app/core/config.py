@@ -1,30 +1,19 @@
-# app/core/config.py
-from pydantic_settings import BaseSettings
-from typing import List
+import os
+from dotenv import load_dotenv
 
-class Settings(BaseSettings):
-    # ===== DATABASE =====
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/dixpertia"
+load_dotenv()
 
-    # ===== SECURITY =====
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+class Settings:
+    # Fallback to the working hardcoded URL if the environment variable is missing or contains invalid characters
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:5432/dixpertia")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
-    # ===== CORS =====
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
-
-    # ===== EMAIL (optional) =====
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        # Allow extra fields if needed (but we've defined all we use)
-        extra = "ignore"   # optional; prevents validation errors on unknown fields
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    SMTP_HOST: str = os.getenv("SMTP_HOST")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USER: str = os.getenv("SMTP_USER")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 settings = Settings()

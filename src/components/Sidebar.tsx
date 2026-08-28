@@ -55,7 +55,7 @@ export default function Sidebar({
     // Projects: only admin
     { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false, showFor: ['admin'] },
     // Payslips: only employee
-    { id: 'payslips', label: 'Payslips', icon: Receipt, isMock: false, showFor: ['employee'] },
+    { id: 'payslips', label: 'Payslips', icon: Receipt, isMock: false, showFor: ['employee' , 'accountant'] },
     // Team: admin and employee (not accountant)
     { id: 'team', label: currentUser.role === 'admin' ? 'Team Management' : 'Team', icon: Users, isMock: false, showFor: ['admin', 'employee'] },
     // Users: admin and accountant (read‑only for accountant)
@@ -76,8 +76,10 @@ export default function Sidebar({
     <div className="flex flex-col h-full py-4 gap-2 px-4 bg-surface-container-lowest border-r border-outline-variant select-none">
       <div className="mb-6 pt-2 px-2 flex flex-col gap-1">
         <div className="text-primary font-black text-h1 tracking-tight">DIXpertIA</div>
-        <div className="text-[11px] text-outline font-semibold tracking-widest uppercase">Employee Portal</div>
-      </div>
+        <div className="text-[11px] text-outline font-semibold tracking-widest uppercase">
+              {currentUser.role === 'admin' ? 'HR Portal' : currentUser.role === 'accountant' ? 'Accountant Portal' : 'Employee Portal'}
+        </div>      
+        </div>
 
       <div className="mb-6 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center gap-3">
         {currentUser.avatarUrl ? (
