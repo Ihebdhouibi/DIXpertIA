@@ -5,7 +5,7 @@ import { Invoice, UserRole } from '../types';
 interface InvoicesViewProps {
   invoices: Invoice[];
   onAddInvoice: (invoice: Partial<Invoice>) => void;
-  userRole: UserRole;   
+  userRole: UserRole;
 }
 
 export default function InvoicesView({ invoices, onAddInvoice, userRole }: InvoicesViewProps) {
@@ -29,8 +29,41 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleDownload = (id: string) => {
-    showToast(`Downloading invoice ${id}...`);
+  // ✅ Updated download handler
+  const handleDownload = async (id: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showToast('Please log in again.');
+        return;
+      }
+
+      const response = await fetch(`/api/invoices/${id}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        showToast(`Download failed: ${errorText || response.statusText}`);
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast(`Invoice ${id} downloaded.`);
+    } catch (error) {
+      console.error('Download error:', error);
+      showToast('Network error. Please try again.');
+    }
   };
 
   const handleNewInvoiceSubmit = (e: React.FormEvent) => {
@@ -102,7 +135,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Invoices</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">Manage and track billing across all projects.</p>
         </div>
-        {isAdmin && (   // ✅ Only show for admin
+        {isAdmin && (
           <button
             onClick={() => setIsNewInvoiceOpen(true)}
             className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
@@ -113,7 +146,6 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         )}
       </div>
 
-      {/* Filters and table – unchanged */}
       <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col gap-4">
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-caption font-bold text-on-surface-variant mr-2">Filter by Status:</span>
@@ -224,22 +256,22 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         </div>
       </div>
 
-      {/* Modal (unchanged) */}
+      {/* Invoice Detail Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-on-background/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[92%] rounded-xl shadow-[0_8px_32px_rgba(31,56,100,0.2)] border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
             <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface shrink-0">
               <div className="flex items-center gap-4">
                 <h3 className="text-h2 font-black text-on-surface">
-                  Invoice <span className="font-mono text-body-sm font-normal text-on-surface-variant ml-1">{selectedInvoice.id}</span>
+                  Invoice <span className="font-mono text-body-sm font-normal text-on-surface-variant ml-1">{selectedInvoice?.id}</span>
                 </h3>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(selectedInvoice.status)}`}>
-                  {selectedInvoice.status}
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(selectedInvoice?.status || 'Draft')}`}>
+                  {selectedInvoice?.status}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleDownload(selectedInvoice.id)}
+                  onClick={() => handleDownload(selectedInvoice?.id || '')}
                   className="px-4 py-2 text-primary font-bold text-body-sm hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> Download
@@ -253,7 +285,6 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
               </div>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-surface-container-low">
-              {/* ... invoice detail content (unchanged) ... */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-6">
                   <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm">
@@ -261,17 +292,17 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     <div className="space-y-4">
                       <div>
                         <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Total Amount</span>
-                        <span className="text-h1 font-black text-primary tracking-tight">{formatCurrency(selectedInvoice.amount)}</span>
+                        <span className="text-h1 font-black text-primary tracking-tight">{formatCurrency(selectedInvoice?.amount || 0)}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Issued Date</span>
-                          <span className="text-body-sm text-on-surface font-semibold">{selectedInvoice.dateIssued}</span>
+                          <span className="text-body-sm text-on-surface font-semibold">{selectedInvoice?.dateIssued}</span>
                         </div>
                         <div>
                           <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Due Date</span>
-                          <span className={`text-body-sm font-bold ${selectedInvoice.status === 'Overdue' ? 'text-error' : 'text-on-surface'}`}>
-                            {selectedInvoice.dueDate}
+                          <span className={`text-body-sm font-bold ${selectedInvoice?.status === 'Overdue' ? 'text-error' : 'text-on-surface'}`}>
+                            {selectedInvoice?.dueDate}
                           </span>
                         </div>
                       </div>
@@ -281,11 +312,11 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 rounded-md bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-body-sm shadow-sm">
-                        {selectedInvoice.clientInitials}
+                        {selectedInvoice?.clientInitials}
                       </div>
                       <div>
-                        <div className="text-body-sm font-bold text-on-surface">{selectedInvoice.client}</div>
-                        <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice.client.toLowerCase().replace(/\s+/g, '')}.example.com</div>
+                        <div className="text-body-sm font-bold text-on-surface">{selectedInvoice?.client}</div>
+                        <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice?.client?.toLowerCase().replace(/\s+/g, '')}.example.com</div>
                       </div>
                     </div>
                     <div className="space-y-1 text-caption text-on-surface-variant font-medium border-t border-outline-variant/30 pt-3">
@@ -325,21 +356,21 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                         </div>
                         <div className="text-right">
                           <div className="font-sans text-h3 font-black text-on-surface mb-2 tracking-wide uppercase">INVOICE</div>
-                          <div className="font-mono text-caption text-primary font-bold mb-1">{selectedInvoice.id}</div>
-                          <div className="text-caption text-on-surface-variant font-semibold">Date: {selectedInvoice.dateIssued}</div>
+                          <div className="font-mono text-caption text-primary font-bold mb-1">{selectedInvoice?.id}</div>
+                          <div className="text-caption text-on-surface-variant font-semibold">Date: {selectedInvoice?.dateIssued}</div>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/50 pt-4 mb-8 text-caption select-none">
                         <div>
                           <span className="block text-outline font-bold uppercase tracking-wider mb-1">Billed To:</span>
-                          <span className="block font-bold text-on-surface">{selectedInvoice.client}</span>
+                          <span className="block font-bold text-on-surface">{selectedInvoice?.client}</span>
                           <span className="block text-on-surface-variant">123 Business Road, Suite 400</span>
                           <span className="block text-on-surface-variant">San Francisco, CA 94107</span>
                         </div>
                         <div className="text-right">
                           <span className="block text-outline font-bold uppercase tracking-wider mb-1">Due Date:</span>
-                          <span className="block font-bold text-on-surface">{selectedInvoice.dueDate}</span>
-                          <span className="block text-on-surface-variant">Status: {selectedInvoice.status}</span>
+                          <span className="block font-bold text-on-surface">{selectedInvoice?.dueDate}</span>
+                          <span className="block text-on-surface-variant">Status: {selectedInvoice?.status}</span>
                         </div>
                       </div>
                       <div className="border-t border-b border-outline-variant py-2">
@@ -349,7 +380,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                           <div className="w-24 text-right">Price</div>
                           <div className="w-24 text-right">Total</div>
                         </div>
-                        {selectedInvoice.items.map((item, index) => (
+                        {selectedInvoice?.items?.map((item, index) => (
                           <div key={index} className="flex text-caption text-on-surface py-2.5 border-t border-outline-variant/20">
                             <div className="flex-grow font-semibold text-on-surface">{item.description}</div>
                             <div className="w-12 text-right font-mono text-on-surface-variant">{item.qty}</div>
@@ -362,11 +393,11 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                         <div className="w-48 border-t border-outline-variant pt-3">
                           <div className="flex justify-between text-caption text-on-surface-variant font-medium py-1">
                             <span>Subtotal:</span>
-                            <span className="font-mono">{formatCurrency(selectedInvoice.amount)}</span>
+                            <span className="font-mono">{formatCurrency(selectedInvoice?.amount || 0)}</span>
                           </div>
                           <div className="flex justify-between text-caption font-bold text-on-surface py-1.5 border-t border-outline-variant/30 mt-2">
                             <span>Total Due:</span>
-                            <span className="font-mono text-primary">{formatCurrency(selectedInvoice.amount)}</span>
+                            <span className="font-mono text-primary">{formatCurrency(selectedInvoice?.amount || 0)}</span>
                           </div>
                         </div>
                       </div>
@@ -379,7 +410,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         </div>
       )}
 
-      {/* New Invoice Modal – shown only for admin */}
+      {/* New Invoice Modal */}
       {isAdmin && isNewInvoiceOpen && (
         <div className="fixed inset-0 z-50 bg-on-background/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">

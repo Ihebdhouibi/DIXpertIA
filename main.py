@@ -21,11 +21,14 @@ from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
 from app.models.service import TeamMember
 from app.models.invoicing import Invoice, Device
+from app.routers import payslip , invoicing
+from app.core.security import get_current_user  
 
 load_dotenv()
 
 app = FastAPI()
-
+app.include_router(payslip.router, prefix="/api")
+app.include_router(invoicing.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
@@ -469,3 +472,31 @@ def logs(request: Request):
 @app.post('/logs')
 def logs_post():
     return []
+
+@app.get('/api/data')
+def get_data(
+    current_user: User = Depends(get_current_user),  # <-- new
+    db: Session = Depends(get_db)
+):
+    # Fetch all data (except payslips for now)
+    leaves = db.query(LeaveRequest).all()
+    team = db.query(TeamMember).all()
+    invoices = db.query(Invoice).all()
+    users = db.query(User).all()
+    devices = db.query(Device).all()
+
+    # Filter payslips based on user role
+    if current_user.role in ['admin', 'accountant']:
+        payslips = db.query(Payslip).all()
+    else:
+        # Employee – only their own payslips
+        payslips = db.query(Payslip).filter(Payslip.employee_id == current_user.id).all()
+
+    return {
+        "payslips": [p.__dict__ for p in payslips],
+        "leaveRequests": [l.__dict__ for l in leaves],
+        "teamMembers": [t.__dict__ for t in team],
+        "invoices": [i.__dict__ for i in invoices],
+        "users": [u.__dict__ for u in users],
+        "devices": [d.__dict__ for d in devices]
+    }

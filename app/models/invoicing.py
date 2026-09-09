@@ -1,10 +1,11 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Column, Float , DateTime ,  Integer, String, Text, ForeignKey, Date, Numeric, Enum
+from sqlalchemy import Column, Float, DateTime, Integer, String, Text, ForeignKey, Date, Numeric, Enum
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.models.user import User   # <-- add this import
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -32,16 +33,18 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero = Column(String(30), unique=True, nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)   # ← revert to Integer, FK to clients
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
     montant_ht = Column(Numeric(10, 2))
     montant_ttc = Column(Numeric(10, 2))
     statut = Column(Enum(InvoiceStatus))
-    cree_par_id = Column(String, ForeignKey("users.id"))   # ← keep as String to match User.id
-    # Keep the relationships
+    # Make cree_par_id nullable so we can insert without it
+    cree_par_id = Column(String, ForeignKey("users.id"), nullable=True)
+    
     client = relationship("Client", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
