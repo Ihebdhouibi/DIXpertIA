@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Linting and hooks. Kept out of requirements.txt so the Docker image does not
+# install developer tooling.
+ruff==0.6.9
+pre-commit==3.8.0
