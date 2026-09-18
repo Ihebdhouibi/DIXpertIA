@@ -21,7 +21,11 @@ def list_leave_requests(db: Session = Depends(get_db), current_user: User = Depe
 
 
 @router.post("/", response_model=LeaveRequestOut)
-def create_leave_request(payload: LeaveRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_leave_request(
+    payload: LeaveRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if not current_user.employee_profile:
         raise HTTPException(status_code=400, detail="Aucun profil employé associé à ce compte")
 
@@ -33,8 +37,17 @@ def create_leave_request(payload: LeaveRequestCreate, db: Session = Depends(get_
     return leave_request
 
 
-@router.patch("/{leave_id}/decision", response_model=LeaveRequestOut, dependencies=[Depends(require_roles("rh", "admin"))])
-def decide_leave_request(leave_id: int, payload: LeaveRequestDecision, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.patch(
+    "/{leave_id}/decision",
+    response_model=LeaveRequestOut,
+    dependencies=[Depends(require_roles("rh", "admin"))],
+)
+def decide_leave_request(
+    leave_id: int,
+    payload: LeaveRequestDecision,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     leave_request = db.query(LeaveRequest).get(leave_id)
     if not leave_request:
         raise HTTPException(status_code=404, detail="Demande introuvable")

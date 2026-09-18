@@ -1,0 +1,37 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "node_modules",
+    "dist",
+    "__pycache__",
+    # Alembic's env.py and generated revisions are template output, not
+    # hand-written code. Excluded wholesale, as is conventional.
+    "alembic",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes: undefined names, unused imports, redefinitions
+    "W",    # pycodestyle warnings: trailing whitespace, missing final newline
+    "T20",  # flake8-print: no print() / pprint() left in application code
+    "S105", # hardcoded password string
+    "S106", # hardcoded password as a function argument
+]
+
+# Deliberately not enabled yet:
+#   "I"  (isort) - would reorder imports in 21 files. Worth doing, but as its own
+#        change so it does not bury the rules that catch real defects.
+
+[tool.ruff.lint.per-file-ignores]
+# These four are command-line utilities. print() is their user interface, not
+# leftover debugging, so T201 does not apply. Their *emoji* are still a problem
+# on Windows (cp1252 stdout) and are caught by the check-no-emoji hook instead.
+"tables.py" = ["T201"]
+"seed_users.py" = ["T201"]
+"migrate_data.py" = ["T201"]
+"insert_invoices.py" = ["T201"]
+# Same reasoning: the hook reports findings on stdout for pre-commit to display.
+"scripts/*.py" = ["T201"]

@@ -1,0 +1,68 @@
+# Run once after cloning:
+#
+#     pip install -r requirements-dev.txt
+#     pre-commit install
+#
+# Hooks then run against staged files on every `git commit`. To sweep the whole
+# tree: `pre-commit run --all-files`.
+#
+# Note that hooks live in .git/, which is not cloned, and `git commit --no-verify`
+# bypasses them. The GitHub Actions workflow in .github/workflows/lint.yml runs
+# the same checks on every push and pull request, and that is what actually holds
+# the line.
+
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        # Configuration lives in pyproject.toml under [tool.ruff].
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+        # Precedent: e9412de was committed purely to remove conflict markers
+        # that had been merged into PayslipsView.tsx.
+
+      # These two rewrite files. They are scoped away from generated and data
+      # files so they cannot churn content nobody edits by hand. They still
+      # reformat legacy source, so do not run them with --all-files casually:
+      # a full sweep touches ~38 files and would conflict with every open
+      # rebrand branch (#23-#31). Let them clean files as those files are
+      # touched, or schedule a deliberate sweep once the rebrand has landed.
+      - id: end-of-file-fixer
+        exclude: &generated ^(db\.json|package-lock\.json|docs/|public/|dist/|DI Xpertia Logo Concepts/)
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: *generated
+
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        exclude: *generated
+      - id: check-yaml
+      - id: check-json
+        exclude: ^(tsconfig\.json|\.vscode/|db\.json)
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: check-no-emoji
+        name: no emoji in python source
+        entry: python scripts/check_no_emoji.py
+        language: system
+        types: [python]
+        exclude: ^(node_modules|dist|\.venv)/
+        # Python only, deliberately. The failure this prevents is
+        # UnicodeEncodeError on a cp1252 stdout stream, which is a Python/Windows
+        # problem - emoji in .tsx render correctly in a browser and are a design
+        # question, not a portability one. The 9 emoji currently in src/ are
+        # tracked in #33 and will mostly be replaced by lucide-react icons during
+        # the v2 rebrand.
+        #
+        # Accented Latin (the French API messages) is deliberately permitted.

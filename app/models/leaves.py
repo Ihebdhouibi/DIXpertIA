@@ -21,7 +21,7 @@ class LeaveRequest(Base):
     __tablename__ = "leave_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, ForeignKey("users.id"))    
+    employee_id = Column(String, ForeignKey("users.id"))
     date_debut = Column(Date, nullable=False)
     date_fin = Column(Date, nullable=False)
     type_conge = Column(Enum(LeaveType), default=LeaveType.PAYE)
