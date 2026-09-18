@@ -53,7 +53,11 @@ def list_invoices(db: Session = Depends(get_db)):
 
 
 @router.post("/invoices", response_model=InvoiceOut)
-def create_invoice(payload: InvoiceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_invoice(
+    payload: InvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
@@ -122,7 +126,12 @@ def download_invoice(
         "client_address": client_address,
         "date_issued": invoice.date_emission.strftime("%b %d, %Y"),
         "due_date": invoice.date_echeance.strftime("%b %d, %Y"),
-        "status": invoice.statut if isinstance(invoice.statut, str) else (invoice.statut.value if invoice.statut else "Sent"),        "items": items,
+        "status": (
+            invoice.statut
+            if isinstance(invoice.statut, str)
+            else (invoice.statut.value if invoice.statut else "Sent")
+        ),
+        "items": items,
         "subtotal": float(invoice.montant_ht),
         "total": float(invoice.montant_ttc),
     }

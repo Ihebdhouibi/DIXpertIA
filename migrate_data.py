@@ -1,7 +1,6 @@
 import json
-from app.core.database import SessionLocal, Base, engine   
+from app.core.database import SessionLocal, Base, engine
 
-from app.core.database import SessionLocal
 from app.models.user import User
 from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
@@ -108,4 +107,4 @@ for d in data.get('devices', []):
 
 db.commit()
 db.close()
-print("✅ Data migration completed successfully.")
+print("Done: data migration completed successfully.")

@@ -450,7 +450,12 @@ def create_device(req: DeviceCreate, current_user: dict = Depends(get_current_us
     return device
 
 @app.put('/api/devices/{device_id}')
-def update_device(device_id: str, req: DeviceCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_device(
+    device_id: str,
+    req: DeviceCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only administrators can manage devices")
     device = db.query(Device).filter(Device.id == device_id).first()
@@ -505,7 +510,7 @@ def get_data(
 
     return {
         "payslips": [_row(p) for p in payslips],
-        "leaveRequests": [_row(l) for l in leaves],
+        "leaveRequests": [_row(lr) for lr in leaves],
         "teamMembers": [_row(t) for t in team],
         "invoices": [_row(i) for i in invoices],
         "users": [_row(u) for u in users],

@@ -5,7 +5,10 @@ from sqlalchemy import Column, Float, DateTime, Integer, String, Text, ForeignKe
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.models.user import User   # <-- add this import
+# Imported for its side effect, not for direct use: loading this module registers
+# the `users` table on Base.metadata, which Invoice.cree_par_id needs in order to
+# resolve ForeignKey("users.id"). Do not let a linter auto-remove it.
+from app.models.user import User  # noqa: F401
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -41,7 +44,7 @@ class Invoice(Base):
     statut = Column(Enum(InvoiceStatus))
     # Make cree_par_id nullable so we can insert without it
     cree_par_id = Column(String, ForeignKey("users.id"), nullable=True)
-    
+
     client = relationship("Client", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
 
@@ -66,5 +69,5 @@ class Device(Base):
     model = Column(String)
     serialNumber = Column(String)
     price = Column(Float)
-    status = Column(String, default="Available")  
+    status = Column(String, default="Available")
     createdAt = Column(DateTime, default=datetime.utcnow)

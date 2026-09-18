@@ -98,12 +98,12 @@ def parse_date(date_str):
 for inv in invoices_data:
     existing = db.query(Invoice).filter(Invoice.numero == inv["numero"]).first()
     if existing:
-        print(f"⏭️ Invoice {inv['numero']} already exists, skipping.")
+        print(f"SKIP: invoice {inv['numero']} already exists.")
         continue
 
     client = client_map.get(inv["client"])
     if not client:
-        print(f"❌ Client {inv['client']} not found, skipping.")
+        print(f"SKIP: client {inv['client']} not found.")
         continue
 
     # Map status to enum value
@@ -132,7 +132,7 @@ for inv in invoices_data:
         ))
 
     db.commit()
-    print(f"✅ Inserted invoice {inv['numero']} with {len(inv['items'])} items.")
+    print(f"OK: inserted invoice {inv['numero']} with {len(inv['items'])} items.")
 
 db.close()
-print("🎉 All invoices inserted.")
+print("Done: all invoices inserted.")
