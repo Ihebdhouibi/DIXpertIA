@@ -14,7 +14,21 @@ export default defineConfig(() => {
         },
       },
       hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch:
+        process.env.DISABLE_HMR === 'true'
+          ? null
+          : {
+              // Non-source folders. Watching them is useless and the brand-asset
+              // folder in particular throws EBUSY when another app holds a file open.
+              ignored: [
+                '**/DI Xpertia Logo Concepts/**',
+                '**/.venv/**',
+                '**/__pycache__/**',
+                '**/alembic/**',
+                '**/docs/**',
+                '**/db.json',
+              ],
+            },
     },
   };
 });
