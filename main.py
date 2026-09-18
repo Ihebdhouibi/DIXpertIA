@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 import string
@@ -21,13 +22,21 @@ from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
 from app.models.service import TeamMember
 from app.models.invoicing import Invoice, Device
-from app.routers import payslip , invoicing
-from app.core.security import get_current_user  
+from app.routers import invoicing
 
 load_dotenv()
 
+# Log through the stdlib rather than print(). The previous debug prints carried
+# emoji, which raise UnicodeEncodeError on Windows consoles using cp1252 and
+# turned every login into a 500. Keep all log messages ASCII-only.
+log = logging.getLogger("dixpertia")
+
 app = FastAPI()
-app.include_router(payslip.router, prefix="/api")
+# NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
+# declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
+# registers GET /api/{payslip_id}, which shadows GET /api/data. It also expects a
+# "rh" role and a `User.employee_profile` relationship that this data model does
+# not have. Mounting it needs those reconciled first.
 app.include_router(invoicing.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
@@ -61,7 +70,7 @@ def send_email(to_email: str, subject: str, body: str):
         from_email = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
 
         if not smtp_host or not smtp_user or not smtp_password:
-            print("⚠️ SMTP credentials missing. Email not sent.")
+            log.warning("SMTP credentials missing. Email not sent.")
             return False
 
         msg = MIMEMultipart()
@@ -75,10 +84,10 @@ def send_email(to_email: str, subject: str, body: str):
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
 
-        print(f"✅ Email sent to {to_email}")
+        log.info("Email sent to %s", to_email)
         return True
     except Exception as e:
-        print(f"❌ Email error: {e}")
+        log.error("Email error: %s", e)
         return False
 
 # --- JWT helpers ---
@@ -103,6 +112,21 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+# --- Serialisation helper ---
+# Fields that must never leave the API.
+_PRIVATE_COLUMNS = {'hashedPassword', 'hashed_password', 'resetToken', 'resetTokenExpiry'}
+
+def _row(obj):
+    """Serialise a SQLAlchemy row, dropping internals and secrets.
+
+    `obj.__dict__` carries SQLAlchemy's `_sa_instance_state` as well as every
+    column, so returning it directly exposed password hashes and reset tokens.
+    """
+    return {
+        k: v for k, v in obj.__dict__.items()
+        if not k.startswith('_') and k not in _PRIVATE_COLUMNS
+    }
 
 # --- Pydantic models ---
 class LeaveRequestCreate(BaseModel):
@@ -170,17 +194,15 @@ class DeviceCreate(BaseModel):
 # --- Auth endpoints ---
 @app.post('/api/login')
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    print(f"🔍 Login attempt for email: {req.email}")
+    log.info("Login attempt for %s", req.email)
     user = db.query(User).filter(User.email == req.email).first()
     if not user:
-        print("❌ User not found")
+        log.info("Login failed: no user for %s", req.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    print(f"✅ User found, role: {user.role}")
-    print(f"Stored hash: {user.hashedPassword}")
     if not verify_password(req.password, user.hashedPassword):
-        print("❌ Password verification failed")
+        log.info("Login failed: bad password for %s", req.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    print("✅ Password verified")
+    log.info("Login OK for %s (role=%s)", req.email, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role})
     return {
         "access_token": token,
@@ -304,22 +326,11 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     return {"message": "Password updated successfully."}
 
 # --- Data endpoints ---
-@app.get('/api/data')
-def get_data(db: Session = Depends(get_db)):
-    payslips = db.query(Payslip).all()
-    leaves = db.query(LeaveRequest).all()
-    team = db.query(TeamMember).all()
-    invoices = db.query(Invoice).all()
-    users = db.query(User).all()
-    devices = db.query(Device).all()
-    return {
-        "payslips": [p.__dict__ for p in payslips],
-        "leaveRequests": [l.__dict__ for l in leaves],
-        "teamMembers": [t.__dict__ for t in team],
-        "invoices": [i.__dict__ for i in invoices],
-        "users": [u.__dict__ for u in users],
-        "devices": [d.__dict__ for d in devices]
-    }
+# NOTE: an unauthenticated duplicate of GET /api/data used to be declared here.
+# FastAPI matches routes in registration order, so it shadowed the authenticated
+# definition further down and served every User row (password hashes included)
+# to anonymous callers, while also bypassing that handler's per-role payslip
+# filter. The single authenticated definition below is now the only one.
 
 @app.post('/api/leave-requests', status_code=201)
 def create_leave_request(req: LeaveRequestCreate, db: Session = Depends(get_db)):
@@ -493,10 +504,10 @@ def get_data(
         payslips = db.query(Payslip).filter(Payslip.employee_id == current_user.id).all()
 
     return {
-        "payslips": [p.__dict__ for p in payslips],
-        "leaveRequests": [l.__dict__ for l in leaves],
-        "teamMembers": [t.__dict__ for t in team],
-        "invoices": [i.__dict__ for i in invoices],
-        "users": [u.__dict__ for u in users],
-        "devices": [d.__dict__ for d in devices]
+        "payslips": [_row(p) for p in payslips],
+        "leaveRequests": [_row(l) for l in leaves],
+        "teamMembers": [_row(t) for t in team],
+        "invoices": [_row(i) for i in invoices],
+        "users": [_row(u) for u in users],
+        "devices": [_row(d) for d in devices]
     }
