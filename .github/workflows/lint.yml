@@ -1,0 +1,100 @@
+name: lint
+
+# Why this exists
+# ---------------
+# Pre-commit hooks live in .git/, which is not cloned, and `git commit
+# --no-verify` bypasses them. Branch protection and rulesets return
+# "403 Upgrade to GitHub Pro" on this private repository, so a failing check
+# cannot currently *block* a merge - but it is visible on the pull request, and
+# Actions do run on private repos on the free plan. This workflow is therefore
+# the only enforcement available today. If the plan is upgraded, add these jobs
+# as required status checks on `develop` and `main`.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: python (ruff + emoji)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the changed-file diff below has a base to compare to.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install lint tooling
+        # Only the linters - not requirements.txt. This job does not import the
+        # application, so it does not need psycopg2, reportlab or a database.
+        run: pip install ruff==0.6.9
+
+      - name: ruff (changed files must be clean)
+        run: ruff check --output-format=github .
+
+      - name: no emoji in python source
+        run: |
+          # Scan tracked Python files, excluding generated and vendored trees.
+          mapfile -t files < <(git ls-files '*.py' | grep -Ev '^(alembic/|\.venv/)')
+          if [ ${#files[@]} -eq 0 ]; then echo "no python files"; exit 0; fi
+          python scripts/check_no_emoji.py "${files[@]}"
+
+  frontend:
+    name: frontend (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  hygiene:
+    name: pre-commit hygiene (non-blocking)
+    runs-on: ubuntu-latest
+    # Informational. The whitespace and end-of-file hooks would reformat ~38
+    # legacy files if swept, which would conflict with every open rebrand
+    # branch. This job reports the outstanding debt without failing the build;
+    # remove continue-on-error once a deliberate sweep has happened.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install pre-commit
+        run: pip install pre-commit==3.8.0
+
+      - name: Run hooks on files changed by this PR
+        if: github.event_name == 'pull_request'
+        run: |
+          pre-commit run \
+            --from-ref origin/${{ github.base_ref }} \
+            --to-ref HEAD \
+            --show-diff-on-failure
+
+      - name: Run hooks on the whole tree (debt report)
+        if: github.event_name == 'push'
+        run: pre-commit run --all-files --show-diff-on-failure
