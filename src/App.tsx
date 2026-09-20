@@ -41,6 +41,12 @@ interface Notification {
   timestamp: number;
   link?: string;
   targetRole?: 'admin' | 'employee';
+  /**
+   * When true the notification is shown for this session only and is never
+   * written to localStorage. Use it for anything containing a secret - a
+   * persisted notification outlives the reason it was shown.
+   */
+  ephemeral?: boolean;
 }
 
 interface AppUser extends User {
@@ -127,7 +133,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
+    // Ephemeral notifications are deliberately excluded: they may carry
+    // secrets, and localStorage has no expiry.
+    localStorage.setItem(
+      'dixpertia_notifications',
+      JSON.stringify(notifications.filter(n => !n.ephemeral))
+    );
     setNotificationCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 
@@ -135,7 +146,8 @@ export default function App() {
     message: string,
     type: Notification['type'] = 'info',
     link?: string,
-    targetRole?: 'admin' | 'employee'
+    targetRole?: 'admin' | 'employee',
+    ephemeral = false
   ) => {
     const newNotif: Notification = {
       id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -145,6 +157,7 @@ export default function App() {
       timestamp: Date.now(),
       link,
       targetRole,
+      ephemeral,
     };
     setNotifications(prev => [newNotif, ...prev]);
   };
@@ -450,8 +463,16 @@ export default function App() {
           avatarUrl: undefined,
         };
         setUsers(prev => [...prev, user]);
-        addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
-        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
+        // The password is also emailed to the new user. It is surfaced here only
+        // as a fallback for when delivery fails, and is marked ephemeral so it is
+        // never written to localStorage. It must not be logged to the console.
+        addNotification(
+          `User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`,
+          'success',
+          undefined,
+          undefined,
+          true
+        );
       } else {
         const error = await response.json();
         addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
