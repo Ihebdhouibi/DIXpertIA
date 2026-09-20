@@ -21,10 +21,10 @@ import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
 import ResetPassword from './components/ResetPassword';     // NEW
-import { 
-  Bell, 
-  Menu, 
-  HelpCircle, 
+import {
+  Bell,
+  Menu,
+  HelpCircle,
   AlertCircle,
   CheckCircle,
   X,
@@ -229,7 +229,7 @@ export default function App() {
         email,
         role,
         department: role === 'admin' ? 'Human Resources' : 'Engineering',
-        avatarUrl: role === 'admin' 
+        avatarUrl: role === 'admin'
           ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
           : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
         isActive: true,
@@ -551,7 +551,9 @@ export default function App() {
         return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
 
       case 'leave-requests':
-        if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
+        // Employees only. Hiding the sidebar entry is not enough on its own -
+        // activeTab can be reached by other paths, so the view guards too (#10).
+        if (currentUser.role !== 'employee') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
               <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
@@ -597,19 +599,19 @@ export default function App() {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
-      
+
       case 'reports':
         if (currentUser.role === 'admin') {
           return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return (
-          <LeaveRequestsView 
-            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
+          <LeaveRequestsView
+            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
           />
         );
-      
+
       case 'team':
         return (
           <TeamView
@@ -621,7 +623,7 @@ export default function App() {
             onRejectLeave={handleRejectLeave}
           />
         );
-      
+
       case 'projects':
         if (currentUser.role !== 'admin') {
           return (
@@ -784,7 +786,7 @@ export default function App() {
                           Mark all read
                         </button>
                       )}
-                      <button 
+                      <button
                         onClick={() => setShowNotificationList(false)}
                         className="text-xs text-secondary hover:underline cursor-pointer"
                       >
