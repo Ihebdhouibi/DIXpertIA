@@ -99,7 +99,6 @@ export default function App() {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [showNotificationList, setShowNotificationList] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -185,63 +184,40 @@ export default function App() {
 
   // --- Handlers with real API calls ---
 
-  const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
+  // Authentication goes through POST /api/login only. The role, and every other
+  // user attribute, comes from the server's response - never from the client.
+  const handleLogin = async (email: string, password: string) => {
     try {
-      if (password) {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
-          return;
-        }
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        const user = data.user;
-        const appUser: AppUser = {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          department: user.department || 'Operations',
-          avatarUrl: user.avatarUrl || undefined,
-          isActive: user.isActive,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt || new Date().toISOString()
-        };
-        setCurrentUser(appUser);
-        setActiveTab('dashboard');
-        setShowHomepage(false);
-        setShowAuth(false);
-        setShowLogin(false);
-        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
         return;
       }
-      // Fallback mock (if no password – for testing)
-      const newUser: AppUser = {
-        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-        firstName,
-        lastName,
-        email,
-        role,
-        department: role === 'admin' ? 'Human Resources' : 'Engineering',
-        avatarUrl: role === 'admin'
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-        isActive: true,
-        isVerified: true,
-        createdAt: new Date().toISOString()
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      const user = data.user;
+      const appUser: AppUser = {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        department: user.department || 'Operations',
+        avatarUrl: user.avatarUrl || undefined,
+        isActive: user.isActive,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt || new Date().toISOString()
       };
-      localStorage.setItem('token', 'mock-admin-token');
-      setCurrentUser(newUser);
+      setCurrentUser(appUser);
       setActiveTab('dashboard');
       setShowHomepage(false);
-      setShowAuth(false);
       setShowLogin(false);
+      addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
     } catch (error) {
       addNotification('Network error during login', 'error');
     }

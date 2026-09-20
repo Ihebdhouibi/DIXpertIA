@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, ArrowLeft, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
-import { UserRole } from '../types';
 
 interface LoginProps {
-  onLogin: (role: UserRole, email: string, firstName: string, lastName: string, password: string) => void;
+  onLogin: (email: string, password: string) => void;
   onBackHome?: () => void;
   onForgotPassword?: () => void;  // NEW
 }
@@ -25,10 +24,11 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
       setError('Please fill in all fields.');
       return;
     }
-    const role: UserRole = email.toLowerCase().includes('admin') ? 'admin' : 'employee';
-    const firstName = email.split('@')[0] || 'User';
-    const lastName = '';
-    onLogin(role, email, firstName, lastName, password);
+    // Do not guess the role here. It previously inferred 'admin' from the email
+    // containing "admin"; the value was discarded server-side, but the pattern
+    // was a genuine privilege escalation in the now-deleted Registration.tsx.
+    // The role comes from the /api/login response.
+    onLogin(email, password);
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
