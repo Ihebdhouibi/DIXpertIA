@@ -1,14 +1,14 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  FileText,
   Calendar,
-  Users, 
-  Settings, 
-  LogOut, 
-  ShieldAlert, 
-  UserCheck, 
+  Users,
+  Settings,
+  LogOut,
+  ShieldAlert,
+  UserCheck,
   Home,
   Bell,
   Receipt,
@@ -50,11 +50,13 @@ export default function Sidebar({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: false },
     // Invoices: visible to admin and accountant
     { id: 'invoices', label: 'Invoices', icon: FileText, isMock: false, showFor: ['admin', 'accountant'] },
-    // Leave Requests: only employee
-    { id: 'leave-requests', label: 'Leave Requests', icon: Calendar, isMock: false, showFor: ['employee' , 'accountant'] },
+    // Leave Requests: only employee. Accountants are deliberately excluded -
+    // they do not manage HR processes (see #10).
+    { id: 'leave-requests', label: 'Leave Requests', icon: Calendar, isMock: false, showFor: ['employee'] },
     // Projects: only admin
     { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false, showFor: ['admin'] },
-    // Payslips: only employee
+    // Payslips: employee and accountant. The accountant access is intentional -
+    // #12 deliberately superseded the employee-only rule in #10. Do not revert.
     { id: 'payslips', label: 'Payslips', icon: Receipt, isMock: false, showFor: ['employee' , 'accountant'] },
     // Team: admin and employee (not accountant)
     { id: 'team', label: currentUser.role === 'admin' ? 'Team Management' : 'Team', icon: Users, isMock: false, showFor: ['admin', 'employee'] },
@@ -78,7 +80,7 @@ export default function Sidebar({
         <div className="text-primary font-black text-h1 tracking-tight">DIXpertIA</div>
         <div className="text-[11px] text-outline font-semibold tracking-widest uppercase">
               {currentUser.role === 'admin' ? 'HR Portal' : currentUser.role === 'accountant' ? 'Accountant Portal' : 'Employee Portal'}
-        </div>      
+        </div>
         </div>
 
       <div className="mb-6 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center gap-3">
