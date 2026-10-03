@@ -73,9 +73,18 @@ def verify(cur) -> list[str]:
         (APP_ROLE,),
     )
     granted = {r[0] for r in cur.fetchall()}
-    expected = {"devices", "services"}
+    cur.execute(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+        "AND tablename IN ('devices', 'services')"
+    )
+    # On a fresh database the tables do not exist yet, so only the subset that
+    # does exist can carry a grant. Re-run after migrations for the rest.
+    expected = {r[0] for r in cur.fetchall()}
     if granted != expected:
         failures.append(f"DELETE grants are {sorted(granted)}, expected {sorted(expected)}")
+    if not expected:
+        print("  note: application tables do not exist yet - re-run this script "
+              "after `alembic upgrade head` to apply the DELETE grants.")
 
     cur.execute(
         "SELECT count(*) FROM information_schema.role_table_grants "
@@ -131,7 +140,7 @@ def main():
         print(f'  DATABASE_URL="postgresql://{APP_ROLE}:{app_password}@{host}:{port}/{database}"')
     else:
         print(f'  DATABASE_URL="postgresql://{APP_ROLE}:<your app password>@{host}:{port}/{database}"')
-    print("\nFor schema changes only (tables.py, Alembic):")
+    print("\nFor schema changes only (Alembic):")
     if generated[1]:
         print(f'  SCHEMA_DATABASE_URL="postgresql://{OWNER_ROLE}:{owner_password}@{host}:{port}/{database}"')
     else:

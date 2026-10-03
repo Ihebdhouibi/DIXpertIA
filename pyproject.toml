@@ -26,10 +26,9 @@ select = [
 #        change so it does not bury the rules that catch real defects.
 
 [tool.ruff.lint.per-file-ignores]
-# These four are command-line utilities. print() is their user interface, not
+# These are command-line utilities. print() is their user interface, not
 # leftover debugging, so T201 does not apply. Their *emoji* are still a problem
 # on Windows (cp1252 stdout) and are caught by the check-no-emoji hook instead.
-"tables.py" = ["T201"]
 "seed_users.py" = ["T201"]
 "migrate_data.py" = ["T201"]
 "insert_invoices.py" = ["T201"]

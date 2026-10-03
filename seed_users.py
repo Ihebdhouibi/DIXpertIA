@@ -1,7 +1,7 @@
 """Create the first administrator account.
 
 POST /api/users requires an authenticated admin, so the first one cannot be
-created through the API. Run this once after `python tables.py`:
+created through the API. Run this once after `alembic upgrade head`:
 
     python seed_users.py --email admin@dixpertia.tn
     python seed_users.py --email admin@dixpertia.tn --password 'chosen-password'

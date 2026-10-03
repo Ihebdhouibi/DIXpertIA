@@ -10,7 +10,10 @@ from app.core.database import Base
 from app.models import user, payroll, leaves, invoicing, service  # noqa: F401 (enregistre les modèles)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Migrations run as the schema OWNER role, not the application role: the
+# application role has no CREATE privilege by design (#70). Using
+# DATABASE_URL here would fail with "permission denied for schema public".
+config.set_main_option("sqlalchemy.url", settings.SCHEMA_DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -28,7 +31,12 @@ def run_migrations_offline():
 def run_migrations_online():
     connectable = engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,          # detect column type changes
+            compare_server_default=True,  # detect default changes
+        )
         with context.begin_transaction():
             context.run_migrations()
 
