@@ -17,6 +17,7 @@ import bcrypt
 from dotenv import load_dotenv
 
 from app.core.config import settings
+from app.core.identity import clear_identity, set_identity
 from app.core.database import get_db
 from app.models.user import User
 from app.models.leaves import LeaveRequest
@@ -44,12 +45,27 @@ PUBLIC_PATHS = frozenset({
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 
-def require_authentication(request: Request, token: Optional[str] = Depends(_optional_bearer)) -> None:
-    """Reject any request to a non-public route that has no valid access token."""
+async def require_authentication(request: Request, token: Optional[str] = Depends(_optional_bearer)) -> None:
+    """Reject any request to a non-public route that has no valid access token.
+
+    Also publishes the caller's identity for row-level security (#43). It is
+    taken from the JWT claims, not from a database lookup: the lookup is itself
+    subject to the policies, so deriving identity from it would be circular.
+
+    Declared async deliberately. As a sync dependency FastAPI runs this in a
+    worker thread, where ContextVar.set() mutates that worker's copy of the
+    context and the endpoint - dispatched to a different worker - never sees
+    it. Awaited on the event loop, the value is in the context that is copied
+    into the endpoint's worker. Verified: as a sync def, every insert was
+    rejected by the policies because the role arrived as NULL.
+    """
+    clear_identity()
     if request.url.path in PUBLIC_PATHS:
         return
-    if not token or decode_token(token) is None:
+    payload = decode_token(token) if token else None
+    if not token or payload is None:
         raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+    set_identity(payload.get("sub"), payload.get("role"))
 
 
 app = FastAPI(dependencies=[Depends(require_authentication)])
