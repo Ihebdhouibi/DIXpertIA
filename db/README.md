@@ -60,3 +60,50 @@ silently inert.
 
 PostgreSQL **17.x**. The audit in `docs/technical-audit/` was performed against
 17.11 and the baseline migration was generated against it.
+
+## Row-level security
+
+Policies are applied by the `2f4f3ed01359` migration to `payslips`,
+`leave_requests`, `invoices`, `invoice_items`, `clients`, `team_members` and
+`devices`. Verify them at any time with:
+
+```bash
+python db/verify_rls.py
+```
+
+### How identity reaches the database
+
+`require_authentication` in `main.py` reads `sub` and `role` from the JWT and
+publishes them through `app/core/identity.py`. An `after_begin` listener in
+`app/core/database.py` then issues `set_config('app.user_id', ..., true)` on
+every transaction the session opens, and the policies read it with
+`current_setting`.
+
+Three details that are easy to get wrong:
+
+- **`require_authentication` must stay `async`.** As a sync dependency FastAPI
+  runs it in a worker thread, where `ContextVar.set()` mutates that worker's
+  copy of the context and the endpoint never sees it. Every insert was rejected
+  by the policies until this was changed.
+- **The identity is re-applied on every `begin`, not once per request.**
+  `SET LOCAL` dies with its transaction, so a handler that calls `commit()` and
+  then `refresh()` would otherwise run the refresh with no identity and, under
+  RLS, see nothing.
+- **`current_setting(..., true)` returns `''`, not `NULL`, once a
+  transaction-local value has been set and the transaction has ended.** Policies
+  therefore wrap it in `nullif(..., '')`; a policy testing `IS NULL` alone would
+  not detect "no identity".
+
+### Who bypasses
+
+`dixpertia_owner` has a permissive `FOR ALL` policy on every protected table, so
+migrations and maintenance scripts keep working under `FORCE ROW LEVEL
+SECURITY`. It is scoped to that role by name rather than to a settable flag: a
+GUC-based escape hatch could be flipped by `dixpertia_app` itself.
+
+### `users` is not covered
+
+Login, forgot-password and reset-password all read `users` with no authenticated
+identity, so a policy there would break authentication outright. Covering it
+needs `SECURITY DEFINER` lookup functions owned by a `BYPASSRLS` role, exposing
+only the columns the auth path needs. Tracked separately.
