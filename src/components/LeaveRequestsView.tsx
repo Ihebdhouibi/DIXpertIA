@@ -10,11 +10,11 @@ interface LeaveRequestsViewProps {
   currentUserId?: string;   // <-- added to filter employee's own requests in calendar
 }
 
-export default function LeaveRequestsView({ 
-  leaveRequests, 
-  onAddRequest, 
-  userRole, 
-  currentUserId 
+export default function LeaveRequestsView({
+  leaveRequests,
+  onAddRequest,
+  userRole,
+  currentUserId
 }: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);

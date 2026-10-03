@@ -30,11 +30,9 @@ repos:
         # that had been merged into PayslipsView.tsx.
 
       # These two rewrite files. They are scoped away from generated and data
-      # files so they cannot churn content nobody edits by hand. They still
-      # reformat legacy source, so do not run them with --all-files casually:
-      # a full sweep touches ~38 files and would conflict with every open
-      # rebrand branch (#23-#31). Let them clean files as those files are
-      # touched, or schedule a deliberate sweep once the rebrand has landed.
+      # files so they cannot churn content nobody edits by hand. The whole tree
+      # was swept in #51, so `pre-commit run --all-files` is expected to pass;
+      # the hygiene job in .github/workflows/lint.yml enforces it on every push.
       - id: end-of-file-fixer
         exclude: &generated ^(db\.json|package-lock\.json|docs/|public/|dist/|DI Xpertia Logo Concepts/)
       - id: trailing-whitespace

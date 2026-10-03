@@ -167,8 +167,8 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                   <td className="py-4 px-6 text-body-sm text-on-surface-variant">{u.email}</td>
                   <td className="py-4 px-6">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                      u.role === 'admin' 
-                        ? 'bg-primary/10 text-primary border-primary/20' 
+                      u.role === 'admin'
+                        ? 'bg-primary/10 text-primary border-primary/20'
                         : u.role === 'accountant'
                         ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : 'bg-surface-variant text-on-surface-variant border-outline-variant'

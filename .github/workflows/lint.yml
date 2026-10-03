@@ -67,13 +67,11 @@ jobs:
         run: npx tsc --noEmit
 
   hygiene:
-    name: pre-commit hygiene (non-blocking)
+    name: pre-commit hygiene
     runs-on: ubuntu-latest
-    # Informational. The whitespace and end-of-file hooks would reformat ~38
-    # legacy files if swept, which would conflict with every open rebrand
-    # branch. This job reports the outstanding debt without failing the build;
-    # remove continue-on-error once a deliberate sweep has happened.
-    continue-on-error: true
+    # Blocking since the whole-tree whitespace sweep of #51: the tree is clean,
+    # so any failure here is a regression introduced by the change under test.
+    # (Before #51 this job ran with continue-on-error and only reported debt.)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,6 +93,6 @@ jobs:
             --to-ref HEAD \
             --show-diff-on-failure
 
-      - name: Run hooks on the whole tree (debt report)
+      - name: Run hooks on the whole tree
         if: github.event_name == 'push'
         run: pre-commit run --all-files --show-diff-on-failure

@@ -66,8 +66,10 @@ that ticket.
 - Run `pre-commit install` once after cloning (see `.pre-commit-config.yaml`),
   so ruff and the repository hooks run on every commit.
 - Every pull request runs the `lint` workflow (`.github/workflows/lint.yml`):
-  ruff, the no-emoji check on Python files, and `tsc --noEmit`. Fix any
-  failure before asking for a review.
+  ruff, the no-emoji check on Python files, `tsc --noEmit`, and the pre-commit
+  hygiene hooks (trailing whitespace, final newline, YAML/JSON validity,
+  private keys) on the files the PR changes. Fix any failure before asking for
+  a review.
 
 ## A note on enforcement
 

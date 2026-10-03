@@ -31,7 +31,7 @@ interface NotificationsViewProps {
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onNavigate: (link: string) => void;
-  userRole: UserRole; 
+  userRole: UserRole;
 }
 
 export default function NotificationsView({

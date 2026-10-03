@@ -1,7 +1,7 @@
 import React from 'react';
-import { 
-  FolderOpen, FileText, Clock, Users, 
-  CheckCircle, AlertCircle, XCircle, Calendar, 
+import {
+  FolderOpen, FileText, Clock, Users,
+  CheckCircle, AlertCircle, XCircle, Calendar,
   Download, Plus, ChevronRight
 } from 'lucide-react';
 import { User, Project, Invoice, LeaveRequest, TeamMember } from '../types';
@@ -70,8 +70,8 @@ export default function DashboardView({
     .sort((a, b) => new Date(a.dates.split('-')[0].trim()).getTime() - new Date(b.dates.split('-')[0].trim()).getTime())[0];
 
   // Latest payslip (read from localStorage)
-  const latestPayslip = user.role === 'employee' 
-    ? JSON.parse(localStorage.getItem('dixpertia_payslips') || '[]')[0] 
+  const latestPayslip = user.role === 'employee'
+    ? JSON.parse(localStorage.getItem('dixpertia_payslips') || '[]')[0]
     : null;
 
   return (
