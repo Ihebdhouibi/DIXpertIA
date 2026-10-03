@@ -41,9 +41,23 @@ class Invoice(Base):
     date_echeance = Column(Date, nullable=False)
     montant_ht = Column(Numeric(10, 2))
     montant_ttc = Column(Numeric(10, 2))
-    statut = Column(Enum(InvoiceStatus))
+    # NOT NULL with a default: the status was nullable and never set, so every
+    # invoice was created with statut = NULL. InvoiceOut requires it, so
+    # serialising the response failed *after* the commit - the invoice was
+    # saved, the client got a 500, and the retry created a second invoice with
+    # a new legal number (AUDIT-DB-010).
+    # server_default uses the enum NAME, not .value: SQLAlchemy's Enum type
+    # stores Python enum names as the PostgreSQL labels, so the labels here are
+    # BROUILLON/ENVOYEE/..., while .value would give 'brouillon' and the ALTER
+    # would be rejected as an invalid input value for the enum.
+    statut = Column(Enum(InvoiceStatus), nullable=False,
+                    server_default=InvoiceStatus.BROUILLON.name)
     # Make cree_par_id nullable so we can insert without it
     cree_par_id = Column(String, ForeignKey("users.id"), nullable=True)
+    # Set from the Idempotency-Key header. UNIQUE, so a retried request cannot
+    # create a second invoice: in accounting an issued invoice cannot be
+    # deleted, so each duplicate would need a credit note.
+    idempotency_key = Column(String(64), unique=True, nullable=True)
 
     client = relationship("Client", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
