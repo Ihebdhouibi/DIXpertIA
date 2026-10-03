@@ -87,8 +87,22 @@ GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO dixpertia_app;
 -- Nothing else deletes, so nothing else gets DELETE. In particular `users`,
 -- `invoices`, `payslips` and `leave_requests` are append/update only - an
 -- accounting record must not be removable by the application role.
-GRANT DELETE ON TABLE public.devices  TO dixpertia_app;
-GRANT DELETE ON TABLE public.services TO dixpertia_app;
+-- Guarded: on a fresh database this script runs BEFORE the tables exist
+-- (database created -> roles -> migrations -> re-run for table grants). An
+-- unguarded GRANT would abort the whole script with UndefinedTable.
+DO $$
+DECLARE
+    tbl text;
+BEGIN
+    FOREACH tbl IN ARRAY ARRAY['devices', 'services'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = tbl) THEN
+            EXECUTE format('GRANT DELETE ON TABLE public.%I TO dixpertia_app', tbl);
+        ELSE
+            RAISE NOTICE 'Table public.% does not exist yet; re-run this script after migrations to grant DELETE.', tbl;
+        END IF;
+    END LOOP;
+END
+$$;
 
 -- Integer primary keys draw from sequences; UPDATE is required by nextval().
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO dixpertia_app;
