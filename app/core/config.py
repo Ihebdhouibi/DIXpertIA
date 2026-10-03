@@ -49,6 +49,12 @@ class Settings:
     DATABASE_URL: str = _required("DATABASE_URL")
     SECRET_KEY: str = _required_secret("SECRET_KEY")
 
+    # Schema changes (tables.py, Alembic) connect as the owner role, which can
+    # CREATE and ALTER. The application role deliberately cannot, so that an
+    # application flaw cannot reshape the database. Falls back to DATABASE_URL
+    # for environments set up before the roles existed.
+    SCHEMA_DATABASE_URL: str = os.getenv("SCHEMA_DATABASE_URL") or _required("DATABASE_URL")
+
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
