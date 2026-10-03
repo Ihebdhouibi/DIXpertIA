@@ -35,3 +35,8 @@ select = [
 "insert_invoices.py" = ["T201"]
 # Same reasoning: the hook reports findings on stdout for pre-commit to display.
 "scripts/*.py" = ["T201"]
+# Database audit tooling: command-line scripts that report progress on stdout.
+"docs/technical-audit/**/scripts/*.py" = ["T201"]
+# Its probe table holds one SQL statement per string literal; wrapping them would
+# make the statements harder to read and compare, for no gain.
+"docs/technical-audit/database-audit/01-requests/scripts/run_constraint_probe.py" = ["E501"]
