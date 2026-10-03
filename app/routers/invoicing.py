@@ -1,11 +1,11 @@
 from datetime import date
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
-from app.models.invoicing import Client, Invoice, InvoiceItem
+from app.models.invoicing import Client, Invoice, InvoiceItem, InvoiceStatus
 from app.models.user import User
 from app.schemas.invoicing import ClientCreate, ClientOut, InvoiceCreate, InvoiceOut
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
@@ -52,12 +52,41 @@ def list_invoices(db: Session = Depends(get_db)):
     return db.query(Invoice).order_by(Invoice.date_emission.desc()).all()
 
 
-@router.post("/invoices", response_model=InvoiceOut)
+# Creating an invoice is admin-only, overriding the router-wide list. The
+# accountant reviews invoices; letting her create the ones she reviews removes
+# the separation of duties (AUDIT-DB-010). Read access is unchanged.
+@router.post(
+    "/invoices",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def create_invoice(
     payload: InvoiceCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    """Create an invoice.
+
+    An issued invoice cannot be deleted in accounting, so a duplicate costs a
+    credit note to undo. Two things guard against that here:
+
+    - An Idempotency-Key, if supplied, is stored with the invoice under a
+      UNIQUE constraint. Replaying the same request returns the invoice that
+      was already created instead of allocating a second legal number.
+    - The response is built and validated BEFORE the commit. Previously
+      `statut` was never set and stayed NULL, so serialising the response
+      raised ResponseValidationError *after* the row was committed: the
+      invoice existed, the client saw a 500, and the retry created a second
+      one.
+    """
+    if idempotency_key:
+        existing = db.query(Invoice).filter(
+            Invoice.idempotency_key == idempotency_key
+        ).first()
+        if existing:
+            return existing
+
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
@@ -68,18 +97,25 @@ def create_invoice(
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
+        statut=InvoiceStatus.BROUILLON,
         cree_par_id=current_user.id,
+        idempotency_key=idempotency_key,
     )
     db.add(invoice)
-    db.flush()  # to get invoice.id before committing
+    db.flush()  # assigns invoice.id without committing
 
     for item in items_data:
         db.add(InvoiceItem(invoice_id=invoice.id, **item))
+    db.flush()
+    db.refresh(invoice)
+
+    # Validate the response while the transaction can still be rolled back. If
+    # this raises, nothing is persisted and the caller may safely retry.
+    response = InvoiceOut.model_validate(invoice, from_attributes=True)
 
     db.commit()
-    db.refresh(invoice)
     # TODO: generate PDF (WeasyPrint) + send email to client
-    return invoice
+    return response
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)

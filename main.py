@@ -23,7 +23,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.service import TeamMember
-from app.models.invoicing import Invoice, Device
+from app.models.invoicing import Device
 from app.routers import invoicing
 
 load_dotenv()
@@ -436,35 +436,16 @@ def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_adm
     db.refresh(member)
     return member
 
-@app.post('/api/invoices', status_code=201)
-def create_invoice(req: InvoiceCreate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    from datetime import datetime, timedelta
-    date_issued = req.dateIssued or datetime.now().strftime('%b %d, %Y')
-    due_date = req.dueDate or (datetime.now() + timedelta(days=30)).strftime('%b %d, %Y')
-    client_initials = req.clientInitials or req.client[:2].upper()
-    new_id = req.id or f"INV-2024-00{db.query(Invoice).count()+1:03d}"
-    invoice = Invoice(
-        id=new_id,
-        client=req.client,
-        clientInitials=client_initials,
-        amount=req.amount,
-        dateIssued=date_issued,
-        dueDate=due_date,
-        status=req.status,
-        items=[item.dict() for item in req.items] if req.items else [],
-        deviceIds=req.deviceIds or [],
-        createdAt=datetime.utcnow()
-    )
-    db.add(invoice)
-
-    if req.deviceIds:
-        for dev_id in req.deviceIds:
-            dev = db.query(Device).filter(Device.id == dev_id).first()
-            if dev and dev.status != 'Sold':
-                dev.status = 'Sold'
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+# NOTE: an older POST /api/invoices lived here. It was unreachable - the
+# invoicing router is registered first, so it won by registration order - and
+# it wrote camelCase attributes (client, clientInitials, amount, dateIssued,
+# deviceIds) that the Invoice model does not have, so it would have raised
+# TypeError had it ever been called. The single handler is now
+# app/routers/invoicing.py, which is admin-only (#59).
+#
+# Its device side effect - marking a Device as 'Sold' when it is billed - had
+# no equivalent and was never reachable either. The device/invoice link is
+# modelled properly in #60.
 
 
 # --- Device endpoints ---
@@ -525,6 +506,7 @@ def delete_device(device_id: str, _admin: User = Depends(require_admin), db: Ses
 @app.api_route('/logs', methods=['GET', 'POST', 'OPTIONS'])
 def logs(request: Request):
     return []
-@app.post('/logs')
-def logs_post():
-    return []
+# NOTE: a second POST /logs handler was declared here. The api_route above
+# already registers POST, so it won by registration order and this one was
+# unreachable - the same duplicate-route pattern as GET /api/data (#35) and
+# POST /api/invoices (#59).
