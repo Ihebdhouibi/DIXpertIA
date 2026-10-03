@@ -18,7 +18,6 @@ from dotenv import load_dotenv
 
 from app.core.database import get_db
 from app.models.user import User
-from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
 from app.models.service import TeamMember
 from app.models.invoicing import Invoice, Device
@@ -31,10 +30,31 @@ load_dotenv()
 # turned every login into a 500. Keep all log messages ASCII-only.
 log = logging.getLogger("dixpertia")
 
-app = FastAPI()
+# --- Authentication by default ---
+# Every route requires a valid access token, except the explicit allow-list
+# below: a route that forgets to declare authentication is closed, not open
+# (#55). Role checks are still declared per route. FastAPI's own documentation
+# routes (/docs, /redoc, /openapi.json) are not API routes and are not affected.
+PUBLIC_PATHS = frozenset({
+    "/api/login",
+    "/api/forgot-password",
+    "/api/reset-password",
+})
+_optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
+
+
+def require_authentication(request: Request, token: Optional[str] = Depends(_optional_bearer)) -> None:
+    """Reject any request to a non-public route that has no valid access token."""
+    if request.url.path in PUBLIC_PATHS:
+        return
+    if not token or decode_token(token) is None:
+        raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+
+
+app = FastAPI(dependencies=[Depends(require_authentication)])
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
-# registers GET /api/{payslip_id}, which shadows GET /api/data. It also expects a
+# registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a
 # "rh" role and a `User.employee_profile` relationship that this data model does
 # not have. Mounting it needs those reconciled first.
 app.include_router(invoicing.router, prefix="/api")
@@ -113,25 +133,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-# --- Serialisation helper ---
-# Fields that must never leave the API.
-_PRIVATE_COLUMNS = {'hashedPassword', 'hashed_password', 'resetToken', 'resetTokenExpiry'}
-
-def _row(obj):
-    """Serialise a SQLAlchemy row, dropping internals and secrets.
-
-    `obj.__dict__` carries SQLAlchemy's `_sa_instance_state` as well as every
-    column, so returning it directly exposed password hashes and reset tokens.
-    """
-    return {
-        k: v for k, v in obj.__dict__.items()
-        if not k.startswith('_') and k not in _PRIVATE_COLUMNS
-    }
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    return current_user
 
 # --- Pydantic models ---
+# The employee is always the authenticated caller: an employeeId or
+# employeeName sent in the body is ignored (#55).
 class LeaveRequestCreate(BaseModel):
-    employeeId: str
-    employeeName: str
     department: Optional[str] = 'Operations'
     type: Optional[str] = 'Annual Leave'
     dates: Optional[str] = 'Oct 20, 2024'
@@ -326,19 +336,22 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     return {"message": "Password updated successfully."}
 
 # --- Data endpoints ---
-# NOTE: an unauthenticated duplicate of GET /api/data used to be declared here.
-# FastAPI matches routes in registration order, so it shadowed the authenticated
-# definition further down and served every User row (password hashes included)
-# to anonymous callers, while also bypassing that handler's per-role payslip
-# filter. The single authenticated definition below is now the only one.
+# GET /api/data used to return every table (all users, invoices, leave requests,
+# devices and team members) to any authenticated user, whatever their role. It
+# was removed in #55; per-entity endpoints with explicit response schemas replace
+# it as the UI needs them (#65).
 
 @app.post('/api/leave-requests', status_code=201)
-def create_leave_request(req: LeaveRequestCreate, db: Session = Depends(get_db)):
+def create_leave_request(
+    req: LeaveRequestCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     new_id = f"LR-00{db.query(LeaveRequest).count()+1:03d}"
     leave = LeaveRequest(
         id=new_id,
-        employeeId=req.employeeId,
-        employeeName=req.employeeName,
+        employeeId=current_user.id,
+        employeeName=f"{current_user.firstName} {current_user.lastName}",
         department=req.department,
         type=req.type,
         dates=req.dates,
@@ -352,7 +365,7 @@ def create_leave_request(req: LeaveRequestCreate, db: Session = Depends(get_db))
     return leave
 
 @app.post('/api/leave-requests/{req_id}/approve')
-def approve_leave_request(req_id: str, db: Session = Depends(get_db)):
+def approve_leave_request(req_id: str, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
@@ -361,7 +374,12 @@ def approve_leave_request(req_id: str, db: Session = Depends(get_db)):
     return {"message": "Leave request approved successfully"}
 
 @app.post('/api/leave-requests/{req_id}/reject')
-def reject_leave_request(req_id: str, body: RejectLeaveRequest, db: Session = Depends(get_db)):
+def reject_leave_request(
+    req_id: str,
+    body: RejectLeaveRequest,
+    _admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
@@ -371,7 +389,7 @@ def reject_leave_request(req_id: str, body: RejectLeaveRequest, db: Session = De
     return {"message": "Leave request rejected successfully"}
 
 @app.post('/api/team-members', status_code=201)
-def create_team_member(req: TeamMemberCreate, db: Session = Depends(get_db)):
+def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     email = req.email or f"{req.firstName.lower()}.{req.lastName.lower()}@dixpertia.com"
     initials = req.initials or f"{req.firstName[0]}{req.lastName[0]}".upper()
     new_id = f"TM-00{db.query(TeamMember).count()+1:03d}"
@@ -488,31 +506,3 @@ def logs(request: Request):
 @app.post('/logs')
 def logs_post():
     return []
-
-@app.get('/api/data')
-def get_data(
-    current_user: User = Depends(get_current_user),  # <-- new
-    db: Session = Depends(get_db)
-):
-    # Fetch all data (except payslips for now)
-    leaves = db.query(LeaveRequest).all()
-    team = db.query(TeamMember).all()
-    invoices = db.query(Invoice).all()
-    users = db.query(User).all()
-    devices = db.query(Device).all()
-
-    # Filter payslips based on user role
-    if current_user.role in ['admin', 'accountant']:
-        payslips = db.query(Payslip).all()
-    else:
-        # Employee – only their own payslips
-        payslips = db.query(Payslip).filter(Payslip.employee_id == current_user.id).all()
-
-    return {
-        "payslips": [_row(p) for p in payslips],
-        "leaveRequests": [_row(lr) for lr in leaves],
-        "teamMembers": [_row(t) for t in team],
-        "invoices": [_row(i) for i in invoices],
-        "users": [_row(u) for u in users],
-        "devices": [_row(d) for d in devices]
-    }
