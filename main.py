@@ -18,9 +18,10 @@ from dotenv import load_dotenv
 
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
+from app.schemas.api import LeaveRequestCreate, LeaveRequestOut
 from app.core.database import get_db
 from app.models.user import User
-from app.models.leaves import LeaveRequest
+from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.service import TeamMember
 from app.models.invoicing import Invoice, Device
 from app.routers import invoicing
@@ -160,15 +161,6 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 # --- Pydantic models ---
-# The employee is always the authenticated caller: an employeeId or
-# employeeName sent in the body is ignored (#55).
-class LeaveRequestCreate(BaseModel):
-    department: Optional[str] = 'Operations'
-    type: Optional[str] = 'Annual Leave'
-    dates: Optional[str] = 'Oct 20, 2024'
-    duration: Optional[int] = 1
-    reason: Optional[str] = ''
-
 class RejectLeaveRequest(BaseModel):
     comment: Optional[str] = ''
 
@@ -362,52 +354,67 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
 # was removed in #55; per-entity endpoints with explicit response schemas replace
 # it as the UI needs them (#65).
 
-@app.post('/api/leave-requests', status_code=201)
+@app.post('/api/leave-requests', status_code=201, response_model=LeaveRequestOut)
 def create_leave_request(
     req: LeaveRequestCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    new_id = f"LR-00{db.query(LeaveRequest).count()+1:03d}"
-    leave = LeaveRequest(
-        id=new_id,
-        employeeId=current_user.id,
-        employeeName=f"{current_user.firstName} {current_user.lastName}",
-        department=req.department,
-        type=req.type,
-        dates=req.dates,
-        duration=req.duration,
-        status='Pending',
-        reason=req.reason
-    )
+    """Create a leave request for the authenticated employee.
+
+    Previously this assigned camelCase attributes (employeeId, dates, status)
+    that do not exist on the LeaveRequest model, so SQLAlchemy raised
+    TypeError and the endpoint returned 500 on every call. The request body is
+    now translated to the real columns by LeaveRequestCreate.to_orm_kwargs
+    (#37).
+    """
+    if req.endDate < req.startDate:
+        raise HTTPException(status_code=422, detail="endDate cannot be before startDate")
+
+    leave = LeaveRequest(employee_id=current_user.id, **req.to_orm_kwargs())
     db.add(leave)
     db.commit()
     db.refresh(leave)
-    return leave
+    return LeaveRequestOut.from_orm_row(leave, current_user)
 
-@app.post('/api/leave-requests/{req_id}/approve')
-def approve_leave_request(req_id: str, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+@app.post('/api/leave-requests/{req_id}/approve', response_model=LeaveRequestOut)
+def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Approve a leave request.
+
+    Previously this set `leave.status`, a name the model does not have, so
+    SQLAlchemy tracked nothing and commit() wrote nothing - the endpoint
+    reported success while leaving the row untouched (AUDIT-DB-013). It now
+    writes `statut`, and records who approved it.
+    """
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
-    leave.status = 'Approved'
+    leave.statut = LeaveStatus.APPROUVE
+    leave.valide_par_id = admin.id
     db.commit()
-    return {"message": "Leave request approved successfully"}
+    db.refresh(leave)
+    employee = db.query(User).filter(User.id == leave.employee_id).first()
+    return LeaveRequestOut.from_orm_row(leave, employee)
 
-@app.post('/api/leave-requests/{req_id}/reject')
+@app.post('/api/leave-requests/{req_id}/reject', response_model=LeaveRequestOut)
 def reject_leave_request(
-    req_id: str,
+    req_id: int,
     body: RejectLeaveRequest,
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Reject a leave request. Same defect as approve: it set `status` and
+    `rejectionReason`, neither of which is a column, so nothing was written."""
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
-    leave.status = 'Rejected'
-    leave.rejectionReason = body.comment or ''
+    leave.statut = LeaveStatus.REFUSE
+    leave.commentaire_validation = body.comment or ''
+    leave.valide_par_id = admin.id
     db.commit()
-    return {"message": "Leave request rejected successfully"}
+    db.refresh(leave)
+    employee = db.query(User).filter(User.id == leave.employee_id).first()
+    return LeaveRequestOut.from_orm_row(leave, employee)
 
 @app.post('/api/team-members', status_code=201)
 def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
