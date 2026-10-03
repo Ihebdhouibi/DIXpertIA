@@ -13,7 +13,6 @@ see the backlog item about generating an initial revision.
 # here (as this script previously did) leaves the metadata empty, so
 # create_all() silently creates nothing while still printing success.
 from app.core.database import Base, engine
-from app.core.config import settings
 
 # These imports look unused but are required: importing each module is what
 # attaches the model to Base.metadata.
@@ -25,7 +24,8 @@ from app.models.invoicing import Client, Invoice, InvoiceItem, Device  # noqa: F
 
 
 def main():
-    print(f"Target: {settings.DATABASE_URL}")
+    # Never print settings.DATABASE_URL: it contains the database password.
+    print(f"Target database: {engine.url.database} on {engine.url.host}")
     tables = sorted(Base.metadata.tables)
     if not tables:
         raise SystemExit("No tables registered on Base.metadata - check the model imports.")

@@ -1,21 +1,24 @@
-"""Seed the `users` table so a fresh database can be logged into.
+"""Create the first administrator account.
 
-`POST /api/users` requires an authenticated admin, so the first admin cannot be
-created through the API. Run this after `python tables.py` on a new database.
+POST /api/users requires an authenticated admin, so the first one cannot be
+created through the API. Run this once after `python tables.py`:
 
-    python seed_users.py                       # import the accounts from db.json
-    python seed_users.py --admin a@b.tn        # also create/reset an admin (prompts nothing;
-                                               #   password defaults to Admin123!)
-    python seed_users.py --admin a@b.tn --password s3cret
+    python seed_users.py --email admin@dixpertia.tn
+    python seed_users.py --email admin@dixpertia.tn --password 'chosen-password'
 
-Importing from db.json carries the existing bcrypt hashes over, so whatever
-passwords those accounts already had continue to work. Existing rows are left
-untouched unless --admin names them.
+With no --password a strong one is generated and printed once. It is shown on
+stdout only, never written to a file.
+
+This script deliberately does NOT import accounts from db.json. That file held
+bcrypt hashes of three real people plus a live password-reset token, and copying
+them into every new database spread real credentials across environments
+(AUDIT-DB-007). Accounts come from arguments only.
 """
 
 import argparse
-import json
-import os
+import secrets
+import string
+import sys
 from datetime import datetime
 
 import bcrypt
@@ -23,109 +26,76 @@ import bcrypt
 from app.core.database import SessionLocal
 from app.models.user import User
 
-DB_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db.json")
+MIN_PASSWORD_LENGTH = 12
+ROLES = ("admin", "employee", "accountant")
 
 
-def import_from_db_json(db):
-    if not os.path.exists(DB_JSON):
-        print(f"! {DB_JSON} not found - skipping import")
-        return 0
-
-    with open(DB_JSON, "r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    added = 0
-    for record in payload.get("users", []):
-        if db.query(User).filter(User.id == record["id"]).first():
-            print(f"  = {record['email']} (id={record['id']}) already present")
-            continue
-        if db.query(User).filter(User.email == record["email"]).first():
-            print(f"  = {record['email']} already present under a different id")
-            continue
-
-        created = record.get("createdAt")
-        db.add(User(
-            id=record["id"],
-            email=record["email"],
-            firstName=record.get("firstName", ""),
-            lastName=record.get("lastName", ""),
-            role=record.get("role", "employee"),
-            department=record.get("department"),
-            avatarUrl=record.get("avatarUrl"),
-            hashedPassword=record["hashedPassword"],
-            isActive=record.get("isActive", True),
-            isVerified=record.get("isVerified", False),
-            createdAt=datetime.fromisoformat(created) if created else datetime.now(),
-        ))
-        print(f"  + {record['email']} (role={record.get('role')})")
-        added += 1
-    return added
+def generate_password(length: int = 20) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*-_"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def upsert_admin(db, email, password, first_name, last_name):
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    user = db.query(User).filter(User.email == email).first()
+def next_user_id(db) -> str:
+    """Allocate USR-NNN from the highest existing number.
 
-    if user:
-        user.hashedPassword = hashed
-        user.role = "admin"
-        user.isActive = True
-        print(f"  ~ {email} password reset, role forced to admin (id={user.id})")
-        return
-
-    # String primary key in the USR-NNN format the rest of the app expects.
-    # Derive it from the highest existing number rather than from a row count:
-    # db.json ids are sparse (USR-001, USR-003, USR-005), so a count would collide.
+    Not from a row count: ids are sparse once anything is deleted, and a count
+    then collides with a live primary key. That is the open bug in main.py's
+    create_user (#59) which makes POST /api/users fail with a 500.
+    """
     used = set()
-    for (existing_id,) in db.query(User.id).all():
-        if existing_id and existing_id.startswith("USR-"):
-            suffix = existing_id.split("-", 1)[1]
+    for (existing,) in db.query(User.id).all():
+        if existing and existing.startswith("USR-"):
+            suffix = existing.split("-", 1)[1]
             if suffix.isdigit():
                 used.add(int(suffix))
-    next_id = f"USR-{(max(used) + 1) if used else 1:03d}"
-
-    db.add(User(
-        id=next_id,
-        email=email,
-        firstName=first_name,
-        lastName=last_name,
-        role="admin",
-        hashedPassword=hashed,
-        isActive=True,
-        isVerified=True,
-        createdAt=datetime.now(),
-    ))
-    print(f"  + {email} created as admin (id={next_id})")
+    return f"USR-{(max(used) + 1) if used else 1:03d}"
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--admin", help="email of an admin to create or reset")
-    parser.add_argument("--password", default="Admin123!")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--email", required=True)
+    parser.add_argument("--password", help="omit to generate a strong one")
     parser.add_argument("--first-name", default="Admin")
     parser.add_argument("--last-name", default="DIXpertIA")
-    parser.add_argument("--skip-import", action="store_true",
-                        help="do not import accounts from db.json")
+    parser.add_argument("--role", default="admin", choices=ROLES)
     args = parser.parse_args()
+
+    password = args.password or generate_password()
+    generated = args.password is None
+    if len(password) < MIN_PASSWORD_LENGTH:
+        sys.exit(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     db = SessionLocal()
     try:
-        if not args.skip_import:
-            print("Importing users from db.json:")
-            import_from_db_json(db)
-            # Commit before the admin step so id allocation below sees these rows.
-            db.commit()
-
-        if args.admin:
-            print("Admin account:")
-            upsert_admin(db, args.admin, args.password, args.first_name, args.last_name)
-            db.commit()
-
-        print("\nUsers now in the database:")
-        for u in db.query(User).order_by(User.id).all():
-            print(f"  {u.id}  {u.email}  role={u.role}  active={u.isActive}")
+        existing = db.query(User).filter(User.email == args.email).first()
+        if existing:
+            existing.hashedPassword = hashed
+            existing.role = args.role
+            existing.isActive = True
+            user_id, action = existing.id, "updated (password reset)"
+        else:
+            user_id = next_user_id(db)
+            db.add(User(
+                id=user_id,
+                email=args.email,
+                firstName=args.first_name,
+                lastName=args.last_name,
+                role=args.role,
+                hashedPassword=hashed,
+                isActive=True,
+                isVerified=True,
+                createdAt=datetime.now(),
+            ))
+            action = "created"
+        db.commit()
     finally:
         db.close()
+
+    print(f"{action}: {args.email}  id={user_id}  role={args.role}")
+    if generated:
+        print(f"Generated password (shown once): {password}")
 
 
 if __name__ == "__main__":

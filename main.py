@@ -16,6 +16,7 @@ from jose import JWTError, jwt
 import bcrypt
 from dotenv import load_dotenv
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.leaves import LeaveRequest
@@ -75,9 +76,13 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 # --- JWT ---
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# Single source of truth: app.core.config validates these at import time and
+# refuses to start without them. main.py must not keep its own copy with a
+# fallback - that is what allowed a public signing key into deployments
+# (AUDIT-DB-007).
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # --- Email ---
