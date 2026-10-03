@@ -30,3 +30,23 @@ Thumbs.db
 
 # Database files
 db.json
+
+# Brand kit: only the files the app is built from are versioned. Everything
+# else in design/ stays local - the print and marketing exports (business card,
+# sign, e-mail signature, LinkedIn) carry personal contact details.
+/design/**
+!/design/
+!/design/README.md
+!/design/DI Xpertia Logo Concepts/
+!/design/DI Xpertia Logo Concepts/exports/
+!/design/DI Xpertia Logo Concepts/exports/logo/
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-favicon.svg
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-app-icon.svg
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-app-icon-1024.png
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-mark-dark.svg
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-mark-light.svg
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-lockup-horizontal.png
+!/design/DI Xpertia Logo Concepts/exports/logo/DIXpertia-lockup-horizontal-on-ink.png
+!/design/DI Xpertia Logo Concepts/exports/palette/
+!/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.css
+!/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.json
