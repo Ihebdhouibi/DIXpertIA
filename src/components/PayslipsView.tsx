@@ -127,7 +127,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
           <div className="text-xs text-outline mt-1 font-medium">Cumulé net pour l'année {selectedYear}</div>
         </div>
 
-        <div className="bg-primary-container text-white rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
+        <div className="bg-primary text-white rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1px,transparent_1px)] bg-[size:16px_16px]"></div>
           <div className="absolute top-0 right-0 p-4 opacity-25">
             <CreditCard className="w-16 h-16" />
