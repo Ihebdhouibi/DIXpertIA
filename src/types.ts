@@ -8,11 +8,11 @@ export interface User {
   avatarUrl?: string;
   role: UserRole;
   department?: string;
-  isActive: boolean;      
-  isVerified: boolean;  
+  isActive: boolean;
+  isVerified: boolean;
   createdAt: string;
-  resetToken?: string;   
-  resetTokenExpiry?: string; 
+  resetToken?: string;
+  resetTokenExpiry?: string;
 }
 
 export interface Payslip {

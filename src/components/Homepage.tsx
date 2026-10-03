@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Mail, Phone, MapPin, Clock, Search, Send, HelpCircle, 
-  CheckCircle2, ChevronDown, ChevronUp, AlertCircle 
+import {
+  Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
+  CheckCircle2, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 
 interface HomepageProps {

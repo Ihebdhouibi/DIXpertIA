@@ -67,7 +67,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
 
   return (
     <div className="flex-1 flex flex-col gap-6">
-      
+
       {/* Toast Alert Notification */}
       {toastMessage && (
         <div className="fixed bottom-4 right-4 z-50 bg-[#137333] text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/20">
@@ -88,7 +88,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
               : 'View and download your monthly salary statements.'}
           </p>
         </div>
-        
+
         {/* Period Filter */}
         <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-outline-variant shadow-sm w-full md:w-auto">
           <Calendar className="text-outline w-5 h-5" />
