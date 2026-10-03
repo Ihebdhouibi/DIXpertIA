@@ -245,7 +245,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     }
 
 @app.post('/api/users', status_code=201)
-def create_user(req: UserCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_user(req: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != 'admin':
         raise HTTPException(status_code=403, detail="Only administrators can create users")
     existing = db.query(User).filter(User.email == req.email).first()
@@ -437,9 +437,7 @@ def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_adm
     return member
 
 @app.post('/api/invoices', status_code=201)
-def create_invoice(req: InvoiceCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can create invoices")
+def create_invoice(req: InvoiceCreate, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     from datetime import datetime, timedelta
     date_issued = req.dateIssued or datetime.now().strftime('%b %d, %Y')
     due_date = req.dueDate or (datetime.now() + timedelta(days=30)).strftime('%b %d, %Y')
@@ -471,15 +469,15 @@ def create_invoice(req: InvoiceCreate, current_user: dict = Depends(get_current_
 
 # --- Device endpoints ---
 @app.get('/api/devices')
-def get_devices(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user['role'] not in ['admin', 'accountant', 'employee']:
-        raise HTTPException(status_code=403, detail="Not authorized")
+def get_devices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # The previous check listed admin, accountant and employee - every role in
+    # UserRole - so it rejected nothing while crashing on current_user['role'].
+    # Authentication is already required globally (#55); any signed-in user may
+    # list devices, and RLS decides which rows they see (#43).
     return db.query(Device).all()
 
 @app.post('/api/devices', status_code=201)
-def create_device(req: DeviceCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
+def create_device(req: DeviceCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     new_id = f"DEV-{db.query(Device).count()+1:03d}"
     device = Device(
         id=new_id,
@@ -499,11 +497,9 @@ def create_device(req: DeviceCreate, current_user: dict = Depends(get_current_us
 def update_device(
     device_id: str,
     req: DeviceCreate,
-    current_user: dict = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
     device = db.query(Device).filter(Device.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -517,9 +513,7 @@ def update_device(
     return device
 
 @app.delete('/api/devices/{device_id}')
-def delete_device(device_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can manage devices")
+def delete_device(device_id: str, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
