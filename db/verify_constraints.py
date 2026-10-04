@@ -62,26 +62,30 @@ PROBES = [
      " VALUES ('2026-01-01', '2026-01-02', 'EN_ATTENTE')"),
     ("leave ending before it starts",
      "INSERT INTO leave_requests (employee_id, date_debut, date_fin, statut)"
-     " VALUES (:uid, '2026-02-10', '2026-02-01', 'EN_ATTENTE')"),
+     " VALUES (:eid, '2026-02-10', '2026-02-01', 'EN_ATTENTE')"),
+    # Enforced by a trigger rather than a CHECK since #60: employee_id is an
+    # employees.id while valide_par_id is a users.id, so the two are different
+    # key spaces and a row-local comparison is meaningless.
     ("leave approved by the requester",
      "INSERT INTO leave_requests (employee_id, date_debut, date_fin, statut, valide_par_id)"
-     " VALUES (:uid, '2026-03-01', '2026-03-02', 'APPROUVE', :uid)"),
+     " VALUES (:eid, '2026-03-01', '2026-03-02', 'APPROUVE',"
+     "         (SELECT user_id FROM employees WHERE id = :eid))"),
     ("leave approved with no validator",
      "INSERT INTO leave_requests (employee_id, date_debut, date_fin, statut)"
-     " VALUES (:uid, '2026-04-01', '2026-04-02', 'APPROUVE')"),
+     " VALUES (:eid, '2026-04-01', '2026-04-02', 'APPROUVE')"),
 
     ("payslip with net above gross",
      "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
-     " VALUES (:uid, '2026-01-01', 100, 200)"),
+     " VALUES (:eid, '2026-01-01', 100, 200)"),
     ("payslip with negative amounts",
      "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
-     " VALUES (:uid, '2026-01-01', -100, -50)"),
+     " VALUES (:eid, '2026-01-01', -100, -50)"),
     ("payslip dated mid-month",
      "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
-     " VALUES (:uid, '2026-01-15', 100, 80)"),
+     " VALUES (:eid, '2026-01-15', 100, 80)"),
     ("second payslip for the same employee and month",
      "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
-     " VALUES (:uid, '2026-05-01', 100, 80)"),
+     " VALUES (:eid, '2026-05-01', 100, 80)"),
 
     ("user with role superadmin",
      "INSERT INTO users (id, email, role, \"hashedPassword\", \"isActive\")"
@@ -111,6 +115,10 @@ def main():
         email = conn.execute(text("SELECT email FROM users LIMIT 1")).scalar()
         if not uid:
             sys.exit("No users in the database; run seed_users.py first.")
+        # Payslips and leave reference employees.id since #60, not users.id.
+        eid = conn.execute(text("SELECT id FROM employees LIMIT 1")).scalar()
+        if not eid:
+            sys.exit("No employees in the database; create one first.")
 
         # The SELECTs above have already autobegun a transaction; everything
         # below runs inside it and is rolled back at the end, so the database
@@ -126,9 +134,10 @@ def main():
             " 100, 119, 'BROUILLON', :uid)"), {"uid": uid})
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
-            " VALUES (:uid, '2026-05-01', 100, 80)"), {"uid": uid})
+            " VALUES (:eid, '2026-05-01', 100, 80)"), {"eid": eid})
 
-        params = {"cid": 99001, "uid": uid, "inv": 99001, "upper_email": email.upper()}
+        params = {"cid": 99001, "uid": uid, "eid": eid, "inv": 99001,
+                  "upper_email": email.upper()}
 
         for probe in PROBES:
             label, sql = probe[0], probe[1]

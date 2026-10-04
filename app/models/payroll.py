@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -18,12 +19,16 @@ class Payslip(Base):
     __tablename__ = "payslips"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, ForeignKey("users.id"), nullable=False)
+    # RESTRICT: payroll history must outlive any attempt to delete the person.
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="RESTRICT"),
+                         nullable=False)
     periode = Column(Date, nullable=False)
     montant_brut = Column(Numeric(10, 2), nullable=False)
     montant_net = Column(Numeric(10, 2), nullable=False)
     fichier_pdf = Column(String(255), nullable=True)
     date_emission = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee", back_populates="payslips")
 
     __table_args__ = (
         # Already present: one payslip per employee per *date*. The audit noted

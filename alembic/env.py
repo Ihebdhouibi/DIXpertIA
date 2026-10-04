@@ -7,7 +7,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import user, payroll, leaves, invoicing, service  # noqa: F401 (enregistre les modèles)
+from app.models import (  # noqa: F401 (registers the models on Base.metadata)
+    employee,
+    invoicing,
+    leaves,
+    payroll,
+    service,
+    user,
+)
 
 config = context.config
 # Migrations run as the schema OWNER role, not the application role: the

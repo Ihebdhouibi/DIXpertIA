@@ -1,5 +1,7 @@
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Index, String, text
 from datetime import datetime
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 class User(Base):
@@ -17,6 +19,8 @@ class User(Base):
     resetToken = Column(String, nullable=True)
     resetTokenExpiry = Column(DateTime, nullable=True)
     createdAt = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee", back_populates="user", uselist=False)
 
     __table_args__ = (
         # Roles are a closed set; the audit inserted 'superadmin' cleanly (#58).

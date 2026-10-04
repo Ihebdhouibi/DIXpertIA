@@ -5,12 +5,12 @@ import string
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 import bcrypt
@@ -20,9 +20,12 @@ from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
 from app.schemas.api import LeaveRequestCreate, LeaveRequestOut
 from app.core.database import get_db
+# app.models imports every model module, which is what populates SQLAlchemy's
+# registry so relationship("Payslip") and friends can resolve. See its docstring.
+import app.models  # noqa: F401
 from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
-from app.models.service import TeamMember
+from app.models.employee import Employee
 from app.routers import invoicing
 
 load_dotenv()
@@ -163,14 +166,19 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 class RejectLeaveRequest(BaseModel):
     comment: Optional[str] = ''
 
-class TeamMemberCreate(BaseModel):
-    firstName: str
-    lastName: str
-    email: Optional[str] = None
-    role: Optional[str] = 'Contributor'
-    status: Optional[str] = 'Active'
-    initials: Optional[str] = None
-    avatarUrl: Optional[str] = None
+class EmployeeCreate(BaseModel):
+    """An employee record for an existing login account.
+
+    Replaces TeamMemberCreate. team_members duplicated names, e-mail and a
+    free-text role from users with no foreign key, so the two could describe
+    the same person differently (#60). Identity now lives once, on the user.
+    """
+
+    userId: str
+    jobTitle: Optional[str] = None
+    hiredOn: date
+    # No default: contractual days per year is a per-person term (#60).
+    annualEntitlementDays: int = Field(ge=0, le=365)
 
 class InvoiceItem(BaseModel):
     description: str
@@ -364,11 +372,22 @@ def create_leave_request(
     if req.endDate < req.startDate:
         raise HTTPException(status_code=422, detail="endDate cannot be before startDate")
 
-    leave = LeaveRequest(employee_id=current_user.id, **req.to_orm_kwargs())
+    # Leave belongs to the employee record, not the login account (#60), so the
+    # caller is resolved through employees. A user with no employee record
+    # cannot request leave - which is correct: an admin account that is not an
+    # employee has no entitlement.
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        raise HTTPException(
+            status_code=409,
+            detail="This account has no employee record, so it cannot request leave",
+        )
+
+    leave = LeaveRequest(employee_id=employee.id, **req.to_orm_kwargs())
     db.add(leave)
     db.commit()
     db.refresh(leave)
-    return LeaveRequestOut.from_orm_row(leave, current_user)
+    return LeaveRequestOut.from_orm_row(leave, employee)
 
 @app.post('/api/leave-requests/{req_id}/approve', response_model=LeaveRequestOut)
 def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -386,7 +405,7 @@ def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db:
     leave.valide_par_id = admin.id
     db.commit()
     db.refresh(leave)
-    employee = db.query(User).filter(User.id == leave.employee_id).first()
+    employee = db.query(Employee).filter(Employee.id == leave.employee_id).first()
     return LeaveRequestOut.from_orm_row(leave, employee)
 
 @app.post('/api/leave-requests/{req_id}/reject', response_model=LeaveRequestOut)
@@ -406,28 +425,38 @@ def reject_leave_request(
     leave.valide_par_id = admin.id
     db.commit()
     db.refresh(leave)
-    employee = db.query(User).filter(User.id == leave.employee_id).first()
+    employee = db.query(Employee).filter(Employee.id == leave.employee_id).first()
     return LeaveRequestOut.from_orm_row(leave, employee)
 
-@app.post('/api/team-members', status_code=201)
-def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    email = req.email or f"{req.firstName.lower()}.{req.lastName.lower()}@dixpertia.com"
-    initials = req.initials or f"{req.firstName[0]}{req.lastName[0]}".upper()
-    new_id = f"TM-00{db.query(TeamMember).count()+1:03d}"
-    member = TeamMember(
-        id=new_id,
-        firstName=req.firstName,
-        lastName=req.lastName,
-        email=email,
-        role=req.role,
-        status='Active',
-        initials=initials,
-        avatarUrl=req.avatarUrl
+@app.post('/api/employees', status_code=201)
+def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Attach an employee record to an existing login account."""
+    user = db.query(User).filter(User.id == req.userId).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if db.query(Employee).filter(Employee.user_id == req.userId).first():
+        raise HTTPException(status_code=409, detail="This user already has an employee record")
+
+    employee = Employee(
+        user_id=req.userId,
+        job_title=req.jobTitle,
+        hired_on=req.hiredOn,
+        annual_entitlement_days=req.annualEntitlementDays,
     )
-    db.add(member)
+    db.add(employee)
     db.commit()
-    db.refresh(member)
-    return member
+    db.refresh(employee)
+    return {
+        "id": employee.id,
+        "userId": employee.user_id,
+        "firstName": user.firstName,
+        "lastName": user.lastName,
+        "email": user.email,
+        "jobTitle": employee.job_title,
+        "hiredOn": employee.hired_on.isoformat(),
+        "annualEntitlementDays": employee.annual_entitlement_days,
+        "employmentStatus": employee.employment_status.value,
+    }
 
 # NOTE: an older POST /api/invoices lived here. It was unreachable - the
 # invoicing router is registered first, so it won by registration order - and
