@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, X, Download, ZoomIn, ZoomOut, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Invoice, UserRole } from '../types';
+import StatusBadge from './StatusBadge';
 
 interface InvoicesViewProps {
   invoices: Invoice[];
@@ -103,20 +104,6 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'Paid':
-        return 'bg-[#e6f4ea] text-[#137333] border border-[#ceead6]';
-      case 'Sent':
-        return 'bg-tertiary-fixed text-on-tertiary-fixed-variant border border-outline-variant/30';
-      case 'Overdue':
-        return 'bg-error-container text-on-error-container border border-error/10';
-      case 'Draft':
-      default:
-        return 'bg-surface-container-highest text-on-surface-variant border border-outline-variant';
-    }
-  };
-
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
   };
@@ -216,9 +203,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                       {inv.dueDate}
                     </td>
                     <td className="py-4 px-6">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(inv.status)}`}>
-                        {inv.status}
-                      </span>
+                      <StatusBadge status={inv.status} />
                     </td>
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -265,9 +250,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                 <h3 className="text-h2 font-black text-on-surface">
                   Invoice <span className="font-mono text-body-sm font-normal text-on-surface-variant ml-1">{selectedInvoice?.id}</span>
                 </h3>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyle(selectedInvoice?.status || 'Draft')}`}>
-                  {selectedInvoice?.status}
-                </span>
+                <StatusBadge status={selectedInvoice?.status || 'Draft'} />
               </div>
               <div className="flex items-center gap-2">
                 <button

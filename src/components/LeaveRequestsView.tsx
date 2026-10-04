@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, Plus, Filter, Plane, HeartPulse, MoreVertical, X, Check } from 'lucide-react';
 import { LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
+import StatusBadge from './StatusBadge';
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
@@ -60,28 +61,6 @@ export default function LeaveRequestsView({
     setEndDate('');
     setReason('');
     setLeaveType('Annual Leave');
-  };
-
-  const getStatusBadge = (status: 'Approved' | 'Pending' | 'Rejected') => {
-    if (status === 'Approved') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#e6f4ea] text-[#137333]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Approved
-        </span>
-      );
-    }
-    if (status === 'Pending') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#fef7e0] text-[#b06000]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#b06000]"></span> Pending
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-error-container text-on-error-container border border-error/10">
-        <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span> Rejected
-      </span>
-    );
   };
 
   const getLeaveIcon = (type: string) => {
@@ -215,7 +194,7 @@ export default function LeaveRequestsView({
                     </td>
                     <td className="px-6 py-4 text-on-surface-variant font-medium">{req.dates}</td>
                     <td className="px-6 py-4 font-medium">{req.duration} {req.duration > 1 ? 'days' : 'day'}</td>
-                    <td className="px-6 py-4">{getStatusBadge(req.status)}</td>
+                    <td className="px-6 py-4"><StatusBadge status={req.status} /></td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => req.rejectionReason ? showToast(`Rejection reason: ${req.rejectionReason}`) : showToast(`Request: ${req.type}`)}

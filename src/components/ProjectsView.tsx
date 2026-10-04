@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, X, Check, AlertCircle, Calendar, Users } from 'lucide-react';
 import { Project, UserRole  } from '../types';
+import StatusBadge from './StatusBadge';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -108,19 +109,6 @@ export default function ProjectsView({
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status: Project['status']) => {
-    switch (status) {
-      case 'Active':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'In Progress':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'Completed':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'On Hold':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
   const getTeamNames = (ids: string[]) => {
     return ids
       .map((id) => {
@@ -225,13 +213,7 @@ export default function ProjectsView({
                     </td>
                     <td className="py-4 px-6 text-body-sm font-semibold text-on-surface-variant">{p.client}</td>
                     <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(
-                          p.status
-                        )}`}
-                      >
-                        {p.status}
-                      </span>
+                      <StatusBadge status={p.status} />
                     </td>
                     <td className="py-4 px-6 text-body-sm font-semibold text-on-surface-variant">
                       <div className="flex items-center gap-1.5">
