@@ -13,10 +13,16 @@ constraint here and hide a missing one.
 """
 
 import sys
+from pathlib import Path
 
-from sqlalchemy import create_engine, text
+# Running "python db/<script>.py" puts db/ on sys.path, not the project root, so
+# "import app" would fail. Adding the root here keeps the command in the
+# docstring working as written, as well as "python -m db.<script>".
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.config import settings
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
 
 # (label, SQL) - the database must REJECT each of these.
 # A third element of True means the write is legitimately allowed.

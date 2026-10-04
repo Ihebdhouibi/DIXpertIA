@@ -18,7 +18,7 @@ from app.core.database import Base
 class Payslip(Base):
     __tablename__ = "payslips"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # RESTRICT: payroll history must outlive any attempt to delete the person.
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="RESTRICT"),
                          nullable=False)

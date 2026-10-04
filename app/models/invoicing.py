@@ -33,7 +33,7 @@ class InvoiceStatus(str, enum.Enum):
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     nom = Column(String(150), nullable=False)
     email = Column(String(100), default="")
     telephone = Column(String(30), default="")
@@ -50,7 +50,7 @@ class Client(Base):
 class Invoice(Base):
     __tablename__ = "invoices"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     numero = Column(String(30), unique=True, nullable=False)
     # RESTRICT: a client with invoices must not be deletable.
     client_id = Column(Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
@@ -84,13 +84,29 @@ class Invoice(Base):
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        # Indexes below were chosen by measuring, not by habit: db/seed_perf_data.py
+        # fills the tables and db/measure_indexes.py prints the resulting plans.
+        #
+        # Ascending, although the list reads newest first: PostgreSQL scans a
+        # btree backward at the same cost, and one ascending index then serves
+        # both the newest-first list and the accountant's ascending month range.
+        Index("ix_invoices_date_emission", "date_emission", "id"),
+        # Invoices for one client.
+        Index("ix_invoices_client_id", "client_id"),
+        # Not for reads: without it, deleting a user who has issued no invoices
+        # makes the RESTRICT check scan the whole table to prove absence.
+        Index("ix_invoices_cree_par_id", "cree_par_id"),
+        # Only five distinct statuses, so this earns about 2x rather than the
+        # large factors above - kept because the accountant's workflow filters
+        # by status constantly.
+        Index("ix_invoices_statut", "statut"),
     )
 
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # CASCADE, matching the ORM cascade on Invoice.items. Previously the ORM
     # deleted lines while a direct SQL delete was refused - the same operation
     # with two different outcomes depending on the code path (#60).
@@ -106,4 +122,8 @@ class InvoiceItem(Base):
         CheckConstraint("quantite > 0", name="ck_invoice_items_quantite"),
         CheckConstraint("prix_unitaire >= 0", name="ck_invoice_items_prix"),
         CheckConstraint("taux_tva >= 0 AND taux_tva <= 100", name="ck_invoice_items_tva"),
+        # The single largest win measured: loading one invoice's lines went from
+        # a full scan of invoice_items to an index lookup. Every invoice detail
+        # view and every PDF render takes this path.
+        Index("ix_invoice_items_invoice_id", "invoice_id"),
     )

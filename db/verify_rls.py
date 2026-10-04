@@ -15,12 +15,18 @@ No pytest harness exists yet; this folds into the suite added by #57.
 
 import sys
 from datetime import date
+from pathlib import Path
 
-from sqlalchemy import create_engine, text
+# Running "python db/<script>.py" puts db/ on sys.path, not the project root, so
+# "import app" would fail. Adding the root here keeps the command in the
+# docstring working as written, as well as "python -m db.<script>".
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.config import settings
-from app.core.database import SessionLocal
-from app.core.identity import clear_identity, set_identity
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
+from app.core.identity import clear_identity, set_identity  # noqa: E402
 
 EMPLOYEES = ("RLS-EMP-A", "RLS-EMP-B")
 

@@ -6,7 +6,7 @@ from app.core.database import Base
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, index=True)
+    id = Column(String, primary_key=True)
     email = Column(String, unique=True, index=True, nullable=False)
     firstName = Column(String)
     lastName = Column(String)

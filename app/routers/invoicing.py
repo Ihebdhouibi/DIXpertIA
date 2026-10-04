@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
@@ -13,12 +13,36 @@ from app.services.invoice_generator import generate_invoice_pdf   # <-- new impo
 # Allow admin, rh, and accountant to access invoice routes
 router = APIRouter(dependencies=[Depends(require_roles("rh", "admin", "accountant"))])
 
+# Every list endpoint is paginated. The previous versions returned the whole
+# table, so response size and query count grew without limit as data was added
+# - on the seeded 20k-invoice dataset, listing invoices issued 20,002 queries
+# and serialised every row the company had ever produced (#61).
+DEFAULT_PAGE_SIZE = 50
+# A hard cap, not a suggestion: without one, ?limit=1000000 restores the
+# original behaviour on request.
+MAX_PAGE_SIZE = 200
+
+
+def _paginate(response: Response, query, limit: int, offset: int):
+    """Apply limit/offset and report the unpaginated total in a header.
+
+    The total goes in X-Total-Count rather than wrapping the body in an
+    envelope, so existing callers that expect a JSON array keep working.
+    """
+    response.headers["X-Total-Count"] = str(query.order_by(None).count())
+    return query.limit(limit).offset(offset).all()
+
 
 # ---- Clients ----
 
 @router.get("/clients", response_model=list[ClientOut])
-def list_clients(db: Session = Depends(get_db)):
-    return db.query(Client).all()
+def list_clients(
+    response: Response,
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    return _paginate(response, db.query(Client).order_by(Client.nom), limit, offset)
 
 
 @router.post("/clients", response_model=ClientOut)
@@ -48,8 +72,41 @@ def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])
-def list_invoices(db: Session = Depends(get_db)):
-    return db.query(Invoice).order_by(Invoice.date_emission.desc()).all()
+def list_invoices(
+    response: Response,
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+    client_id: int | None = None,
+    statut: InvoiceStatus | None = None,
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$",
+                              description="YYYY-MM: invoices issued in that month"),
+):
+    """List invoices, newest first.
+
+    selectinload is what stops the 1+N: InvoiceOut serialises `items`, so
+    without it each invoice in the page triggered its own query for its lines -
+    one page of 50 cost 52 queries, and the unpaginated list cost 20,002 on the
+    seeded dataset. With it, a page costs two.
+
+    The ordering tie-breaks on id because date_emission is only a date: several
+    invoices share one, and without a tie-break their relative order is
+    undefined, so paging could show a row twice or skip it entirely.
+    """
+    query = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.items))
+        .order_by(Invoice.date_emission.desc(), Invoice.id.desc())
+    )
+    if client_id is not None:
+        query = query.filter(Invoice.client_id == client_id)
+    if statut is not None:
+        query = query.filter(Invoice.statut == statut)
+    if month is not None:
+        start = date(int(month[:4]), int(month[5:]), 1)
+        end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
+        query = query.filter(Invoice.date_emission >= start, Invoice.date_emission < end)
+    return _paginate(response, query, limit, offset)
 
 
 # Creating an invoice is admin-only, overriding the router-wide list. The
@@ -120,7 +177,8 @@ def create_invoice(
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    invoice = db.query(Invoice).get(invoice_id)
+    # db.get, not the legacy Query.get, which is deprecated in SQLAlchemy 2.0.
+    invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     return invoice
@@ -136,7 +194,12 @@ def download_invoice(
     """
     Generate and download an invoice as PDF.
     """
-    invoice = db.query(Invoice).filter(Invoice.numero == invoice_number).first()
+    invoice = (
+        db.query(Invoice)
+        .options(selectinload(Invoice.items), selectinload(Invoice.client))
+        .filter(Invoice.numero == invoice_number)
+        .first()
+    )
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
