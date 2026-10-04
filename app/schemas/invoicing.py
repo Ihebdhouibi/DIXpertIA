@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.invoicing import InvoiceStatus
+from app.models.invoicing import InvoiceProcessingStatus, InvoiceStatus
 
 
 class ClientBase(BaseModel):
@@ -64,7 +64,19 @@ class InvoiceOut(BaseModel):
     montant_ht: Decimal
     montant_ttc: Decimal
     statut: InvoiceStatus
+    # The accountant's workflow state, independent of `statut` above (#41).
+    processing_status: InvoiceProcessingStatus
     items: list[InvoiceItemOut] = []
 
     class Config:
         from_attributes = True
+
+
+class ProcessingStatusUpdate(BaseModel):
+    """Body of the processing-status transition.
+
+    Only the target state: the rules about which moves are legal live in the
+    database, not here, so that a direct SQL write cannot bypass them.
+    """
+
+    processing_status: InvoiceProcessingStatus

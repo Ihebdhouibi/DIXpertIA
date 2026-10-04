@@ -1,13 +1,26 @@
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
-from app.models.invoicing import Client, Invoice, InvoiceItem, InvoiceStatus
+from app.models.invoicing import (
+    Client,
+    Invoice,
+    InvoiceItem,
+    InvoiceProcessingStatus,
+    InvoiceStatus,
+)
 from app.models.user import User
-from app.schemas.invoicing import ClientCreate, ClientOut, InvoiceCreate, InvoiceOut
+from app.schemas.invoicing import (
+    ClientCreate,
+    ClientOut,
+    InvoiceCreate,
+    InvoiceOut,
+    ProcessingStatusUpdate,
+)
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
 
 # Allow admin, rh, and accountant to access invoice routes
@@ -54,6 +67,24 @@ def create_client(payload: ClientCreate, db: Session = Depends(get_db)):
     return client
 
 
+def _trigger_message(exc: DatabaseError) -> str:
+    """Pull the database's own message out of the driver's wrapper.
+
+    psycopg2 appends the failing statement and parameters to str(exc); only the
+    first line is the message the trigger raised.
+    """
+    orig = getattr(exc, "orig", None)
+    text_ = str(orig) if orig else str(exc)
+    line = text_.strip().splitlines()[0].strip()
+    # PostgreSQL prefixes the severity in the server's own locale - "ERROR:" on
+    # an English server, "ERREUR:" on this one. Neither belongs in an API
+    # response, and which appears depends on the server's configuration.
+    for prefix in ("ERROR:", "ERREUR:", "FEHLER:"):
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return line
+
+
 # ---- Invoices ----
 
 def _generate_invoice_number(db: Session) -> str:
@@ -79,6 +110,7 @@ def list_invoices(
     offset: int = Query(0, ge=0),
     client_id: int | None = None,
     statut: InvoiceStatus | None = None,
+    processing_status: InvoiceProcessingStatus | None = None,
     month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$",
                               description="YYYY-MM: invoices issued in that month"),
 ):
@@ -102,6 +134,8 @@ def list_invoices(
         query = query.filter(Invoice.client_id == client_id)
     if statut is not None:
         query = query.filter(Invoice.statut == statut)
+    if processing_status is not None:
+        query = query.filter(Invoice.processing_status == processing_status)
     if month is not None:
         start = date(int(month[:4]), int(month[5:]), 1)
         end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
@@ -173,6 +207,41 @@ def create_invoice(
     db.commit()
     # TODO: generate PDF (WeasyPrint) + send email to client
     return response
+
+
+@router.patch(
+    "/invoices/{invoice_id}/processing-status",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin", "accountant"))],
+)
+def set_processing_status(
+    invoice_id: int,
+    payload: ProcessingStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    """Move an invoice through the accountant's workflow.
+
+    Admin and accountant only: this is bookkeeping, not a commercial act, so
+    `rh` is excluded even though the router-wide rule allows it elsewhere.
+
+    The legality of a move is not checked here. A trigger refuses anything that
+    would change an archived invoice, so the rule holds for a direct SQL write
+    too, and this endpoint only has to report the refusal.
+    """
+    invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+
+    invoice.processing_status = payload.processing_status
+    try:
+        db.commit()
+    except DatabaseError as exc:
+        db.rollback()
+        # The trigger's message names the invoice and the reason; surfacing it
+        # is more useful than a generic 409, and it is written for a reader.
+        raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
+    db.refresh(invoice)
+    return invoice
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)

@@ -7,6 +7,13 @@ from reportlab.lib.enums import TA_RIGHT, TA_LEFT
 from datetime import datetime
 
 # Map status values to human-readable labels
+# Maps the commercial status to the label printed on the PDF. Accepts both the
+# stored enum values and the English labels, because the two call sites pass
+# different things - see #41 on reconciling the three vocabularies.
+#
+# The accountant's processing_status is deliberately NOT printed: it is an
+# internal bookkeeping state, and the client has no business seeing whether
+# their invoice has been reconciled yet.
 STATUS_MAP = {
     "brouillon": "Draft",
     "envoyee": "Sent",

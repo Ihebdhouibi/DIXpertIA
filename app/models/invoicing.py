@@ -30,6 +30,40 @@ class InvoiceStatus(str, enum.Enum):
     ANNULEE = "annulee"
 
 
+class InvoiceProcessingStatus(str, enum.Enum):
+    """The accountant's workflow state, independent of the commercial state.
+
+    This is a second axis, not a renaming of InvoiceStatus (#41). The two
+    describe different things and move for different reasons:
+
+        statut            what the client sees - issued, paid, overdue
+        processing_status what the books see   - booked, reconciled, closed
+
+    An invoice is routinely PAYEE and still `pending`: the client has paid, but
+    nobody has entered it in the books yet. The reverse happens too - an invoice
+    can be `completed` in the accounts while the client has not paid, because
+    booking an expectation and collecting on it are separate events. Collapsing
+    the two into one enum would make "paid but not yet booked" inexpressible,
+    which is the normal state of most invoices mid-month.
+
+    Meanings, as confirmed with the accountant:
+
+        pending    it exists, nobody has handled it. The state on creation.
+        processed  entered in the books.
+        completed  booked AND matched against an actual payment.
+        archived   the month it belongs to has been closed.
+
+    `processed` and `completed` are deliberately distinct: booking an invoice
+    and reconciling it against a bank line are separate acts, often days apart,
+    and the gap between them is exactly what the accountant chases at month end.
+    """
+
+    PENDING = "pending"
+    PROCESSED = "processed"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
 class Client(Base):
     __tablename__ = "clients"
 
@@ -72,6 +106,16 @@ class Invoice(Base):
     # Make cree_par_id nullable so we can insert without it
     # RESTRICT: authorship of an issued invoice must survive.
     cree_par_id = Column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    # The accountant's workflow state. Separate from `statut` above - see
+    # InvoiceProcessingStatus for why these are two fields and not one.
+    # server_default uses the enum NAME, as `statut` does: SQLAlchemy stores
+    # Python enum names as the PostgreSQL labels, so 'pending' would be rejected
+    # as an invalid input value while 'PENDING' is the actual label.
+    processing_status = Column(
+        Enum(InvoiceProcessingStatus),
+        nullable=False,
+        server_default=InvoiceProcessingStatus.PENDING.name,
+    )
     # Set from the Idempotency-Key header. UNIQUE, so a retried request cannot
     # create a second invoice: in accounting an issued invoice cannot be
     # deleted, so each duplicate would need a credit note.
@@ -100,6 +144,15 @@ class Invoice(Base):
         # large factors above - kept because the accountant's workflow filters
         # by status constantly.
         Index("ix_invoices_statut", "statut"),
+        # Composite, not a single column on processing_status. Measured at 10k
+        # invoices, the paginated list never uses either: with four roughly
+        # equal values the filter is 25% selective, so ix_invoices_date_emission
+        # plus a LIMIT beats both. What this does earn is the unbounded count
+        # behind "how many invoices are still awaiting me" - 1.13 ms to 0.49 ms
+        # against a sequential scan - and the month-scoped close query, where
+        # leading with the status and then the date beats a single column
+        # (0.14 ms against 0.33 ms). Re-check with db/measure_indexes.py.
+        Index("ix_invoices_processing_status", "processing_status", "date_emission"),
     )
 
 
