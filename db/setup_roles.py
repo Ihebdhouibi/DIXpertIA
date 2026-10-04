@@ -75,7 +75,7 @@ def verify(cur) -> list[str]:
     granted = {r[0] for r in cur.fetchall()}
     cur.execute(
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-        "AND tablename IN ('devices', 'services')"
+        "AND tablename IN ('services')"
     )
     # On a fresh database the tables do not exist yet, so only the subset that
     # does exist can carry a grant. Re-run after migrations for the rest.
@@ -130,7 +130,7 @@ def main():
         sys.exit(1)
 
     print("Verified: app role is NOSUPERUSER / NOBYPASSRLS, DELETE limited to "
-          "devices+services, no TRUNCATE.")
+          "services only, no TRUNCATE.")
 
     parsed = psycopg2.extensions.parse_dsn(args.superuser_url)
     host = parsed.get("host", "localhost")

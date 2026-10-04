@@ -23,7 +23,6 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.service import TeamMember
-from app.models.invoicing import Device
 from app.routers import invoicing
 
 load_dotenv()
@@ -188,7 +187,6 @@ class InvoiceCreate(BaseModel):
     dueDate: Optional[str] = None
     status: Optional[str] = 'Sent'
     items: Optional[List[InvoiceItem]] = []
-    deviceIds: Optional[List[str]] = []
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -207,12 +205,7 @@ class ResetPasswordRequest(BaseModel):
     token: str
     newPassword: str
 
-class DeviceCreate(BaseModel):
-    name: str
-    model: str
-    serialNumber: str
-    price: float
-    status: Optional[str] = 'Available'
+
 
 # --- Auth endpoints ---
 @app.post('/api/login')
@@ -350,7 +343,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
 
 # --- Data endpoints ---
 # GET /api/data used to return every table (all users, invoices, leave requests,
-# devices and team members) to any authenticated user, whatever their role. It
+# and team members) to any authenticated user, whatever their role. It
 # was removed in #55; per-entity endpoints with explicit response schemas replace
 # it as the UI needs them (#65).
 
@@ -438,71 +431,13 @@ def create_team_member(req: TeamMemberCreate, _admin: User = Depends(require_adm
 
 # NOTE: an older POST /api/invoices lived here. It was unreachable - the
 # invoicing router is registered first, so it won by registration order - and
-# it wrote camelCase attributes (client, clientInitials, amount, dateIssued,
-# deviceIds) that the Invoice model does not have, so it would have raised
-# TypeError had it ever been called. The single handler is now
-# app/routers/invoicing.py, which is admin-only (#59).
-#
-# Its device side effect - marking a Device as 'Sold' when it is billed - had
-# no equivalent and was never reachable either. The device/invoice link is
-# modelled properly in #60.
+# it wrote camelCase attributes (client, clientInitials, amount, dateIssued)
+# that the Invoice model does not have, so it would have raised TypeError had
+# it ever been called. The single handler is now app/routers/invoicing.py,
+# which is admin-only (#59).
 
 
-# --- Device endpoints ---
-@app.get('/api/devices')
-def get_devices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # The previous check listed admin, accountant and employee - every role in
-    # UserRole - so it rejected nothing while crashing on current_user['role'].
-    # Authentication is already required globally (#55); any signed-in user may
-    # list devices, and RLS decides which rows they see (#43).
-    return db.query(Device).all()
 
-@app.post('/api/devices', status_code=201)
-def create_device(req: DeviceCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    new_id = f"DEV-{db.query(Device).count()+1:03d}"
-    device = Device(
-        id=new_id,
-        name=req.name,
-        model=req.model,
-        serialNumber=req.serialNumber,
-        price=req.price,
-        status=req.status or "Available",
-        createdAt=datetime.utcnow()
-    )
-    db.add(device)
-    db.commit()
-    db.refresh(device)
-    return device
-
-@app.put('/api/devices/{device_id}')
-def update_device(
-    device_id: str,
-    req: DeviceCreate,
-    _admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    device = db.query(Device).filter(Device.id == device_id).first()
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
-    device.name = req.name
-    device.model = req.model
-    device.serialNumber = req.serialNumber
-    device.price = req.price
-    device.status = req.status or device.status
-    db.commit()
-    db.refresh(device)
-    return device
-
-@app.delete('/api/devices/{device_id}')
-def delete_device(device_id: str, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    device = db.query(Device).filter(Device.id == device_id).first()
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
-    db.delete(device)
-    db.commit()
-    return {"message": "Device deleted"}
-
-# --- Logs endpoint (handles OPTIONS preflight) ---
 @app.api_route('/logs', methods=['GET', 'POST', 'OPTIONS'])
 def logs(request: Request):
     return []

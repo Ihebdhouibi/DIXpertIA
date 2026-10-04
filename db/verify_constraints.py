@@ -96,11 +96,6 @@ PROBES = [
      "INSERT INTO users (id, email, role, \"hashedPassword\", \"isActive\")"
      " VALUES ('P-U4', :upper_email, 'employee', 'h', true)"),
 
-    ("device with a negative price",
-     "INSERT INTO devices (id, name, price, status) VALUES ('P-D1', 'x', -99.99, 'Available')"),
-    ("duplicate device serial number",
-     "INSERT INTO devices (id, name, \"serialNumber\", price, status)"
-     " VALUES ('P-D3', 'x', 'PROBE-SN', 10, 'Available')"),
     ("client name differing only by case",
      "INSERT INTO clients (nom, email) VALUES ('PROBE CLIENT', 'c@x.tn')"),
 ]
@@ -129,9 +124,6 @@ def main():
             " montant_ht, montant_ttc, statut, cree_par_id)"
             " VALUES (99001, 'PROBE-1', 99001, '2026-01-01', '2026-02-01',"
             " 100, 119, 'BROUILLON', :uid)"), {"uid": uid})
-        conn.execute(text(
-            "INSERT INTO devices (id, name, \"serialNumber\", price, status)"
-            " VALUES ('P-D2', 'x', 'PROBE-SN', 10, 'Available')"))
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
             " VALUES (:uid, '2026-05-01', 100, 80)"), {"uid": uid})

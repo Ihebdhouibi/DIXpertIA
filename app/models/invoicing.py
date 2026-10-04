@@ -1,13 +1,10 @@
 import enum
-from datetime import datetime
 
 from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
-    DateTime,
     Enum,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -104,23 +101,4 @@ class InvoiceItem(Base):
         CheckConstraint("quantite > 0", name="ck_invoice_items_quantite"),
         CheckConstraint("prix_unitaire >= 0", name="ck_invoice_items_prix"),
         CheckConstraint("taux_tva >= 0 AND taux_tva <= 100", name="ck_invoice_items_tva"),
-    )
-
-
-class Device(Base):
-    __tablename__ = "devices"
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String)
-    model = Column(String)
-    serialNumber = Column(String)
-    price = Column(Float)
-    status = Column(String, default="Available")
-    createdAt = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        CheckConstraint("price >= 0", name="ck_devices_price"),
-        # Serial numbers identify hardware. Partial, so several devices may
-        # still have no serial recorded.
-        Index("ux_devices_serial", "serialNumber", unique=True,
-              postgresql_where=text('"serialNumber" IS NOT NULL')),
     )

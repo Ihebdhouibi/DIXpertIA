@@ -82,7 +82,6 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM dixpertia_app;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO dixpertia_app;
 
 -- DELETE is granted only where the application deletes rows:
---   main.py:503                  db.delete(device)
 --   app/routers/services.py:44   db.delete(service)
 -- Nothing else deletes, so nothing else gets DELETE. In particular `users`,
 -- `invoices`, `payslips` and `leave_requests` are append/update only - an
@@ -94,7 +93,7 @@ DO $$
 DECLARE
     tbl text;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['devices', 'services'] LOOP
+    FOREACH tbl IN ARRAY ARRAY['services'] LOOP
         IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = tbl) THEN
             EXECUTE format('GRANT DELETE ON TABLE public.%I TO dixpertia_app', tbl);
         ELSE
