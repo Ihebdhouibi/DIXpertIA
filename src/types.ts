@@ -55,7 +55,8 @@ export interface Invoice {
   amount: number;
   dateIssued: string;
   dueDate: string;
-  status: 'Draft' | 'Sent' | 'Paid' | 'Overdue';
+  // The API contract's five invoice states (app/schemas/api.py).
+  status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
   items: {
     description: string;
     qty: number;

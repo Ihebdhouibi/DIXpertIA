@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, X, Check, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
+import StatusBadge from './StatusBadge';
 
 interface UsersViewProps {
   users: User[];
@@ -177,10 +178,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                     </span>
                   </td>
                   <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`}></div>
-                      <span className="text-body-sm font-semibold text-on-surface">{u.isActive ? 'Active' : 'Inactive'}</span>
-                    </div>
+                    <StatusBadge status={u.isActive ? 'Active' : 'Inactive'} />
                   </td>
                   {isAdmin && (
                     <td className="py-4 px-6 text-right">

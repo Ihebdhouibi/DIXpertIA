@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Search, Edit, Ban, CheckCircle, X, Calendar, User, FileText, Check, AlertCircle } from 'lucide-react';
 import { TeamMember, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
+import StatusBadge from './StatusBadge';
 
 interface TeamViewProps {
   userRole: UserRole;
@@ -148,10 +149,7 @@ export default function TeamView({
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${member.status === 'Active' ? 'bg-[#10b981]' : 'bg-outline'}`}></div>
-                        <span className="text-body-sm font-semibold text-on-surface">{member.status}</span>
-                      </div>
+                      <StatusBadge status={member.status} />
                     </td>
                   </tr>
                 ))}
@@ -302,10 +300,7 @@ export default function TeamView({
                           </span>
                         </td>
                         <td className="py-4 px-6">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${member.status === 'Active' ? 'bg-[#10b981]' : 'bg-outline'}`}></div>
-                            <span className="text-body-sm font-semibold text-on-surface">{member.status}</span>
-                          </div>
+                          <StatusBadge status={member.status} />
                         </td>
                         <td className="py-4 px-6 text-right">
                           <div className="flex justify-end gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -706,10 +701,7 @@ export default function TeamView({
                     </span>
                   </td>
                   <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${member.status === 'Active' ? 'bg-[#10b981]' : 'bg-outline'}`}></div>
-                      <span className="text-body-sm font-semibold text-on-surface">{member.status}</span>
-                    </div>
+                    <StatusBadge status={member.status} />
                   </td>
                 </tr>
               ))}

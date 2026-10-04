@@ -48,10 +48,31 @@
   /* Primary actions are ink, not lime: lime is reserved for the single accent. */
   --color-primary: var(--color-ink);
 
-  /* Status colours are owned by #24 and kept unchanged until then. */
-  --color-error: #ba1a1a;
-  --color-error-container: #ffdad6;
-  --color-on-error-container: #93000a;
+  /*
+   * Status tones. Muted on purpose: Signal Lime stays the only bright colour
+   * on screen, and success is not lime (lime is the brand, not a state).
+   * Each tone is a text/dot colour plus a container tint for the badge fill.
+   * Text on its own tint, on white and on paper all clear WCAG AA:
+   *   success 5.33 / 6.34 / 5.66    warning 5.26 / 6.24 / 5.57
+   *   danger  5.34 / 6.44 / 5.75    info    6.19 / 7.42 / 6.63
+   *   neutral 5.98 / 7.90 / 7.05
+   * Which business status uses which tone: src/components/StatusBadge.tsx.
+   */
+  --color-success: #2F6B45;
+  --color-success-container: color-mix(in srgb, var(--color-success) 12%, #ffffff);
+  --color-warning: #80591C;
+  --color-warning-container: color-mix(in srgb, var(--color-warning) 12%, #ffffff);
+  --color-danger: #A63A2B;
+  --color-danger-container: color-mix(in srgb, var(--color-danger) 12%, #ffffff);
+  --color-info: #3B5873;
+  --color-info-container: color-mix(in srgb, var(--color-info) 12%, #ffffff);
+  --color-neutral: #4E5254;
+  --color-neutral-container: var(--color-surface-container-high);
+
+  /* Error is the danger tone, so form errors and status badges agree. */
+  --color-error: var(--color-danger);
+  --color-error-container: var(--color-danger-container);
+  --color-on-error-container: var(--color-danger);
 
   /*
    * Deprecated: Material-3 roles with no brand equivalent (the brand has a
