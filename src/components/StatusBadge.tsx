@@ -10,6 +10,8 @@ const STATUS_TONES: Record<string, StatusTone> = {
   Sent: 'info',
   Paid: 'success',
   Overdue: 'danger',
+  // Danger, not neutral: a void invoice must not look like a Draft.
+  Cancelled: 'danger',
   // Leave requests
   Pending: 'warning',
   Approved: 'success',
