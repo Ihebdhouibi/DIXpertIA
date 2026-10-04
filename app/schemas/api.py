@@ -89,9 +89,9 @@ class LeaveRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    employeeId: Optional[str] = None
+    employeeId: Optional[int] = None
     employeeName: str = ""
-    department: Optional[str] = None
+    jobTitle: Optional[str] = None
     type: str
     # `dates` is what the UI renders today. startDate/endDate are the real
     # columns, exposed so the UI can migrate off the formatted string without a
@@ -106,12 +106,14 @@ class LeaveRequestOut(BaseModel):
 
     @classmethod
     def from_orm_row(cls, row, employee=None) -> "LeaveRequestOut":
-        name = f"{employee.firstName} {employee.lastName}".strip() if employee else ""
+        """`employee` is an Employee row; the person's name lives on its user."""
+        user = getattr(employee, "user", None) if employee else None
+        name = f"{user.firstName} {user.lastName}".strip() if user else ""
         return cls(
             id=str(row.id),
             employeeId=row.employee_id,
             employeeName=name,
-            department=getattr(employee, "department", None),
+            jobTitle=getattr(employee, "job_title", None),
             type=LEAVE_TYPE_TO_API.get(row.type_conge, "Annual Leave"),
             dates=format_date_range(row.date_debut, row.date_fin),
             startDate=row.date_debut,
@@ -129,7 +131,7 @@ class PayslipOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    employeeId: Optional[str] = None
+    employeeId: Optional[int] = None
     period: str
     grossPay: float
     netPay: float

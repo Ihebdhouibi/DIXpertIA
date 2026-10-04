@@ -147,3 +147,54 @@ Neither is a single-row rule, so neither can be a CHECK:
   generated column, or recomputation at issue time. The handler already
   computes totals server-side, so the header cannot disagree via the API; a
   direct write still could.
+
+## Employees
+
+An `employees` record is distinct from the `users` login account (#60). Payroll
+and leave hang off the employee, so a login can be deactivated without taking
+the payroll history with it.
+
+```
+users (login)  1 --- 0..1  employees  1 --- *  payslips
+                                      1 --- *  leave_requests
+```
+
+`team_members` is gone. It duplicated names, e-mail and a free-text role from
+`users` with no foreign key, so the two tables could describe the same person
+differently.
+
+### Leave balance is derived, never stored
+
+Balance = `annual_entitlement_days` minus approved leave in the current
+calendar year. **No carry-over** - the balance resets annually. A stored column
+would drift out of step with the leave table the moment a request was approved,
+and nothing would record why.
+
+`annual_entitlement_days` has no default on purpose: it is a per-person
+contractual term, and a company-wide guess would bake an invented figure into
+every record.
+
+### Delete behaviour
+
+Every foreign key states its `ON DELETE` explicitly; none are left implicit.
+
+| From | To | On delete | Why |
+|---|---|---|---|
+| `employees` | `users` | RESTRICT | a login owning payroll history must not vanish |
+| `payslips` | `employees` | RESTRICT | payroll history outlives the person record |
+| `leave_requests` | `employees` | RESTRICT | same |
+| `leave_requests.valide_par_id` | `users` | RESTRICT | who approved must remain answerable |
+| `invoices` | `clients` | RESTRICT | a client with invoices is not deletable |
+| `invoices.cree_par_id` | `users` | RESTRICT | authorship of an issued invoice survives |
+| `invoice_items` | `invoices` | CASCADE | lines belong to their invoice |
+
+The `invoice_items` cascade previously existed in the ORM only, so an ORM
+delete removed the lines while a direct SQL delete was refused - the same
+operation with two different outcomes depending on the code path.
+
+### Self-validation is enforced by a trigger
+
+An employee must not approve their own leave. This was a CHECK comparing
+`valide_par_id` to `employee_id`, which stopped being meaningful once they
+referenced different tables. `trg_leave_no_self_validation` resolves the
+employee's `user_id` and rejects the match.

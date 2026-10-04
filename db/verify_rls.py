@@ -26,6 +26,13 @@ EMPLOYEES = ("RLS-EMP-A", "RLS-EMP-B")
 
 
 def setup(owner):
+    """Create a user, an employee record and a payslip for each fixture.
+
+    Payslips hang off employees, not users, since #60 - so the fixture needs
+    both, and the policy has to resolve users.id -> employees.id to decide what
+    is visible.
+    """
+    ids = {}
     with owner.begin() as c:
         teardown_sql(c)
         for uid in EMPLOYEES:
@@ -35,35 +42,49 @@ def setup(owner):
                      "VALUES (:id, :em, 'RLS', 'Fixture', 'employee', 'x', true, true, now())"),
                 {"id": uid, "em": f"{uid.lower()}@rls.test"},
             )
+            employee_id = c.execute(
+                text("INSERT INTO employees (user_id, job_title, hired_on, "
+                     "annual_entitlement_days) VALUES (:u, 'Fixture', :d, 21) RETURNING id"),
+                {"u": uid, "d": date(2025, 1, 1)},
+            ).scalar()
+            ids[uid] = employee_id
             c.execute(
                 text("INSERT INTO payslips (employee_id, periode, montant_brut, montant_net) "
                      "VALUES (:e, :p, 1000, 800)"),
-                {"e": uid, "p": date(2026, 9, 1)},
+                {"e": employee_id, "p": date(2026, 9, 1)},
             )
+    return ids
 
 
 def teardown_sql(c):
-    c.execute(text("DELETE FROM payslips WHERE employee_id = ANY(:ids)"), {"ids": list(EMPLOYEES)})
+    c.execute(text("DELETE FROM payslips WHERE employee_id IN "
+                   "(SELECT id FROM employees WHERE user_id = ANY(:ids))"),
+              {"ids": list(EMPLOYEES)})
+    c.execute(text("DELETE FROM leave_requests WHERE employee_id IN "
+                   "(SELECT id FROM employees WHERE user_id = ANY(:ids))"),
+              {"ids": list(EMPLOYEES)})
+    c.execute(text("DELETE FROM employees WHERE user_id = ANY(:ids)"), {"ids": list(EMPLOYEES)})
     c.execute(text("DELETE FROM users WHERE id = ANY(:ids)"), {"ids": list(EMPLOYEES)})
 
 
-def visible(user_id, role):
+def visible(user_id, role, ids):
+    """Return the fixture user_ids whose payslips this identity can see."""
+    by_employee_id = {v: k for k, v in ids.items()}
     set_identity(user_id, role)
     db = SessionLocal()
     try:
-        return sorted(
-            r[0] for r in db.execute(
-                text("SELECT employee_id FROM payslips WHERE employee_id = ANY(:ids)"),
-                {"ids": list(EMPLOYEES)},
-            ).all()
-        )
+        rows = db.execute(
+            text("SELECT employee_id FROM payslips WHERE employee_id = ANY(:ids)"),
+            {"ids": list(ids.values())},
+        ).all()
+        return sorted(by_employee_id[r[0]] for r in rows)
     finally:
         db.close()
 
 
 def main():
     owner = create_engine(settings.SCHEMA_DATABASE_URL)
-    setup(owner)
+    ids = setup(owner)
 
     a, b = EMPLOYEES
     cases = [
@@ -75,7 +96,7 @@ def main():
 
     failures = []
     for label, (uid, role), expected in cases:
-        got = visible(uid, role)
+        got = visible(uid, role, ids)
         ok = got == expected
         print(f"  {'ok ' if ok else 'FAIL'}  {label}: {got}")
         if not ok:
@@ -86,7 +107,7 @@ def main():
     try:
         got = [r[0] for r in db.execute(
             text("SELECT employee_id FROM payslips WHERE employee_id = ANY(:ids)"),
-            {"ids": list(EMPLOYEES)}).all()]
+            {"ids": list(ids.values())}).all()]
     finally:
         db.close()
     ok = got == []
@@ -99,7 +120,7 @@ def main():
     db = SessionLocal()
     try:
         n = db.execute(text("SELECT count(*) FROM payslips WHERE employee_id = :o"),
-                       {"o": b}).scalar()
+                       {"o": ids[b]}).scalar()
     finally:
         db.close()
     ok = n == 0

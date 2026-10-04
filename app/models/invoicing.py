@@ -52,7 +52,8 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     numero = Column(String(30), unique=True, nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    # RESTRICT: a client with invoices must not be deletable.
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
     montant_ht = Column(Numeric(10, 2), nullable=False)
@@ -69,7 +70,8 @@ class Invoice(Base):
     statut = Column(Enum(InvoiceStatus), nullable=False,
                     server_default=InvoiceStatus.BROUILLON.name)
     # Make cree_par_id nullable so we can insert without it
-    cree_par_id = Column(String, ForeignKey("users.id"), nullable=False)
+    # RESTRICT: authorship of an issued invoice must survive.
+    cree_par_id = Column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     # Set from the Idempotency-Key header. UNIQUE, so a retried request cannot
     # create a second invoice: in accounting an issued invoice cannot be
     # deleted, so each duplicate would need a credit note.
@@ -89,7 +91,10 @@ class InvoiceItem(Base):
     __tablename__ = "invoice_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
+    # CASCADE, matching the ORM cascade on Invoice.items. Previously the ORM
+    # deleted lines while a direct SQL delete was refused - the same operation
+    # with two different outcomes depending on the code path (#60).
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
     designation = Column(String(255), nullable=False)
     quantite = Column(Numeric(8, 2), default=1)
     prix_unitaire = Column(Numeric(10, 2), nullable=False)

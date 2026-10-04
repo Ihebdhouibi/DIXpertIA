@@ -4,7 +4,6 @@ from app.core.database import SessionLocal, Base, engine
 from app.models.user import User
 from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
-from app.models.service import TeamMember
 from app.models.invoicing import Invoice
 from datetime import datetime
 
@@ -62,19 +61,6 @@ for lr in data.get('leaveRequests', []):
     )
     db.add(leave)
 
-# Team Members
-for tm in data.get('teamMembers', []):
-    member = TeamMember(
-        id=tm['id'],
-        firstName=tm['firstName'],
-        lastName=tm['lastName'],
-        email=tm['email'],
-        role=tm['role'],
-        status=tm['status'],
-        initials=tm.get('initials'),
-        avatarUrl=tm.get('avatarUrl')
-    )
-    db.add(member)
 
 # Invoices
 for inv in data.get('invoices', []):
