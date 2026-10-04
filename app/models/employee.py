@@ -6,7 +6,6 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
-    Index,
     Integer,
     String,
 )
@@ -36,7 +35,7 @@ class Employee(Base):
 
     __tablename__ = "employees"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # RESTRICT: a login that owns payroll history must not be deletable. Use
     # employment_status, or deactivate the user, instead of deleting.
     user_id = Column(
@@ -71,9 +70,9 @@ class Employee(Base):
             "annual_entitlement_days >= 0 AND annual_entitlement_days <= 365",
             name="ck_employees_entitlement",
         ),
-        # The payslip and leave policies resolve the caller through
-        # employees.user_id on every row read, so this is on the hot path.
-        Index("ix_employees_user_id", "user_id"),
+        # No index on user_id: the UNIQUE constraint above already creates one,
+        # and the planner uses it for exactly the same lookups. The index added
+        # in #60 was redundant from the start and is dropped in #61.
     )
 
     # The leave balance is derived, never stored: entitlement minus approved

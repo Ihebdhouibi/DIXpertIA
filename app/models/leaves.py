@@ -1,5 +1,17 @@
 import enum
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, Enum, ForeignKey, Integer, String, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -21,7 +33,7 @@ class LeaveStatus(str, enum.Enum):
 class LeaveRequest(Base):
     __tablename__ = "leave_requests"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # RESTRICT: leave history must outlive any attempt to delete the person.
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="RESTRICT"),
                          nullable=False)
@@ -49,4 +61,9 @@ class LeaveRequest(Base):
         # A decided request must name who decided it.
         CheckConstraint("statut = 'EN_ATTENTE' OR valide_par_id IS NOT NULL",
                         name="ck_leave_decision_has_validator"),
+        # One employee's leave history - the employee's own list view.
+        Index("ix_leave_requests_employee_id", "employee_id"),
+        # Not for reads: makes the RESTRICT check on deleting a user an index
+        # lookup instead of a full scan.
+        Index("ix_leave_requests_valide_par_id", "valide_par_id"),
     )

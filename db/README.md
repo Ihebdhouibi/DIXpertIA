@@ -198,3 +198,71 @@ An employee must not approve their own leave. This was a CHECK comparing
 `valide_par_id` to `employee_id`, which stopped being meaningful once they
 referenced different tables. `trg_leave_no_self_validation` resolves the
 employee's `user_id` and rejects the match.
+
+## Indexes
+
+Every index is justified by a measured query plan rather than by convention.
+The procedure is reproducible on any environment:
+
+```bash
+# Fill the tables; --scale multiplies the volumes
+python db/seed_perf_data.py --scale 10
+
+# Print the plan the planner chooses for each access path
+python db/measure_indexes.py
+
+# Remove the fixtures again
+python db/seed_perf_data.py --clear
+```
+
+`measure_indexes.py` flags any path still falling back to a sequential scan.
+One is expected and deliberate: filtering `leave_requests` by `statut` has only
+three distinct values, so an index saves about 7% and is not worth the write
+cost. Everything else uses an index.
+
+Measuring matters because an empty database cannot answer the question. With no
+rows, PostgreSQL scans sequentially whatever indexes exist, because reading
+nothing is cheaper than consulting an index -- so on an empty database every
+index looks equally useless, and every plan looks the same.
+
+### What a measurement changed
+
+Three decisions came out differently than they would have by convention:
+
+- `ix_users_email` looks redundant beside `ux_users_email_ci`, but is not. That
+  index covers `lower(email)` and cannot serve `WHERE email = ?`. Dropping it
+  turned login into a sequential scan, so it was kept.
+- `payslips.employee_id` has no index of its own and needs none:
+  `uq_employee_periode` is `(employee_id, periode)`, and a btree already serves
+  lookups on its leading column.
+- The invoice list index is ascending although the list reads newest first.
+  PostgreSQL scans a btree backward at the same cost, so one ascending index
+  serves both that and the accountant's ascending month range.
+
+### Indexes that serve no query
+
+`invoices.cree_par_id` and `leave_requests.valide_par_id` are indexed although
+nothing selects on them. Both are `ON DELETE RESTRICT`, so deleting a user
+makes PostgreSQL search the child table to check for references. Proving that
+*no* row references the user means reading the whole table -- 1.7 ms against
+20k invoices, while holding locks. With the index it is 0.045 ms.
+
+### Redundant indexes
+
+A primary key and a `UNIQUE` constraint each create an index already. The
+models originally declared `index=True` on every primary key as well, which
+produced a second, identical index on eight tables -- paid for on every insert
+and update, and never chosen by the planner. Do not add `index=True` to a
+primary key or to a column that already carries `unique=True`.
+
+## Pagination
+
+List endpoints take `limit` (default 50, maximum 200) and `offset`, and report
+the unpaginated total in the `X-Total-Count` header. The cap is enforced by the
+API, not left to the caller.
+
+Ordering always ends in a unique tie-break, normally `id`. Without one, rows
+that share a sort value have no defined order between queries, and a client
+paging through the list sees some rows twice and never sees others. Walking 40
+pages of the seeded invoices ordered by `date_emission` alone returned 123
+duplicated rows out of 1000; adding `id` returned zero.
