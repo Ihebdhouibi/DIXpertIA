@@ -107,3 +107,43 @@ Login, forgot-password and reset-password all read `users` with no authenticated
 identity, so a policy there would break authentication outright. Covering it
 needs `SECURITY DEFINER` lookup functions owned by a `BYPASSRLS` role, exposing
 only the columns the auth path needs. Tracked separately.
+
+## Business integrity constraints
+
+The database enforces every single-row business rule. Verify at any time:
+
+```bash
+python db/verify_constraints.py
+```
+
+It attempts invalid writes inside a transaction that is always rolled back, so
+it never modifies data. The audit's original run attempted 30 invalid writes
+and **26 were accepted**, because the schema held zero CHECK constraints.
+
+Rules now enforced:
+
+| Table | Rule |
+|---|---|
+| `invoices` | amounts non-negative, TTC >= HT, due date >= issue date, author and amounts NOT NULL |
+| `invoice_items` | quantity > 0, unit price >= 0, VAT between 0 and 100 |
+| `leave_requests` | end >= start, no self-validation, a decided request names its validator, employee NOT NULL |
+| `payslips` | net <= gross, both non-negative, `periode` pinned to the 1st so `uq_employee_periode` means one per month |
+| `users` | role in (admin, employee, accountant), role and password hash NOT NULL, email unique case-insensitively |
+| `devices` | price >= 0, serial number unique where present |
+| `clients` | name unique case-insensitively |
+
+The same rules are mirrored in the Pydantic input schemas, so the API answers
+422 naming the field rather than letting the database raise and returning 500.
+The database is the backstop, not the only check: `migrate_data.py` and
+`insert_invoices.py` write directly and bypass the API entirely.
+
+### Two rules deliberately not enforced here
+
+Neither is a single-row rule, so neither can be a CHECK:
+
+- **Overlapping leave requests** for one employee - needs an `EXCLUDE`
+  constraint with `btree_gist`, or an application-level check.
+- **Invoice header totals matching the sum of its lines** - needs a trigger, a
+  generated column, or recomputation at issue time. The handler already
+  computes totals server-side, so the header cannot disagree via the API; a
+  direct write still could.
