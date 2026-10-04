@@ -154,12 +154,23 @@ class PayslipOut(BaseModel):
 
 # --- Invoices ---------------------------------------------------------------
 
+# The commercial state, as the UI labels it.
 INVOICE_STATUS_TO_API = {
     "brouillon": "Draft",
     "envoyee": "Sent",
     "payee": "Paid",
     "en_retard": "Overdue",
     "annulee": "Cancelled",
+}
+
+# The accountant's workflow state (#41) - a separate axis, not an alternative
+# spelling of the above. An invoice is routinely "Paid" and "Pending" at once:
+# the client has paid, nobody has booked it yet.
+INVOICE_PROCESSING_STATUS_TO_API = {
+    "pending": "Pending",
+    "processed": "Processed",
+    "completed": "Completed",
+    "archived": "Archived",
 }
 
 

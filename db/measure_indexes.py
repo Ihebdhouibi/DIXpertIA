@@ -48,6 +48,9 @@ PATHS = [
      "SELECT * FROM invoices ORDER BY date_emission DESC, id DESC LIMIT 25"),
     ("invoices in one status",
      "SELECT * FROM invoices WHERE statut = 'ENVOYEE' ORDER BY date_emission DESC"),
+    ("invoices awaiting the accountant (processing status)",
+     "SELECT * FROM invoices WHERE processing_status = 'PENDING' "
+     "ORDER BY date_emission DESC"),
     ("employee record for the signed-in user (RLS hot path)",
      "SELECT * FROM employees WHERE user_id = :uid"),
     ("login by e-mail",

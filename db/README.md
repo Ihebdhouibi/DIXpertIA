@@ -199,6 +199,68 @@ An employee must not approve their own leave. This was a CHECK comparing
 referenced different tables. `trg_leave_no_self_validation` resolves the
 employee's `user_id` and rejects the match.
 
+## Invoice status: two axes, not one
+
+Invoices carry two independent status columns, and conflating them loses
+information the accountant needs (#41).
+
+| Column | Describes | Moves because |
+|---|---|---|
+| `statut` | the commercial state the client sees | the client relationship: issued, paid, overdue |
+| `processing_status` | the accountant's workflow state | the monthly close: booked, reconciled, archived |
+
+An invoice is routinely `PAYEE` and `pending` at the same time: the client has
+paid, but nobody has entered it in the books yet. The reverse happens too. A
+single enum could not express either, and "paid but not yet booked" is the
+normal state of most invoices mid-month.
+
+### What each processing state means
+
+| State | Meaning |
+|---|---|
+| `pending` | It exists, nobody has handled it. The state on creation. |
+| `processed` | Entered in the books. |
+| `completed` | Booked **and** matched against an actual payment. |
+| `archived` | The month it belongs to has been closed. |
+
+`processed` and `completed` are deliberately distinct. Booking an invoice and
+reconciling it against a bank line are separate acts, often days apart, and the
+gap between them is what the accountant chases at month end.
+
+### Archived is final, and the database enforces it
+
+Once an invoice is archived, the trigger `invoice_archived_is_final` refuses:
+
+- any change to `processing_status` -- it cannot move back
+- any change to `numero`, `client_id`, `date_emission`, `date_echeance`,
+  `montant_ht` or `montant_ttc`
+- deletion of the row
+
+A mistake found after the close is corrected by issuing a new document in the
+open month, never by editing a closed one. That is what makes a closed month's
+totals final, and it is the assumption the gapless-numbering rule in #38 is
+built on.
+
+`statut` is deliberately **not** frozen. A client can pay in November an invoice
+archived with October's books, and the commercial state must still record it.
+Needing exactly that is why the two axes are separate columns.
+
+The rule lives in a trigger rather than in the API so that it holds for a direct
+SQL write too. `db/verify_constraints.py` probes all six refusals, plus two
+writes that must still be **accepted**: marking an archived invoice paid, and
+moving an open invoice forward.
+
+### Transitions are not otherwise constrained
+
+Before archiving, an invoice moves freely between `pending`, `processed` and
+`completed`, so the accountant can correct their own work while the month is
+still open. Only the step into `archived` is one-way. If the accountant later
+wants a stricter forward-only progression, it belongs in the same trigger.
+
+The close itself -- which invoices get archived and when -- is owned separately
+and is not implemented here.
+
+
 ## Indexes
 
 Every index is justified by a measured query plan rather than by convention.

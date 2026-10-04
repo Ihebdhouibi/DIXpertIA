@@ -108,6 +108,25 @@ PROBES = [
 
     ("client name differing only by case",
      "INSERT INTO clients (nom, email) VALUES ('PROBE CLIENT', 'c@x.tn')"),
+    # --- archived invoices: the closed month is final (#41) ----------------
+    ("archived invoice moved back to pending",
+     "UPDATE invoices SET processing_status = 'PENDING' WHERE id = 99002"),
+    ("archived invoice moved back to processed",
+     "UPDATE invoices SET processing_status = 'PROCESSED' WHERE id = 99002"),
+    ("archived invoice with its amounts changed",
+     "UPDATE invoices SET montant_ht = 999, montant_ttc = 1200 WHERE id = 99002"),
+    ("archived invoice with its issue date changed",
+     "UPDATE invoices SET date_emission = '2026-01-15' WHERE id = 99002"),
+    ("archived invoice with its number changed",
+     "UPDATE invoices SET numero = 'PROBE-RENUMBERED' WHERE id = 99002"),
+    ("archived invoice deleted",
+     "DELETE FROM invoices WHERE id = 99002"),
+    # The two below MUST be accepted. They prove the rule is targeted rather
+    # than a blanket freeze, and that the two status axes are independent.
+    ("archived invoice marked paid by the client",
+     "UPDATE invoices SET statut = 'PAYEE' WHERE id = 99002", True),
+    ("open invoice moved from pending to processed",
+     "UPDATE invoices SET processing_status = 'PROCESSED' WHERE id = 99001", True),
 ]
 
 
@@ -138,6 +157,12 @@ def main():
             " montant_ht, montant_ttc, statut, cree_par_id)"
             " VALUES (99001, 'PROBE-1', 99001, '2026-01-01', '2026-02-01',"
             " 100, 119, 'BROUILLON', :uid)"), {"uid": uid})
+        # A second invoice, already archived, for the closed-month probes.
+        conn.execute(text(
+            "INSERT INTO invoices (id, numero, client_id, date_emission, date_echeance,"
+            " montant_ht, montant_ttc, statut, processing_status, cree_par_id)"
+            " VALUES (99002, 'PROBE-ARCHIVED', 99001, '2026-01-01', '2026-02-01',"
+            " 100, 119, 'ENVOYEE', 'ARCHIVED', :uid)"), {"uid": uid})
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
             " VALUES (:eid, '2026-05-01', 100, 80)"), {"eid": eid})
