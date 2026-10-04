@@ -5,7 +5,7 @@ from app.models.user import User
 from app.models.payroll import Payslip
 from app.models.leaves import LeaveRequest
 from app.models.service import TeamMember
-from app.models.invoicing import Invoice, Device
+from app.models.invoicing import Invoice
 from datetime import datetime
 
 
@@ -87,23 +87,10 @@ for inv in data.get('invoices', []):
         dueDate=inv['dueDate'],
         status=inv['status'],
         items=inv.get('items', []),
-        deviceIds=inv.get('deviceIds', []),
         createdAt=datetime.now()
     )
     db.add(invoice)
 
-# Devices
-for d in data.get('devices', []):
-    device = Device(
-        id=d['id'],
-        name=d['name'],
-        model=d['model'],
-        serialNumber=d['serialNumber'],
-        price=d['price'],
-        status=d.get('status', 'Available'),
-        createdAt=datetime.now()
-    )
-    db.add(device)
 
 db.commit()
 db.close()
