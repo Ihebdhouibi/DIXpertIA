@@ -20,7 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.leaves import LeaveStatus, LeaveType
 
@@ -67,6 +67,14 @@ class LeaveRequestCreate(BaseModel):
     endDate: date
     type: str = "Annual Leave"
     reason: Optional[str] = ""
+
+    @model_validator(mode="after")
+    def _end_not_before_start(self) -> "LeaveRequestCreate":
+        # Mirrors ck_leave_dates. Validating here turns a database error into a
+        # 422 naming the field (#58).
+        if self.endDate < self.startDate:
+            raise ValueError("endDate cannot be before startDate")
+        return self
 
     def to_orm_kwargs(self) -> dict:
         return {

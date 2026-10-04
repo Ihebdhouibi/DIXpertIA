@@ -1,7 +1,21 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Column, Float, DateTime, Integer, String, Text, ForeignKey, Date, Numeric, Enum
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -30,6 +44,11 @@ class Client(Base):
 
     invoices = relationship("Invoice", back_populates="client")
 
+    __table_args__ = (
+        # Stops "Acme Corp" and "ACME CORP" becoming two customers.
+        Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
+    )
+
 
 class Invoice(Base):
     __tablename__ = "invoices"
@@ -39,8 +58,8 @@ class Invoice(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
-    montant_ht = Column(Numeric(10, 2))
-    montant_ttc = Column(Numeric(10, 2))
+    montant_ht = Column(Numeric(10, 2), nullable=False)
+    montant_ttc = Column(Numeric(10, 2), nullable=False)
     # NOT NULL with a default: the status was nullable and never set, so every
     # invoice was created with statut = NULL. InvoiceOut requires it, so
     # serialising the response failed *after* the commit - the invoice was
@@ -53,7 +72,7 @@ class Invoice(Base):
     statut = Column(Enum(InvoiceStatus), nullable=False,
                     server_default=InvoiceStatus.BROUILLON.name)
     # Make cree_par_id nullable so we can insert without it
-    cree_par_id = Column(String, ForeignKey("users.id"), nullable=True)
+    cree_par_id = Column(String, ForeignKey("users.id"), nullable=False)
     # Set from the Idempotency-Key header. UNIQUE, so a retried request cannot
     # create a second invoice: in accounting an issued invoice cannot be
     # deleted, so each duplicate would need a credit note.
@@ -61,6 +80,12 @@ class Invoice(Base):
 
     client = relationship("Client", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
+                        name="ck_invoices_amounts"),
+        CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+    )
 
 
 class InvoiceItem(Base):
@@ -75,6 +100,12 @@ class InvoiceItem(Base):
 
     invoice = relationship("Invoice", back_populates="items")
 
+    __table_args__ = (
+        CheckConstraint("quantite > 0", name="ck_invoice_items_quantite"),
+        CheckConstraint("prix_unitaire >= 0", name="ck_invoice_items_prix"),
+        CheckConstraint("taux_tva >= 0 AND taux_tva <= 100", name="ck_invoice_items_tva"),
+    )
+
 
 class Device(Base):
     __tablename__ = "devices"
@@ -85,3 +116,11 @@ class Device(Base):
     price = Column(Float)
     status = Column(String, default="Available")
     createdAt = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint("price >= 0", name="ck_devices_price"),
+        # Serial numbers identify hardware. Partial, so several devices may
+        # still have no serial recorded.
+        Index("ux_devices_serial", "serialNumber", unique=True,
+              postgresql_where=text('"serialNumber" IS NOT NULL')),
+    )
