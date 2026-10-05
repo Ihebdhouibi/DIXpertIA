@@ -26,7 +26,7 @@ import app.models  # noqa: F401
 from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.employee import Employee
-from app.routers import invoicing
+from app.routers import accounting, invoicing
 
 load_dotenv()
 
@@ -78,6 +78,7 @@ app = FastAPI(dependencies=[Depends(require_authentication)])
 # "rh" role and a `User.employee_profile` relationship that this data model does
 # not have. Mounting it needs those reconciled first.
 app.include_router(invoicing.router, prefix="/api")
+app.include_router(accounting.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
