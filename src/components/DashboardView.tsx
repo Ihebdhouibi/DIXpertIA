@@ -5,6 +5,7 @@ import {
   Download, Plus, ChevronRight
 } from 'lucide-react';
 import { User, Project, Invoice, LeaveRequest, TeamMember } from '../types';
+import { TONE_CLASSES, statusTone } from './StatusBadge';
 
 interface Notification {
   id: string;
@@ -112,7 +113,7 @@ export default function DashboardView({
           </div>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-amber-50 text-amber-600">
+          <div className="p-3 rounded-full bg-warning-container text-warning">
             <Clock className="w-6 h-6" />
           </div>
           <div>
@@ -121,7 +122,7 @@ export default function DashboardView({
           </div>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-emerald-50 text-emerald-600">
+          <div className="p-3 rounded-full bg-success-container text-success">
             <Users className="w-6 h-6" />
           </div>
           <div>
@@ -144,12 +145,7 @@ export default function DashboardView({
                   <span className="text-caption font-semibold text-on-surface-variant w-24">{status}</span>
                   <div className="flex-1 h-3 bg-surface-variant rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${
-                        status === 'Active' ? 'bg-blue-500' :
-                        status === 'In Progress' ? 'bg-amber-500' :
-                        status === 'Completed' ? 'bg-emerald-500' :
-                        'bg-gray-400'
-                      } transition-all duration-500`}
+                      className={`h-full rounded-full ${TONE_CLASSES[statusTone(status)].dot} transition-all duration-500`}
                       style={{ width: `${(count / maxStatusCount) * 100}%` }}
                     />
                   </div>
@@ -182,7 +178,7 @@ export default function DashboardView({
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => onQuickAction('approve-leaves')}
-                  className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-semibold text-caption hover:bg-amber-100 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 bg-warning-container text-warning border border-warning/25 rounded-lg font-semibold text-caption hover:border-warning/50 transition-colors flex items-center gap-2"
                 >
                   <Clock className="w-4 h-4" />
                   Approve Leaves
@@ -266,9 +262,9 @@ export default function DashboardView({
                     }}
                   >
                     <div className="flex items-start gap-2">
-                      {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
-                      {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />}
-                      {notif.type === 'error' && <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
+                      {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />}
+                      {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />}
+                      {notif.type === 'error' && <XCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-on-surface truncate">{notif.message}</p>
                         <p className="text-[10px] text-outline mt-0.5">

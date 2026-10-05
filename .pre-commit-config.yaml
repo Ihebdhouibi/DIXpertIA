@@ -64,3 +64,15 @@ repos:
         # the v2 rebrand.
         #
         # Accented Latin (the French API messages) is deliberately permitted.
+
+      - id: check-no-raw-colors
+        name: no raw colours in frontend source
+        entry: python scripts/check_no_raw_colors.py
+        language: system
+        types_or: [ts, tsx]
+        files: ^src/
+        # Colours come from the token layer in src/index.css so they follow the
+        # brand and switch with the dark theme (#23, #24, #80). This rejects hex
+        # and rgb() literals, raw Tailwind palette classes and bg/text-white in
+        # src/ (#25). Scrims and the unthemed public homepage are allowed; any
+        # other exception needs a `raw-color-ok: <reason>` marker.

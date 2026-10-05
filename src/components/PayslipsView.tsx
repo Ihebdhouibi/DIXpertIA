@@ -70,7 +70,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
 
       {/* Toast Alert Notification */}
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-[#137333] text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/20">
+        <div className="fixed bottom-4 right-4 z-50 bg-success-container text-success py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-success/20">
           <Check className="w-5 h-5 shrink-0" />
           <span>{toastMessage}</span>
         </div>

@@ -87,7 +87,7 @@ export default function LeaveRequestsView({
     <div className="flex-1 flex flex-col gap-6">
       {/* Toast notification */}
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-primary text-on-primary py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/15">
+        <div className="fixed bottom-4 right-4 z-50 bg-primary text-on-primary py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-on-primary/15">
           <Check className="w-5 h-5 shrink-0" />
           <span>{toastMessage}</span>
         </div>

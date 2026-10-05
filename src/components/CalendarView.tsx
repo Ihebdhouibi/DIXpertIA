@@ -3,6 +3,7 @@ import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { LeaveRequest, UserRole } from '../types';
+import { statusTone } from './StatusBadge';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const locales = { 'en-US': enUS };
@@ -83,25 +84,17 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
 
   console.log(' Generated events:', events);
 
+  // Same tones as the status badges, as theme variables so events follow
+  // light and dark. Tint fill with tone text and a tone edge: AA in both themes.
   const eventStyleGetter = (event: CalendarEvent) => {
-    let backgroundColor = '#6b7280';
-    switch (event.status) {
-      case 'Approved':
-        backgroundColor = '#10b981';
-        break;
-      case 'Pending':
-        backgroundColor = '#f59e0b';
-        break;
-      case 'Rejected':
-        backgroundColor = '#ef4444';
-        break;
-    }
+    const tone = statusTone(event.status);
     return {
       style: {
-        backgroundColor,
+        backgroundColor: `var(--color-${tone}-container)`,
         border: 'none',
+        borderLeft: `3px solid var(--color-${tone})`,
         borderRadius: '4px',
-        color: 'white',
+        color: `var(--color-${tone})`,
         padding: '2px 4px',
         fontSize: '0.75rem',
       },

@@ -124,8 +124,8 @@ export default function ProjectsView({
         <div
           className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-red-50 text-red-800 border-red-200'
+              ? 'bg-success-container text-success border-success/20'
+              : 'bg-error-container text-on-error-container border-error/20'
           }`}
         >
           {toast.type === 'success' ? (
@@ -270,7 +270,7 @@ export default function ProjectsView({
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-lg max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
+          <div className="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-lg max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface sticky top-0 z-10">
               <h2 className="text-h2 font-black text-on-surface m-0">
                 {editingProject ? 'Edit Project' : 'Create New Project'}

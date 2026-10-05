@@ -84,13 +84,13 @@ export default function NotificationsView({
   const getIcon = (type: Notification['type']) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-emerald-500" />;
+        return <CheckCircle className="w-5 h-5 text-success" />;
       case 'warning':
-        return <AlertCircle className="w-5 h-5 text-amber-500" />;
+        return <AlertCircle className="w-5 h-5 text-warning" />;
       case 'error':
-        return <XCircle className="w-5 h-5 text-red-500" />;
+        return <XCircle className="w-5 h-5 text-danger" />;
       default:
-        return <Info className="w-5 h-5 text-blue-500" />;
+        return <Info className="w-5 h-5 text-info" />;
     }
   };
 
