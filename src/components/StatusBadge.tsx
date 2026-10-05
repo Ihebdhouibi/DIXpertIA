@@ -25,8 +25,13 @@ const STATUS_TONES: Record<string, StatusTone> = {
   Inactive: 'neutral',
 };
 
+/** Tone for a business status; charts and calendars reuse it so colours agree everywhere. */
+export function statusTone(status: string): StatusTone {
+  return STATUS_TONES[status] ?? 'neutral';
+}
+
 // Full class names so Tailwind can see them at build time.
-const TONE_CLASSES: Record<StatusTone, { badge: string; dot: string }> = {
+export const TONE_CLASSES: Record<StatusTone, { badge: string; dot: string }> = {
   success: { badge: 'bg-success-container text-success', dot: 'bg-success' },
   warning: { badge: 'bg-warning-container text-warning', dot: 'bg-warning' },
   danger: { badge: 'bg-danger-container text-danger', dot: 'bg-danger' },
@@ -46,7 +51,7 @@ interface StatusBadgeProps {
  * colour alone.
  */
 export default function StatusBadge({ status, tone, className = '' }: StatusBadgeProps) {
-  const classes = TONE_CLASSES[tone ?? STATUS_TONES[status] ?? 'neutral'];
+  const classes = TONE_CLASSES[tone ?? statusTone(status)];
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${classes.badge} ${className}`}

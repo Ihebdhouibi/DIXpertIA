@@ -65,7 +65,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-xs font-semibold text-red-800 text-center">
+                    <div className="bg-error-container border border-error/20 rounded-lg p-2 text-xs font-semibold text-on-error-container text-center">
                       {error}
                     </div>
                   )}
@@ -107,7 +107,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
             ) : (
               <div className="text-center space-y-4 py-4">
                 <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-secondary-fixed/30 text-secondary mb-4">
-                  <CheckCircle className="w-10 h-10 text-[#137333]" />
+                  <CheckCircle className="w-10 h-10 text-success" />
                 </div>
                 <h2 className="text-h2 font-semibold text-primary">Check your email</h2>
                 <p className="text-body-sm text-on-surface-variant">

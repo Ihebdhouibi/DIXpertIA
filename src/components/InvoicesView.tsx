@@ -121,7 +121,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
   return (
     <div className="flex-grow flex flex-col gap-6 animate-fade-in">
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-[#137333] text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/10">
+        <div className="fixed bottom-4 right-4 z-50 bg-success-container text-success py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-success/20">
           <Check className="w-5 h-5 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -254,7 +254,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
       {/* Invoice Detail Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-on-background/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest w-full max-w-4xl max-h-[92%] rounded-xl shadow-[0_8px_32px_rgba(31,56,100,0.2)] border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
+          <div className="bg-surface-container-lowest w-full max-w-4xl max-h-[92%] rounded-xl shadow-xl border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
             <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface shrink-0">
               <div className="flex items-center gap-4">
                 <h3 className="text-h2 font-black text-on-surface">
@@ -335,7 +335,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
                   <div className="flex-1 bg-surface-variant overflow-auto p-4 md:p-8 flex items-start justify-center">
                     <div
                       style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-                      className="bg-white w-full max-w-[580px] shadow-lg aspect-[1/1.4] p-8 border border-outline-variant relative transition-transform"
+                      className="bg-surface-container-lowest w-full max-w-[580px] shadow-lg aspect-[1/1.4] p-8 border border-outline-variant relative transition-transform"
                     >
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
                         <span className="font-sans text-[90px] font-black rotate-45 text-on-surface">PREVIEW</span>
@@ -406,7 +406,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
       {/* New Invoice Modal */}
       {isAdmin && isNewInvoiceOpen && (
         <div className="fixed inset-0 z-50 bg-on-background/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">
+          <div className="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface shrink-0">
               <h3 className="text-h2 font-black text-on-surface m-0">Create New Invoice</h3>
               <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition-colors cursor-pointer" onClick={() => setIsNewInvoiceOpen(false)}>

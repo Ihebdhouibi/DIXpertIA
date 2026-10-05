@@ -574,7 +574,7 @@ export default function App() {
               </button>
 
               {showNotificationList && (
-                <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
+                <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/60 py-2 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">
                     <span className="font-bold text-caption text-on-surface">Notifications</span>
                     <div className="flex gap-2">
@@ -625,9 +625,9 @@ export default function App() {
                           }}
                         >
                           <div className="flex items-start gap-2">
-                            {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
-                            {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />}
-                            {notif.type === 'error' && <X className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
+                            {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />}
+                            {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />}
+                            {notif.type === 'error' && <X className="w-4 h-4 text-danger shrink-0 mt-0.5" />}
                             <div className="flex-1">
                               <p className="text-xs font-semibold text-on-surface">{notif.message}</p>
                               <p className="text-[10px] text-outline mt-1">
@@ -659,7 +659,7 @@ export default function App() {
               </button>
 
               {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
+                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/60 py-1 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/30">
                     <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
                     <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
