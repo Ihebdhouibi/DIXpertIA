@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -64,6 +65,57 @@ class InvoiceProcessingStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+class InvoiceDirection(str, enum.Enum):
+    """Which way the money goes (#40).
+
+    OUTGOING is an invoice we issue to a client: income, and the series the tax
+    authority expects to be gapless and in date order.
+
+    INCOMING is a bill a supplier issued to us: an expense. It arrives with the
+    supplier's own number, which we cannot change, and bills arrive out of date
+    order by nature - one dated the 3rd is routinely booked after one dated the
+    20th. That is why the chronological rule from #39 applies to OUTGOING only.
+
+    Separating the two is also what makes VAT reportable: VAT on sales is
+    collected and VAT on purchases is deductible, and a VAT return reports them
+    apart to arrive at the amount owed. Without a direction the system holds
+    both figures and cannot tell them apart.
+    """
+
+    OUTGOING = "outgoing"
+    INCOMING = "incoming"
+
+
+class Supplier(Base):
+    """A company that invoices us (#40).
+
+    Deliberately a separate table from `clients` rather than one counterparty
+    table with a role flag. The same company could in principle be both, but
+    conflating them makes every revenue figure that counts clients wrong, and
+    the audit found exactly that class of mistake elsewhere in this schema.
+
+    Before this existed, storing a supplier bill meant inventing a row in
+    `clients` - so the client list silently mixed people who pay us with people
+    we pay.
+    """
+
+    __tablename__ = "suppliers"
+
+    id = Column(Integer, primary_key=True)
+    nom = Column(String(150), nullable=False)
+    email = Column(String(100), default="")
+    telephone = Column(String(30), default="")
+    adresse = Column(Text, default="")
+
+    invoices = relationship("Invoice", back_populates="supplier")
+
+    __table_args__ = (
+        # Stops the same supplier being created twice under different casing,
+        # which would let the same bill be entered twice and paid twice.
+        Index("ux_suppliers_nom_ci", text("lower(nom)"), unique=True),
+    )
+
+
 class Client(Base):
     __tablename__ = "clients"
 
@@ -85,9 +137,24 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True)
+    # Our own number, in both directions. For an outgoing invoice this is the
+    # legal number the client sees (FA-YYYY-NNNN); for an incoming one it is an
+    # internal filing reference (FF-YYYY-NNNN), because a supplier's own number
+    # is not ours to assign and two suppliers may well use the same one.
     numero = Column(String(30), unique=True, nullable=False)
-    # RESTRICT: a client with invoices must not be deletable.
-    client_id = Column(Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
+    direction = Column(
+        Enum(InvoiceDirection),
+        nullable=False,
+        server_default=InvoiceDirection.OUTGOING.name,
+    )
+    # Exactly one of these is set, enforced by ck_invoice_counterparty below.
+    # RESTRICT: a counterparty with invoices must not be deletable.
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True)
+    # The number printed on the supplier's bill, stored exactly as received.
+    # Never merged into `numero`: if the two shared a column, every report and
+    # filter would silently mix their numbering with ours.
+    supplier_reference = Column(String(60), nullable=True)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
     montant_ht = Column(Numeric(10, 2), nullable=False)
@@ -122,12 +189,30 @@ class Invoice(Base):
     idempotency_key = Column(String(64), unique=True, nullable=True)
 
     client = relationship("Client", back_populates="invoices")
+    supplier = relationship("Supplier", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        # An invoice has exactly one counterparty, and which one follows from
+        # the direction. Without this, a row could name both a client and a
+        # supplier, or neither, and no report could say what it was.
+        CheckConstraint(
+            "(direction = 'OUTGOING' AND client_id IS NOT NULL"
+            " AND supplier_id IS NULL AND supplier_reference IS NULL)"
+            " OR (direction = 'INCOMING' AND supplier_id IS NOT NULL"
+            " AND client_id IS NULL AND supplier_reference IS NOT NULL)",
+            name="ck_invoice_counterparty",
+        ),
+        # The supplier's number is unique PER SUPPLIER, never globally. Two
+        # suppliers both numbering a bill "2026-001" is ordinary; a global
+        # UNIQUE would reject the second one outright. Scoped this way it does
+        # the job that matters: the same bill cannot be entered twice, and so
+        # cannot be paid twice.
+        UniqueConstraint("supplier_id", "supplier_reference",
+                         name="uq_supplier_reference"),
         # Indexes below were chosen by measuring, not by habit: db/seed_perf_data.py
         # fills the tables and db/measure_indexes.py prints the resulting plans.
         #
@@ -137,6 +222,9 @@ class Invoice(Base):
         Index("ix_invoices_date_emission", "date_emission", "id"),
         # Invoices for one client.
         Index("ix_invoices_client_id", "client_id"),
+        Index("ix_invoices_supplier_id", "supplier_id"),
+        # The accountant reads income and expense apart on every screen.
+        Index("ix_invoices_direction", "direction", "date_emission"),
         # Not for reads: without it, deleting a user who has issued no invoices
         # makes the RESTRICT check scan the whole table to prove absence.
         Index("ix_invoices_cree_par_id", "cree_par_id"),
@@ -159,9 +247,10 @@ class Invoice(Base):
         # scanned the table. Partial, because only FA-YYYY-NNNN is the series.
         Index(
             "ix_invoices_series",
+            text("substring(numero from 1 for 2)"),
             text("substring(numero from 4 for 4)"),
             text("substring(numero from 9)::integer"),
-            postgresql_where=text("numero ~ '^FA-[0-9]{4}-[0-9]+$'"),
+            postgresql_where=text("numero ~ '^(FA|FF)-[0-9]{4}-[0-9]+$'"),
         ),
     )
 

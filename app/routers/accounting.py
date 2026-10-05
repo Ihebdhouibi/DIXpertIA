@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.models.accounting import AccountingPeriod, PeriodState
-from app.models.invoicing import Invoice, InvoiceProcessingStatus
+from app.models.invoicing import (
+    Invoice,
+    InvoiceDirection,
+    InvoiceProcessingStatus,
+)
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
 
@@ -35,14 +39,34 @@ def _month_bounds(month: str) -> tuple[date, date]:
     return start, end
 
 
-def _summarise(db: Session, start: date, end: date) -> tuple[int, float, float]:
-    """Count and total the invoices issued in a month."""
-    row = db.query(
-        func.count(Invoice.id),
-        func.coalesce(func.sum(Invoice.montant_ht), 0),
-        func.coalesce(func.sum(Invoice.montant_ttc), 0),
-    ).filter(Invoice.date_emission >= start, Invoice.date_emission < end).one()
-    return row[0], row[1], row[2]
+def _summarise(db: Session, start: date, end: date) -> dict:
+    """Count the month's invoices and total them, income apart from cost.
+
+    Adding the two together would produce a figure meaning nothing. Kept apart,
+    these also give the VAT return: ttc - ht is VAT collected on the outgoing
+    side and VAT deductible on the incoming one (#40).
+    """
+    def totals(direction):
+        row = db.query(
+            func.count(Invoice.id),
+            func.coalesce(func.sum(Invoice.montant_ht), 0),
+            func.coalesce(func.sum(Invoice.montant_ttc), 0),
+        ).filter(
+            Invoice.date_emission >= start,
+            Invoice.date_emission < end,
+            Invoice.direction == direction,
+        ).one()
+        return row
+
+    out = totals(InvoiceDirection.OUTGOING)
+    inc = totals(InvoiceDirection.INCOMING)
+    return {
+        "invoice_count": out[0] + inc[0],
+        "total_ht_outgoing": out[1],
+        "total_ttc_outgoing": out[2],
+        "total_ht_incoming": inc[1],
+        "total_ttc_incoming": inc[2],
+    }
 
 
 def _blocking(db: Session, start: date, end: date) -> list[Invoice]:
@@ -83,14 +107,11 @@ def preview_period(
     start, end = _month_bounds(month)
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.periode == start).first()
-    count, ht, ttc = _summarise(db, start, end)
     return PeriodSummary(
         periode=start,
         state=period.state if period else PeriodState.OPEN,
-        invoice_count=count,
-        total_ht=ht,
-        total_ttc=ttc,
         blocking=[BlockingInvoice.model_validate(i) for i in _blocking(db, start, end)],
+        **_summarise(db, start, end),
     )
 
 
@@ -126,17 +147,14 @@ def close_period(
         # 409 rather than 422: the request is well formed, the books are not
         # ready. The list is the accountant's worklist.
         response.status_code = 409
-        count, ht, ttc = _summarise(db, start, end)
         return PeriodSummary(
             periode=start,
             state=PeriodState.OPEN,
-            invoice_count=count,
-            total_ht=ht,
-            total_ttc=ttc,
             blocking=[BlockingInvoice.model_validate(i) for i in blocking],
+            **_summarise(db, start, end),
         )
 
-    count, ht, ttc = _summarise(db, start, end)
+    totals = _summarise(db, start, end)
 
     # Archive, then seal, both in one transaction: either the month closes
     # completely or nothing changed. The order is not load-bearing - the
@@ -154,16 +172,9 @@ def close_period(
     period.state = PeriodState.CLOSED
     period.closed_at = func.now()
     period.closed_by_id = current_user.id
-    period.invoice_count = count
-    period.total_ht = ht
-    period.total_ttc = ttc
+    for field, value in totals.items():
+        setattr(period, field, value)
 
     db.commit()
-    return PeriodSummary(
-        periode=start,
-        state=PeriodState.CLOSED,
-        invoice_count=count,
-        total_ht=ht,
-        total_ttc=ttc,
-        blocking=[],
-    )
+    return PeriodSummary(periode=start, state=PeriodState.CLOSED,
+                         blocking=[], **totals)
