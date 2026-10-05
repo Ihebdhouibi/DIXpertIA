@@ -49,6 +49,10 @@
   --color-primary: var(--color-ink);
   --color-on-primary: #ffffff;
 
+  /* Keyboard focus ring (#29). Ink on light: Signal Lime on paper is 1.16:1,
+     below the 3:1 a focus indicator needs. Dark mode switches it to lime. */
+  --color-focus-ring: var(--color-ink);
+
   /*
    * Status tones. Muted on purpose: Signal Lime stays the only bright colour
    * on screen, and success is not lime (lime is the brand, not a state).
@@ -141,6 +145,8 @@
 
   --color-primary: var(--color-paper);
   --color-on-primary: var(--color-ink);
+  /* Signal Lime on ink is 14.41:1, so the ring can carry the brand here. */
+  --color-focus-ring: var(--color-lime);
 
   --color-success: #8CC4A0;
   --color-success-container: color-mix(in srgb, var(--color-success) 16%, var(--color-surface-container-lowest));
@@ -174,16 +180,22 @@
   --color-surface-variant: var(--color-surface-container-high);
 }
 
+/*
+ * One visible keyboard focus ring for every interactive element (#29),
+ * instead of per-component focus styles. Mouse clicks do not show it;
+ * keyboard navigation always does.
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--color-background);
   color: var(--color-on-background);
-}
-
-/* Dot grid behind the authentication screens */
-.bg-pattern {
-  background-image: radial-gradient(var(--color-outline-variant) 1px, transparent 1px);
-  background-size: 24px 24px;
 }
 
 /* Glass card styling */
