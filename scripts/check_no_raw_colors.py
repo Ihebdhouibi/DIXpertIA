@@ -9,7 +9,7 @@ tones, each with a light and a dark value (#23, #24, #80). A colour written
 anywhere else ignores the brand and does not switch with the theme. Issue #25
 removed about 170 of them; this hook keeps them from coming back.
 
-What it rejects in src/**/*.ts and src/**/*.tsx
+What it rejects in src/**/*.ts, *.tsx and *.css
 -----------------------------------------------
 - hex literals (#137333, #fff) and rgb()/rgba()/hsl()/hsla() literals
 - raw Tailwind palette classes: bg-red-50, text-emerald-600, border-gray-200...
@@ -19,7 +19,10 @@ What it rejects in src/**/*.ts and src/**/*.tsx
 
 What it allows
 --------------
-- src/index.css: the one place colours are defined (not scanned).
+- src/index.css: the one place colours are defined (not scanned). Other
+  stylesheets, such as src/styles/calendar.css, must use its tokens (#79).
+- Comments. Issue references (#104) and colours quoted in a comment are
+  documentation, not styling.
 - Scrims: bg-black/NN behind modals and drawers. They dim whatever is beneath
   and read correctly in both themes.
 - The public homepage (src/components/Homepage.tsx) may use white surfaces:
@@ -57,9 +60,25 @@ RULES = (
 WHITE_BLACK = re.compile(r"(?<![\w-])(?:bg|text|border)-(?:white|black)(?:/\d+)?(?![\w-])")
 SCRIM = re.compile(r"(?<![\w-])bg-black/\d+(?![\w-])")
 MARKER = re.compile(r"raw-color-ok:\s*\S")
+BLOCK_COMMENT = re.compile(r"/\*.*?\*/")
+LINE_COMMENT = re.compile(r"(?<![:\w])//.*$")
 
 # Files that may use white surfaces because they are deliberately not themed.
 UNTHEMED = {"src/components/Homepage.tsx"}
+
+
+def strip_comments(line: str, in_block: bool) -> tuple[str, bool]:
+    """Drop // and /* */ comments; carry an open block comment to the next line."""
+    if in_block:
+        end = line.find("*/")
+        if end == -1:
+            return "", True
+        line = line[end + 2:]
+    line = BLOCK_COMMENT.sub("", line)
+    start = line.find("/*")
+    if start != -1:
+        return line[:start], True
+    return LINE_COMMENT.sub("", line), False
 
 
 def check(path: str) -> list[str]:
@@ -70,10 +89,12 @@ def check(path: str) -> list[str]:
         return [f"{path}: cannot read ({exc})"]
 
     problems = []
-    for number, line in enumerate(lines, start=1):
+    in_block = False
+    for number, raw in enumerate(lines, start=1):
         previous = lines[number - 2] if number > 1 else ""
-        if MARKER.search(line) or MARKER.search(previous):
+        if MARKER.search(raw) or MARKER.search(previous):
             continue
+        line, in_block = strip_comments(raw, in_block)
         for label, pattern in RULES:
             for match in pattern.finditer(line):
                 problems.append(f"{path}:{number}: {label} {match.group(0)!r}")

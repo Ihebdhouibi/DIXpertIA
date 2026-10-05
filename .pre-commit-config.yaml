@@ -69,8 +69,9 @@ repos:
         name: no raw colours in frontend source
         entry: python scripts/check_no_raw_colors.py
         language: system
-        types_or: [ts, tsx]
+        types_or: [ts, tsx, css]
         files: ^src/
+        exclude: ^src/index\.css$
         # Colours come from the token layer in src/index.css so they follow the
         # brand and switch with the dark theme (#23, #24, #80). This rejects hex
         # and rgb() literals, raw Tailwind palette classes and bg/text-white in

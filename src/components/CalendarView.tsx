@@ -1,10 +1,13 @@
-import React, { useMemo } from 'react';
-import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
+import React, { useMemo, useState } from 'react';
+import { Calendar, dateFnsLocalizer, Views, View } from 'react-big-calendar';
+import { X } from 'lucide-react';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { LeaveRequest, UserRole } from '../types';
 import { statusTone } from './StatusBadge';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+// Brand and theme overrides for the library's colours; must load after it (#79).
+import '../styles/calendar.css';
 
 const locales = { 'en-US': enUS };
 const localizer = dateFnsLocalizer({
@@ -27,52 +30,55 @@ interface CalendarEvent {
   title: string;
   start: Date;
   end: Date;
+  allDay: boolean;
   status: string;
   resource?: any;
 }
 
+/** 'YYYY-MM-DD' as a local date. `new Date('2026-10-12')` would be UTC midnight
+ * and land on the previous day west of Greenwich. */
+function parseLocalDate(value: string | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return isNaN(date.getTime()) ? null : date;
+}
+
 export default function CalendarView({ leaveRequests, userRole, currentEmployeeId, onClose }: CalendarViewProps) {
+  // View and date are controlled here. Left to the library (defaultView /
+  // defaultDate), its internal state never updated under React 19: Back,
+  // Next, Week and Day did nothing and the calendar stayed on this month (#79).
+  const [view, setView] = useState<View>(Views.MONTH);
+  const [date, setDate] = useState(() => new Date());
+
   const events = useMemo(() => {
     let filtered = leaveRequests;
     if (userRole === 'employee' && currentEmployeeId) {
       filtered = leaveRequests.filter(req => req.employeeId === currentEmployeeId);
     }
 
+    // Built from the ISO startDate / endDate the API returns, not from the
+    // display string `dates`: its format changed with #104 ("Oct 12 - 14, 2026")
+    // and the old parser turned every range into an invalid date, so no event
+    // rendered. Leave is whole days; react-big-calendar treats an all-day end
+    // as exclusive, so the end is moved to the next day to include the last one.
     return filtered
       .map((req): CalendarEvent | null => {
-        const yearMatch = req.dates.match(/\d{4}/);
-        const year = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
-
-        // Split the date range
-        const parts = req.dates.split(' - ');
-        const startStr = parts[0].trim();
-        const endStr = parts.length > 1 ? parts[1].trim() : startStr;
-
-        // Build full date strings with year
-        const startFull = `${startStr}, ${year}`;
-        const endFull = `${endStr}, ${year}`;
-
-        // Parse using JavaScript Date
-        const startDate = new Date(startFull);
-        const endDate = new Date(endFull);
-
-        // Validate
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          console.warn(' Invalid date for request:', req.id, req.dates);
+        const start = parseLocalDate(req.startDate);
+        const last = parseLocalDate(req.endDate);
+        if (!start || !last) {
+          console.warn('Leave request with an invalid date range:', req.id, req.startDate, req.endDate);
           return null;
         }
-
-        // For single-day events, add one day to make it a full-day event
-        const endDateAdjusted = new Date(endDate);
-        if (endDateAdjusted.getTime() === startDate.getTime()) {
-          endDateAdjusted.setDate(endDateAdjusted.getDate() + 1);
-        }
+        const end = new Date(last);
+        end.setDate(end.getDate() + 1);
 
         return {
           id: req.id,
           title: `${req.employeeName} - ${req.type}`,
-          start: startDate,
-          end: endDateAdjusted,
+          start,
+          end,
+          allDay: true,
           status: req.status,
           resource: req,
         };
@@ -116,9 +122,10 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
           <h2 className="text-h2 font-black text-on-surface">Leave Calendar</h2>
           <button
             onClick={onClose}
+            aria-label="Close calendar"
             className="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors cursor-pointer"
           >
-            ✕
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <div className="flex-1 p-4 overflow-auto">
@@ -127,10 +134,12 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
             events={events}
             startAccessor="start"
             endAccessor="end"
-            defaultDate={new Date()}
+            date={date}
+            onNavigate={setDate}
             style={{ height: '100%', minHeight: '500px' }}
             views={[Views.MONTH, Views.WEEK, Views.DAY]}
-            defaultView={Views.MONTH}
+            view={view}
+            onView={setView}
             eventPropGetter={eventStyleGetter}
             onSelectEvent={handleSelectEvent}
             tooltipAccessor={(event) =>
