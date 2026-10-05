@@ -86,7 +86,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
   if (!isAdmin && userRole !== 'accountant') {
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-        <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+        <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
           <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
           <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
         </div>
@@ -119,7 +119,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
         {isAdmin && (
           <button
             onClick={handleOpenCreate}
-            className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
+            className="bg-primary hover:bg-primary/95 text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
           >
             <Plus className="w-5 h-5" />
             <span>Add User</span>
@@ -127,7 +127,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
           <input
@@ -140,7 +140,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
@@ -218,7 +218,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
       {isAdmin && showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
+          <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface sticky top-0 z-10">
               <h2 className="text-h2 font-black text-on-surface">{editingUser ? 'Edit User' : 'Add New User'}</h2>
               <button
@@ -292,7 +292,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
+                  className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
                 >
                   {editingUser ? 'Update User' : 'Create User'}
                 </button>

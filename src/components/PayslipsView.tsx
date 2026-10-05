@@ -90,7 +90,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
         </div>
 
         {/* Period Filter */}
-        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-outline-variant shadow-sm w-full md:w-auto">
+        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-1.5 rounded-lg border border-outline-variant shadow-sm w-full md:w-auto">
           <Calendar className="text-outline w-5 h-5" />
           <select
             value={selectedYear}
@@ -109,7 +109,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
 
       {/* Bento Style Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
+        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-primary group-hover:scale-110 transition-transform">
             <Wallet className="w-20 h-20" />
           </div>
@@ -118,7 +118,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
           <div className="text-xs text-outline mt-1 font-medium">Cumulé brut pour l'année {selectedYear}</div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
+        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-secondary group-hover:scale-110 transition-transform">
             <DollarSign className="w-20 h-20" />
           </div>
@@ -127,7 +127,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
           <div className="text-xs text-outline mt-1 font-medium">Cumulé net pour l'année {selectedYear}</div>
         </div>
 
-        <div className="bg-primary text-white rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
+        <div className="bg-primary text-on-primary rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1px,transparent_1px)] bg-[size:16px_16px]"></div>
           <div className="absolute top-0 right-0 p-4 opacity-25">
             <CreditCard className="w-16 h-16" />
@@ -139,7 +139,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
       </div>
 
       {/* Payslips Data Table Container */}
-      <div className="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -160,7 +160,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
                   >
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all">
                           <FileText className="w-4 h-4" />
                         </div>
                         <span className="font-semibold text-on-surface">{slip.period}</span>

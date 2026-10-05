@@ -9,6 +9,7 @@ import {
 } from './data';
 import Login from './components/Login';
 import Homepage from './components/Homepage';
+import { ThemeScope } from './theme';
 import Sidebar from './components/Sidebar';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
@@ -553,7 +554,7 @@ export default function App() {
         if (currentUser.role !== 'employee') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
                 <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
                 <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
               </div>
@@ -573,7 +574,7 @@ export default function App() {
         if (currentUser.role !== 'admin' && currentUser.role !== 'accountant') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
                 <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
                 <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
               </div>
@@ -625,7 +626,7 @@ export default function App() {
         if (currentUser.role !== 'admin') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
                 <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
                 <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
               </div>
@@ -646,7 +647,7 @@ export default function App() {
       default:
         return (
           <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-            <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto flex flex-col items-center justify-center gap-4 mt-8">
+            <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto flex flex-col items-center justify-center gap-4 mt-8">
               <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                 <HelpCircle className="w-10 h-10" />
               </div>
@@ -656,7 +657,7 @@ export default function App() {
               </p>
               <button
                 onClick={() => setActiveTab('dashboard')}
-                className="bg-primary text-white font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
+                className="bg-primary text-on-primary font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
               >
                 Back to Dashboard
               </button>
@@ -671,6 +672,7 @@ export default function App() {
   // 1. If resetToken is present, show ResetPassword
   if (resetToken) {
     return (
+      <ThemeScope>
       <ResetPassword
         token={resetToken}
         onComplete={() => {
@@ -679,22 +681,29 @@ export default function App() {
           setShowLogin(true);
         }}
       />
+      </ThemeScope>
     );
   }
 
   // 2. If showForgotPassword is true, show ForgotPassword
   if (showForgotPassword) {
-    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+    return (
+      <ThemeScope>
+        <ForgotPassword onBack={() => setShowForgotPassword(false)} />
+      </ThemeScope>
+    );
   }
 
   // 3. If showLogin is true, show Login
   if (showLogin) {
     return (
+      <ThemeScope>
       <Login
         onLogin={handleLogin}
         onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
         onForgotPassword={() => setShowForgotPassword(true)}
       />
+      </ThemeScope>
     );
   }
 
@@ -709,7 +718,7 @@ export default function App() {
 
   // 5. Otherwise, show the dashboard
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
+    <ThemeScope><div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
@@ -755,14 +764,14 @@ export default function App() {
               >
                 <Bell className="w-5 h-5" />
                 {notificationCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-error text-white font-black text-[9px] rounded-full flex items-center justify-center animate-bounce shadow-sm">
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-error text-on-error font-black text-[9px] rounded-full flex items-center justify-center animate-bounce shadow-sm">
                     {notificationCount}
                   </span>
                 )}
               </button>
 
               {showNotificationList && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
+                <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">
                     <span className="font-bold text-caption text-on-surface">Notifications</span>
                     <div className="flex gap-2">
@@ -840,14 +849,14 @@ export default function App() {
             <div className="relative">
               <button
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
+                className="w-8 h-8 rounded-full bg-primary text-on-primary font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
                 title="User menu"
               >
                 {currentUser.firstName[0]}{currentUser.lastName[0]}
               </button>
 
               {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
+                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
                   <div className="px-4 py-2 border-b border-outline-variant/30">
                     <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
                     <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
@@ -893,6 +902,6 @@ export default function App() {
           {renderTabContent()}
         </main>
       </div>
-    </div>
+    </div></ThemeScope>
   );
 }

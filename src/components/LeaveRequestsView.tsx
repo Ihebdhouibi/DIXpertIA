@@ -87,7 +87,7 @@ export default function LeaveRequestsView({
     <div className="flex-1 flex flex-col gap-6">
       {/* Toast notification */}
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-primary text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/15">
+        <div className="fixed bottom-4 right-4 z-50 bg-primary text-on-primary py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/15">
           <Check className="w-5 h-5 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -102,7 +102,7 @@ export default function LeaveRequestsView({
         {isEmployee && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-primary text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+            className="bg-primary text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <Plus className="w-5 h-5" />
             <span>New Request</span>
@@ -112,7 +112,7 @@ export default function LeaveRequestsView({
 
       {/* Balance cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Annual Leave</p>
           <div className="flex items-baseline gap-2">
@@ -120,7 +120,7 @@ export default function LeaveRequestsView({
             <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-secondary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Sick Leave</p>
           <div className="flex items-baseline gap-2">
@@ -128,7 +128,7 @@ export default function LeaveRequestsView({
             <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-tertiary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Personal Days</p>
           <div className="flex items-baseline gap-2">
@@ -138,7 +138,7 @@ export default function LeaveRequestsView({
         </div>
         <div
           onClick={() => setShowCalendar(true)}
-          className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors select-none"
+          className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors select-none"
         >
           <Calendar className="text-primary mb-2 w-7 h-7" />
           <span className="font-semibold text-body-sm text-primary">View Calendar</span>
@@ -146,8 +146,8 @@ export default function LeaveRequestsView({
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-outline-variant bg-white flex justify-between items-center">
+      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
           <h2 className="font-bold text-body-lg text-on-surface">Recent Requests</h2>
           <div className="flex gap-2">
             <select
@@ -225,7 +225,7 @@ export default function LeaveRequestsView({
       {isEmployee && isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-lg border border-outline-variant overflow-hidden flex flex-col max-h-full animate-scale-up">
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant overflow-hidden flex flex-col max-h-full animate-scale-up">
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface">
               <h3 className="text-h2 font-black text-on-surface">New Leave Request</h3>
               <button
@@ -295,7 +295,7 @@ export default function LeaveRequestsView({
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-lg bg-primary text-white font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
+                    className="px-4 py-2 rounded-lg bg-primary text-on-primary font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
                   >
                     Submit Request
                   </button>

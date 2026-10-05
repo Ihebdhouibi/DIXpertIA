@@ -147,7 +147,7 @@ export default function ProjectsView({
         {userRole === 'admin' && (
           <button
             onClick={handleOpenCreate}
-            className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
+            className="bg-primary hover:bg-primary/95 text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
           >
             <Plus className="w-5 h-5" />
             <span>New Project</span>
@@ -155,7 +155,7 @@ export default function ProjectsView({
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
           <input
@@ -174,7 +174,7 @@ export default function ProjectsView({
               onClick={() => setStatusFilter(s)}
               className={`px-3 py-1.5 rounded-full text-caption font-bold border transition-all cursor-pointer ${
                 statusFilter === s
-                  ? 'bg-primary border-primary text-white shadow-sm'
+                  ? 'bg-primary border-primary text-on-primary shadow-sm'
                   : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:bg-surface-container-low'
               }`}
             >
@@ -184,7 +184,7 @@ export default function ProjectsView({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
@@ -270,7 +270,7 @@ export default function ProjectsView({
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-lg max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
+          <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-lg max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface sticky top-0 z-10">
               <h2 className="text-h2 font-black text-on-surface m-0">
                 {editingProject ? 'Edit Project' : 'Create New Project'}
@@ -393,7 +393,7 @@ export default function ProjectsView({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
+                  className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
                 >
                   {editingProject ? 'Update Project' : 'Create Project'}
                 </button>

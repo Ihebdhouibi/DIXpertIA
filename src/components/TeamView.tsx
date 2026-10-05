@@ -118,7 +118,7 @@ export default function TeamView({
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">View team members.</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
@@ -193,7 +193,7 @@ export default function TeamView({
           {activeSubTab === 'employees' && (
             <button
               onClick={() => setIsAddOpen(true)}
-              className="bg-primary hover:bg-primary/95 text-white px-5 py-2.5 rounded-lg font-bold text-body-sm transition-all flex items-center gap-2 shadow-sm whitespace-nowrap cursor-pointer"
+              className="bg-primary hover:bg-primary/95 text-on-primary px-5 py-2.5 rounded-lg font-bold text-body-sm transition-all flex items-center gap-2 shadow-sm whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-5 h-5" />
               <span>Add Employee</span>
@@ -223,7 +223,7 @@ export default function TeamView({
           >
             Leave Approvals
             {pendingRequests.length > 0 && (
-              <span className="bg-error text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
+              <span className="bg-error text-on-error font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
                 {pendingRequests.length}
               </span>
             )}
@@ -233,7 +233,7 @@ export default function TeamView({
         {/* Employees Tab */}
         {activeSubTab === 'employees' && (
           <>
-            <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
               <div className="relative w-full md:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
                 <input
@@ -268,7 +268,7 @@ export default function TeamView({
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+            <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
@@ -388,7 +388,7 @@ export default function TeamView({
               </button>
             </div>
 
-            <div className="glass-card rounded-xl overflow-hidden border border-outline-variant/50 bg-white shadow-sm">
+            <div className="glass-card rounded-xl overflow-hidden border border-outline-variant/50 bg-surface-container-lowest shadow-sm">
               <div className="overflow-x-auto w-full">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-surface-container-low border-b border-outline-variant font-semibold text-caption text-on-surface-variant">
@@ -438,7 +438,7 @@ export default function TeamView({
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleApprove(req.id, req.employeeName)}
-                              className="px-3 py-1.5 rounded-lg bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
                             >
                               Approve
                             </button>
@@ -470,7 +470,7 @@ export default function TeamView({
         {isAddOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsAddOpen(false)}></div>
-            <div className="relative bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-[500px] flex flex-col max-h-[92%] animate-scale-up border border-outline-variant">
+            <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-[500px] flex flex-col max-h-[92%] animate-scale-up border border-outline-variant">
               <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 shrink-0 bg-surface">
                 <h2 className="text-h2 font-black text-on-surface m-0">Add New Employee</h2>
                 <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition-colors cursor-pointer" onClick={() => setIsAddOpen(false)}>
@@ -551,7 +551,7 @@ export default function TeamView({
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
+                      className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
                     >
                       Create Profile
                     </button>
@@ -565,7 +565,7 @@ export default function TeamView({
         {/* Reject Modal */}
         {isRejectOpen && (
           <div className="fixed inset-0 bg-on-background/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md p-6 border border-outline-variant animate-scale-up">
+            <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md p-6 border border-outline-variant animate-scale-up">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-h2 text-on-surface font-black m-0">Reject Leave Request</h2>
                 <button className="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-surface-variant transition-colors cursor-pointer" onClick={() => setIsRejectOpen(false)}>
@@ -595,7 +595,7 @@ export default function TeamView({
                 </button>
                 <button
                   onClick={handleConfirmReject}
-                  className="px-4 py-2 rounded-lg text-body-sm font-bold bg-error text-white hover:bg-error/90 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-lg text-body-sm font-bold bg-error text-on-error hover:bg-error/90 transition-colors cursor-pointer"
                 >
                   Confirm Rejection
                 </button>
@@ -636,7 +636,7 @@ export default function TeamView({
         <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team Directory</h1>
         <p className="text-body-lg text-on-surface-variant mt-1">View and connect with your colleagues.</p>
       </div>
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
           <input
@@ -670,7 +670,7 @@ export default function TeamView({
           </select>
         </div>
       </div>
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
