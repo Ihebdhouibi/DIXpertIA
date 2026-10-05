@@ -698,17 +698,16 @@ export default function App() {
     );
   }
 
-  // 4. If not logged in, show homepage
-  if (!currentUser) {
-    return <Homepage onLoginClick={() => setShowLogin(true)} />;
+  // 4. Public site: always for visitors, and for a signed-in user who went
+  // back to it. Its single "Go to Dashboard" button opens the app when signed
+  // in and the login form otherwise.
+  if (!currentUser || showHomepage) {
+    return (
+      <Homepage onDashboardClick={currentUser ? handleGoToDashboard : () => setShowLogin(true)} />
+    );
   }
 
-  // 5. If logged in and showHomepage is true, show homepage with "Go to Dashboard"
-  if (showHomepage) {
-    return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
-  }
-
-  // 6. Otherwise, show the dashboard
+  // 5. Otherwise, show the dashboard
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
       <Sidebar
