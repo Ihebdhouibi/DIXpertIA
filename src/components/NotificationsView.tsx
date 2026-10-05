@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { UserRole } from '../types';
+import { useConfirm } from './ui/feedback';
+import Button from './ui/Button';
 
 import {
   Bell,
@@ -30,6 +32,7 @@ interface NotificationsViewProps {
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
   onClearAll: () => void;
+  onClearSelected: (ids: string[]) => void;
   onNavigate: (link: string) => void;
   userRole: UserRole;
 }
@@ -39,9 +42,11 @@ export default function NotificationsView({
   onMarkRead,
   onMarkAllRead,
   onClearAll,
+  onClearSelected,
   onNavigate,
   userRole,
 }: NotificationsViewProps) {
+  const confirm = useConfirm();
   const [filterType, setFilterType] = useState<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
   const [filterRead, setFilterRead] = useState<'all' | 'read' | 'unread'>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -72,13 +77,30 @@ export default function NotificationsView({
     setSelectedIds([]);
   };
 
-  const handleClearSelected = () => {
-    if (window.confirm('Delete selected notifications?')) {
-      selectedIds.forEach(id => onClearAll()); // we need a clear selected function
-      // We'll add a clearSelected prop later; for now, we call onClearAll
-      // Better: add onClearSelected prop.
+  // Deletes only the selected notifications. It used to call onClearAll once
+  // per selected item, which wiped every notification (#106).
+  const handleClearSelected = async () => {
+    const count = selectedIds.length;
+    const ok = await confirm({
+      title: `Delete ${count} notification${count === 1 ? '' : 's'}?`,
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (ok) {
+      onClearSelected(selectedIds);
       setSelectedIds([]);
     }
+  };
+
+  const handleClearAll = async () => {
+    const ok = await confirm({
+      title: 'Delete all notifications?',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete all',
+      tone: 'danger',
+    });
+    if (ok) onClearAll();
   };
 
   const getIcon = (type: Notification['type']) => {
@@ -123,11 +145,7 @@ export default function NotificationsView({
             Mark all read
           </button>
           <button
-            onClick={() => {
-              if (window.confirm('Delete all notifications?')) {
-                onClearAll();
-              }
-            }}
+            onClick={handleClearAll}
             className="px-4 py-2 bg-error/10 text-error border border-error/20 rounded-lg font-semibold text-caption hover:bg-error/20 transition-colors flex items-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
@@ -173,6 +191,11 @@ export default function NotificationsView({
             >
               Mark read
             </button>
+            {/* handleClearSelected existed but no control called it (#106). */}
+            <Button variant="danger" size="sm" onClick={handleClearSelected}>
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              Delete
+            </Button>
           </div>
         )}
       </div>

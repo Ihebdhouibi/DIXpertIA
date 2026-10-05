@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, Download, Calendar, DollarSign, Wallet, CreditCard, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Payslip, UserRole } from '../types';
+import { useToast, ToastTone } from './ui/feedback';
 
 interface PayslipsViewProps {
   payslips: Payslip[];
@@ -10,22 +11,19 @@ interface PayslipsViewProps {
 export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) {
   const [selectedYear, setSelectedYear] = useState('2024');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 4;
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const toast = useToast();
+  const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
   const handleDownload = (slip: Payslip) => {
     // Use print fallback to generate a simple PDF
     const win = window.open('', '_blank');
     if (!win) {
-      showToast('Please allow pop-ups to download the payslip.');
+      showToast('Please allow pop-ups to download the payslip.', 'error');
       return;
     }
 
@@ -67,14 +65,6 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
 
   return (
     <div className="flex-1 flex flex-col gap-6">
-
-      {/* Toast Alert Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-success-container text-success py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-success/20">
-          <Check className="w-5 h-5 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

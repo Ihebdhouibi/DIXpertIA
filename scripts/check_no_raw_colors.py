@@ -54,7 +54,9 @@ PREFIX = (
 
 RULES = (
     ("hex colour", re.compile(r"(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")),
-    ("colour function", re.compile(r"\b(?:rgba?|hsla?)\(")),
+    # Not \b: inside a Tailwind arbitrary value the function follows "_"
+    # (shadow-[0_8px_32px_rgba(...)]), a word character, so \b never matched.
+    ("colour function", re.compile(r"(?<![A-Za-z])(?:rgba?|hsla?)\(")),
     ("raw palette class", re.compile(rf"(?<![\w-])(?:{PREFIX})-(?:{PALETTE})-\d{{2,3}}\b")),
 )
 WHITE_BLACK = re.compile(r"(?<![\w-])(?:bg|text|border)-(?:white|black)(?:/\d+)?(?![\w-])")
