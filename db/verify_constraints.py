@@ -155,6 +155,29 @@ PROBES = [
      " montant_ht, montant_ttc, statut, cree_par_id)"
      " VALUES ('P-OPEN', 99001, '2026-07-10', '2026-08-10', 100, 119,"
      " 'BROUILLON', :uid)", True),
+    # --- the gapless invoice series (#38) ----------------------------------
+    ("invoice number skipping a value",
+     "INSERT INTO invoices (numero, client_id, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FA-2026-0099', 99001, '2026-07-10', '2026-08-10', 100, 119,"
+     " 'BROUILLON', :uid)"),
+    ("invoice number reusing an issued one",
+     "INSERT INTO invoices (numero, client_id, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FA-2026-0001', 99001, '2026-07-10', '2026-08-10', 100, 119,"
+     " 'BROUILLON', :uid)"),
+    ("invoice deleted, breaking the series",
+     "DELETE FROM invoices WHERE id = 99003"),
+    ("sequence counter driven negative",
+     "UPDATE invoice_sequences SET last_number = -1 WHERE year = 2026"),
+    ("sequence counter for an implausible year",
+     "INSERT INTO invoice_sequences (year, last_number) VALUES (1999, 0)"),
+    # Must be accepted: the next number in the series.
+    ("invoice taking the next number in the series",
+     "INSERT INTO invoices (numero, client_id, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FA-2026-0002', 99001, '2026-07-10', '2026-08-10', 100, 119,"
+     " 'BROUILLON', :uid)", True),
 ]
 
 
@@ -198,6 +221,17 @@ def main():
             " VALUES ('2026-06-01', 'CLOSED', now(), :uid, 0, 0, 0)"), {"uid": uid})
         conn.execute(text(
             "INSERT INTO accounting_periods (periode) VALUES ('2026-07-01')"))
+        # One invoice in the legal series, so the numbering probes have a
+        # predecessor. PROBE-1 above is outside the series by design: the rule
+        # governs FA-YYYY-NNNN only.
+        conn.execute(text(
+            "INSERT INTO invoices (id, numero, client_id, date_emission, date_echeance,"
+            " montant_ht, montant_ttc, statut, cree_par_id)"
+            " VALUES (99003, 'FA-2026-0001', 99001, '2026-07-05', '2026-08-05',"
+            " 100, 119, 'BROUILLON', :uid)"), {"uid": uid})
+        conn.execute(text(
+            "INSERT INTO invoice_sequences (year, last_number) VALUES (2026, 1)"
+            " ON CONFLICT (year) DO UPDATE SET last_number = 1"))
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
             " VALUES (:eid, '2026-05-01', 100, 80)"), {"eid": eid})
