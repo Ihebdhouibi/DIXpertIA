@@ -153,6 +153,16 @@ class Invoice(Base):
         # leading with the status and then the date beats a single column
         # (0.14 ms against 0.33 ms). Re-check with db/measure_indexes.py.
         Index("ix_invoices_processing_status", "processing_status", "date_emission"),
+        # Serves the two triggers that police the legal series (#38, #39). Both
+        # extract the year and number from `numero` with substring(), which no
+        # ordinary index on `numero` can serve, so without this every insert
+        # scanned the table. Partial, because only FA-YYYY-NNNN is the series.
+        Index(
+            "ix_invoices_series",
+            text("substring(numero from 4 for 4)"),
+            text("substring(numero from 9)::integer"),
+            postgresql_where=text("numero ~ '^FA-[0-9]{4}-[0-9]+$'"),
+        ),
     )
 
 
