@@ -351,6 +351,70 @@ WHERE NOT EXISTS (
 An empty result means the series is intact.
 
 
+## Invoice numbers run in issue-date order
+
+Invoice 3 cannot be dated before invoice 2 (#39). Formally, within one year's
+series, `numero_a < numero_b` implies `date_emission_a <= date_emission_b`.
+
+This held by accident until it was enforced. `date_emission` was hardcoded to
+`date.today()` and `InvoiceCreate` never accepted it, so invoices could only be
+created in order -- an implementation detail, not a guarantee. It would have
+broken the first time anything backdated, imported history, or edited a date.
+
+### Why a trigger and not a CHECK
+
+The invariant holds **between rows**, and a `CHECK` sees only one row. A trigger
+can look at the others, and it is also the only place that catches
+`migrate_data.py` and `insert_invoices.py`, which write to this database
+directly.
+
+`invoice_number_follows_date` fires on insert, and on any update of
+`date_emission` or `numero`. It checks **both directions**, because an update
+can break the order from either side: moving an early invoice's date forward
+past a later one, or a later invoice's date back before an earlier one.
+
+### Dates may repeat
+
+Several invoices are routinely issued on one day, so the rule is "not earlier
+than", never "strictly later than". The second invoice of any morning would
+otherwise be refused. `db/verify_constraints.py` probes exactly that case and
+expects it to be **accepted**.
+
+### Each year is its own series
+
+2028 starts fresh and is not ordered against 2027, matching the per-year
+numbering decided in #38.
+
+### Backdating
+
+Not currently possible through the API: `date_emission` is set server-side and
+`InvoiceCreate` does not accept it. This change does not add backdating; it
+means the invariant will already hold when backdating is added.
+
+Two rules will then apply together: a date cannot break the series order (this
+one), and it cannot fall in a closed month (the period seal from #42). Between
+them, backdating is confined to the open month and to a position consistent with
+the number -- which is the behaviour the accountant described.
+
+### Cost
+
+The two series triggers scan for neighbouring numbers on every insert, which
+`ix_invoices_series` serves -- a partial expression index over the extracted year
+and number, since `substring()` cannot use an ordinary index on `numero`.
+
+Measured with 4000 invoices in one year's series:
+
+| | per insert |
+|---|---|
+| with `ix_invoices_series` | 9.3 ms |
+| without it | 15.1 ms |
+
+Still slow for a hot write path, and deliberately accepted: this company issues
+a few invoices a day, and the alternative is a series the accountant cannot
+rely on. The figure grows with the size of a single year's series, so it is
+worth re-measuring if volume ever changes by an order of magnitude.
+
+
 ## The monthly accounting period
 
 The accountant works the books a month at a time. `accounting_periods` holds one
