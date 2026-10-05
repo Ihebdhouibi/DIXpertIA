@@ -127,6 +127,34 @@ PROBES = [
      "UPDATE invoices SET statut = 'PAYEE' WHERE id = 99002", True),
     ("open invoice moved from pending to processed",
      "UPDATE invoices SET processing_status = 'PROCESSED' WHERE id = 99001", True),
+    # --- accounting periods: a closed month is sealed (#42) ----------------
+    ("period dated mid-month",
+     "INSERT INTO accounting_periods (periode) VALUES ('2026-07-15')"),
+    ("second period for the same month",
+     "INSERT INTO accounting_periods (periode) VALUES ('2026-06-01')"),
+    ("period closed by nobody",
+     "INSERT INTO accounting_periods (periode, state, closed_at)"
+     " VALUES ('2026-08-01', 'CLOSED', now())"),
+    ("period closed with no totals recorded",
+     "INSERT INTO accounting_periods (periode, state, closed_at, closed_by_id)"
+     " VALUES ('2026-08-01', 'CLOSED', now(), :uid)"),
+    ("open period carrying close details",
+     "INSERT INTO accounting_periods (periode, state, closed_at, closed_by_id,"
+     " invoice_count, total_ht, total_ttc)"
+     " VALUES ('2026-08-01', 'OPEN', now(), :uid, 1, 10, 12)"),
+    ("invoice issued into a closed month",
+     "INSERT INTO invoices (numero, client_id, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('P-CLOSED', 99001, '2026-06-10', '2026-07-10', 100, 119,"
+     " 'BROUILLON', :uid)"),
+    ("invoice moved into a closed month",
+     "UPDATE invoices SET date_emission = '2026-06-10' WHERE id = 99001"),
+    # Must be accepted: the open month next door is unaffected.
+    ("invoice issued into an open month",
+     "INSERT INTO invoices (numero, client_id, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('P-OPEN', 99001, '2026-07-10', '2026-08-10', 100, 119,"
+     " 'BROUILLON', :uid)", True),
 ]
 
 
@@ -163,6 +191,13 @@ def main():
             " montant_ht, montant_ttc, statut, processing_status, cree_par_id)"
             " VALUES (99002, 'PROBE-ARCHIVED', 99001, '2026-01-01', '2026-02-01',"
             " 100, 119, 'ENVOYEE', 'ARCHIVED', :uid)"), {"uid": uid})
+        # A closed month (June) and an open one (July), for the period probes.
+        conn.execute(text(
+            "INSERT INTO accounting_periods (periode, state, closed_at, closed_by_id,"
+            " invoice_count, total_ht, total_ttc)"
+            " VALUES ('2026-06-01', 'CLOSED', now(), :uid, 0, 0, 0)"), {"uid": uid})
+        conn.execute(text(
+            "INSERT INTO accounting_periods (periode) VALUES ('2026-07-01')"))
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
             " VALUES (:eid, '2026-05-01', 100, 80)"), {"eid": eid})

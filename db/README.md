@@ -261,6 +261,85 @@ The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
 
+## The monthly accounting period
+
+The accountant works the books a month at a time. `accounting_periods` holds one
+row per month (#42).
+
+A table, not a month derived from `date_emission`, because closing is an **event**
+rather than a property of the invoices: it has an actor, a moment and a result.
+Deriving the month would record none of those, so nobody could answer "who closed
+January, and when".
+
+| Column | Meaning |
+|---|---|
+| `periode` | a `DATE` standing for the month, pinned to the 1st (same convention as `payslips.periode`) |
+| `state` | `OPEN` or `CLOSED` |
+| `closed_at`, `closed_by_id` | who closed it and when; null while open |
+| `invoice_count`, `total_ht`, `total_ttc` | what the close counted, recorded as it ran |
+
+`ck_period_close_is_complete` keeps those consistent: an open period carries no
+close details, and a closed one carries all of them. A row can never claim to be
+closed by nobody.
+
+The totals are worth keeping because the invoices are frozen afterwards, so a
+recount at any later date should still match. A mismatch means something
+bypassed the rules.
+
+### Closing refuses while the books are unfinished
+
+`POST /api/periods/{YYYY-MM}/close` returns **409 with the list of invoices
+blocking it** if any invoice in the month is not `completed`.
+
+That is the decided rule rather than a convenience. Archived is terminal (#41),
+so closing over unfinished work would freeze invoices nobody had booked, and
+they could never be booked afterwards. Refusing gives the accountant a worklist
+instead of a silent outcome.
+
+`GET /api/periods/{YYYY-MM}` previews the same figures and the same blocking
+list without closing anything, because the close cannot be undone.
+
+### A closed month admits no further invoices
+
+This is the rule that gives the close its meaning. The trigger
+`invoice_period_is_open` refuses any invoice inserted into, or moved into, a
+closed month.
+
+Without it, closing would change nothing: an invoice dated into January could
+still appear after January had been reported as final, and the totals recorded
+on the period row would quietly stop matching the invoices they counted.
+
+It is a trigger rather than an API check because `migrate_data.py` and
+`insert_invoices.py` write to this database directly.
+
+### There is no reopen, and that is a decision
+
+A closed month stays closed. Its figures never change afterwards, which is what
+makes them reportable. A mistake found later is corrected by issuing a new
+document in the open month, referencing the original -- never by editing a
+closed one.
+
+A reopen could not do what it appears to do anyway: the #41 trigger refuses to
+un-archive an invoice, so a reopened period would be able to gain new invoices
+while its existing ones stayed frozen, and its recorded totals would be wrong
+either way.
+
+If the accountant turns out to need an escape hatch, it belongs here with an
+audit record, not as a column someone edits by hand. Watch for anyone asking to
+"just fix it in the database" -- that is the signal.
+
+### Who may close
+
+Admin and accountant. `rh` is excluded, exactly as it is for an invoice's
+processing status: this is bookkeeping, not a commercial act. Enforced by the
+router dependency and again by the `accounting_periods_write` policy, so a
+direct connection as the application role cannot bypass it.
+
+Every signed-in role may **read** the periods -- an employee filing an expense
+has a legitimate reason to know which months are open. With no identity at all,
+the table reads as empty.
+
+
 ## Indexes
 
 Every index is justified by a measured query plan rather than by convention.

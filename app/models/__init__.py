@@ -14,6 +14,7 @@ resolve against. Importing here means no caller has to know which models the
 relationships happen to mention.
 """
 
+from app.models.accounting import AccountingPeriod, PeriodState  # noqa: F401
 from app.models.employee import Employee, EmploymentStatus  # noqa: F401
 from app.models.invoicing import (  # noqa: F401
     Client,
