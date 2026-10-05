@@ -3,6 +3,10 @@ import { Plus, Search, Edit, Ban, CheckCircle, X, Calendar, User, FileText, Chec
 import { Employee, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
+import Dialog from './ui/Dialog';
+import Button from './ui/Button';
+import { Field, Textarea } from './ui/Field';
+import { useToast } from './ui/feedback';
 
 interface TeamViewProps {
   userRole: UserRole;
@@ -40,7 +44,6 @@ export default function TeamView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('All Roles');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
   // Admin-only states
@@ -54,9 +57,9 @@ export default function TeamView({
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionComment, setRejectionComment] = useState('');
 
+  const toast = useToast();
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    toast(message, type);
   };
 
   // --- Handlers (admin only) ---
@@ -96,18 +99,6 @@ export default function TeamView({
   if (isAccountant) {
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-        {toast && (
-          <div
-            className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
-              toast.type === 'success'
-                ? 'bg-success-container text-success border-success/20'
-                : 'bg-error-container text-on-error-container border-error/20'
-            }`}
-          >
-            {toast.type === 'success' ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-            <span>{toast.message}</span>
-          </div>
-        )}
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">View team members.</p>
@@ -166,18 +157,6 @@ export default function TeamView({
   if (isAdmin) {
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-        {toast && (
-          <div
-            className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
-              toast.type === 'success'
-                ? 'bg-success-container text-success border-success/20'
-                : 'bg-error-container text-on-error-container border-error/20'
-            }`}
-          >
-            {toast.type === 'success' ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-            <span>{toast.message}</span>
-          </div>
-        )}
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -459,47 +438,35 @@ export default function TeamView({
           that already exists. That flow belongs with #62.
         */}
 
-        {/* Reject Modal */}
-        {isRejectOpen && (
-          <div className="fixed inset-0 bg-on-background/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md p-6 border border-outline-variant animate-scale-up">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-h2 text-on-surface font-black m-0">Reject Leave Request</h2>
-                <button className="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-surface-variant transition-colors cursor-pointer" onClick={() => setIsRejectOpen(false)}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-body-sm text-on-surface-variant mb-6">
-                Please provide a reason for rejecting this leave request. This will be visible to the employee.
-              </p>
-              <div className="mb-6">
-                <label className="block text-xs font-semibold text-on-surface mb-2" htmlFor="rejectComment">Rejection Reason</label>
-                <textarea
-                  value={rejectionComment}
-                  onChange={(e) => setRejectionComment(e.target.value)}
-                  className="w-full rounded-lg border border-outline-variant bg-surface px-3 py-2 text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none placeholder:text-outline/50 transition-shadow resize-none"
-                  id="rejectComment"
-                  placeholder="E.g., Project deadline conflicts..."
-                  rows={4}
-                ></textarea>
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30">
-                <button
-                  className="px-4 py-2 rounded-lg text-body-sm font-bold border border-outline text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer"
-                  onClick={() => setIsRejectOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmReject}
-                  className="px-4 py-2 rounded-lg text-body-sm font-bold bg-error text-on-error hover:bg-error/90 transition-colors cursor-pointer"
-                >
-                  Confirm Rejection
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Reject leave request */}
+        <Dialog
+          open={isRejectOpen}
+          onClose={() => setIsRejectOpen(false)}
+          title="Reject leave request"
+          description="Give a reason for rejecting this request. The employee will see it."
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setIsRejectOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={handleConfirmReject}>
+                Confirm rejection
+              </Button>
+            </>
+          }
+        >
+          <Field label="Rejection reason">
+            {({ id }) => (
+              <Textarea
+                id={id}
+                rows={4}
+                value={rejectionComment}
+                onChange={(e) => setRejectionComment(e.target.value)}
+                placeholder="E.g., Project deadline conflicts..."
+              />
+            )}
+          </Field>
+        </Dialog>
 
         {/* Calendar Modal */}
         {showCalendar && (
@@ -517,18 +484,6 @@ export default function TeamView({
   // --- Render: Employee (read-only directory, no actions) ---
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {toast && (
-        <div
-          className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
-            toast.type === 'success'
-              ? 'bg-success-container text-success border-success/20'
-              : 'bg-error-container text-on-error-container border-error/20'
-          }`}
-        >
-          {toast.type === 'success' ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-          <span>{toast.message}</span>
-        </div>
-      )}
       <div>
         <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team Directory</h1>
         <p className="text-body-lg text-on-surface-variant mt-1">View and connect with your colleagues.</p>

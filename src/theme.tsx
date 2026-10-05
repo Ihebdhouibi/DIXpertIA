@@ -87,6 +87,16 @@ export function ThemeScope({ children }: { children: React.ReactNode }) {
     };
   }, [dark]);
 
+  return <ThemeClass>{children}</ThemeClass>;
+}
+
+/**
+ * Only the theme class, without ThemeScope's page-background side effect. For
+ * UI rendered by app-wide providers outside the screen's own scope, such as
+ * the toast stack and the confirmation dialog (#106).
+ */
+export function ThemeClass({ children }: { children: React.ReactNode }) {
+  const dark = useIsDark();
   return (
     <div className={dark ? 'dark' : undefined} style={{ display: 'contents' }}>
       {children}

@@ -336,10 +336,11 @@ export default function App() {
                 prev.map(n => ({ ...n, read: true }))
               );
             }}
-            onClearAll={() => {
-              if (window.confirm('Delete all notifications?')) {
-                setNotifications([]);
-              }
+            // The view asks for confirmation (#106); asking here as well
+            // made "Clear all" prompt twice.
+            onClearAll={() => setNotifications([])}
+            onClearSelected={(ids) => {
+              setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
             }}
             onNavigate={(link) => {
               setActiveTab(link);

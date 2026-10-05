@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { Plus, Search, Edit, Trash2, X, Check, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import StatusBadge from './StatusBadge';
+import Dialog from './ui/Dialog';
+import Button from './ui/Button';
+import { Field, Input, Select } from './ui/Field';
+import { useConfirm, useToast } from './ui/feedback';
 
 interface UsersViewProps {
   users: User[];
@@ -15,7 +19,6 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
   const isAdmin = userRole === 'admin';
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -23,9 +26,10 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
   const [role, setRole] = useState<UserRole>('employee');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const toast = useToast();
+  const confirm = useConfirm();
   const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    toast(message, type);
   };
 
   const resetForm = () => {
@@ -70,9 +74,15 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
     resetForm();
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!isAdmin) return;
-    if (window.confirm(`Delete user ${name}?`)) {
+    const ok = await confirm({
+      title: `Delete user ${name}?`,
+      message: 'Their account will be removed. This cannot be undone.',
+      confirmLabel: 'Delete user',
+      tone: 'danger',
+    });
+    if (ok) {
       onDeleteUser?.(id);
       showToast(`User ${name} deleted.`, 'success');
     }
@@ -96,19 +106,6 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {toast && (
-        <div
-          className={`fixed bottom-4 right-4 z-50 py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border ${
-            toast.type === 'success'
-              ? 'bg-success-container text-success border-success/20'
-              : 'bg-error-container text-on-error-container border-error/20'
-          }`}
-        >
-          {toast.type === 'success' ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-          <span>{toast.message}</span>
-        </div>
-      )}
-
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Users</h1>
@@ -226,91 +223,56 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
         </div>
       </div>
 
-      {isAdmin && showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md max-h-[90%] overflow-y-auto border border-outline-variant animate-scale-up">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface sticky top-0 z-10">
-              <h2 className="text-h2 font-black text-on-surface">{editingUser ? 'Edit User' : 'Add New User'}</h2>
-              <button
-                className="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-surface-container transition-colors cursor-pointer"
-                onClick={() => { setShowModal(false); resetForm(); }}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-                  First Name <span className="text-error">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="e.g. Jane"
-                  className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-                  Last Name <span className="text-error">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="e.g. Doe"
-                  className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-                  Email <span className="text-error">*</span>
-                </label>
-                <input
+      {isAdmin && (
+        <Dialog
+          open={showModal}
+          onClose={() => { setShowModal(false); resetForm(); }}
+          title={editingUser ? 'Edit user' : 'Add new user'}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button type="submit" form="user-form">
+                {editingUser ? 'Update user' : 'Create user'}
+              </Button>
+            </>
+          }
+        >
+          <form id="user-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field label="First name *">
+              {({ id }) => (
+                <Input id={id} required value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g. Jane" />
+              )}
+            </Field>
+            <Field label="Last name *">
+              {({ id }) => (
+                <Input id={id} required value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g. Doe" />
+              )}
+            </Field>
+            <Field label="Email *">
+              {({ id }) => (
+                <Input
+                  id={id}
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="jane.doe@example.com"
-                  className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">Role</label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface cursor-pointer"
-                >
+              )}
+            </Field>
+            <Field label="Role">
+              {({ id }) => (
+                <Select id={id} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
                   <option value="employee">Employee</option>
                   <option value="admin">Admin</option>
                   <option value="accountant">Accountant</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30">
-                <button
-                  type="button"
-                  onClick={() => { setShowModal(false); resetForm(); }}
-                  className="px-4 py-2 border border-primary text-primary rounded-lg font-bold text-body-sm hover:bg-primary/5 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
-                >
-                  {editingUser ? 'Update User' : 'Create User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                </Select>
+              )}
+            </Field>
+          </form>
+        </Dialog>
       )}
     </div>
   );

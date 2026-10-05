@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, dateFnsLocalizer, Views, View } from 'react-big-calendar';
-import { X } from 'lucide-react';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { LeaveRequest, UserRole } from '../types';
-import { statusTone } from './StatusBadge';
+import StatusBadge, { statusTone } from './StatusBadge';
+import Dialog from './ui/Dialog';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 // Brand and theme overrides for the library's colours; must load after it (#79).
 import '../styles/calendar.css';
@@ -103,51 +103,54 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
     };
   };
 
-  const handleSelectEvent = (event: CalendarEvent) => {
-    const req = event.resource;
-    alert(
-      `Leave Request: ${req.employeeName}\n` +
-      `Type: ${req.type}\n` +
-      `Dates: ${req.dates}\n` +
-      `Duration: ${req.duration} days\n` +
-      `Status: ${req.status}\n` +
-      `Reason: ${req.reason || 'N/A'}`
-    );
-  };
+  // Leave details open in a themed dialog; this used to be a browser alert() (#106).
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
+  const handleSelectEvent = (event: CalendarEvent) => setSelected(event.resource);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-outline-variant">
-          <h2 className="text-h2 font-black text-on-surface">Leave Calendar</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close calendar"
-            className="p-2 hover:bg-surface-container rounded-lg text-on-surface-variant transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="flex-1 p-4 overflow-auto">
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            date={date}
-            onNavigate={setDate}
-            style={{ height: '100%', minHeight: '500px' }}
-            views={[Views.MONTH, Views.WEEK, Views.DAY]}
-            view={view}
-            onView={setView}
-            eventPropGetter={eventStyleGetter}
-            onSelectEvent={handleSelectEvent}
-            tooltipAccessor={(event) =>
-              `${event.resource.employeeName}\n${event.resource.type}\n${event.resource.dates}\nStatus: ${event.resource.status}`
-            }
-          />
-        </div>
-      </div>
-    </div>
+    <Dialog open onClose={onClose} title="Leave calendar" size="full" bodyClassName="p-4 overflow-auto">
+      <Calendar
+        localizer={localizer}
+        events={events}
+        startAccessor="start"
+        endAccessor="end"
+        date={date}
+        onNavigate={setDate}
+        style={{ height: '100%', minHeight: '500px' }}
+        views={[Views.MONTH, Views.WEEK, Views.DAY]}
+        view={view}
+        onView={setView}
+        eventPropGetter={eventStyleGetter}
+        onSelectEvent={handleSelectEvent}
+        tooltipAccessor={(event) =>
+          `${event.resource.employeeName}\n${event.resource.type}\n${event.resource.dates}\nStatus: ${event.resource.status}`
+        }
+      />
+
+      <Dialog
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={selected ? `${selected.employeeName} - ${selected.type}` : ''}
+        size="sm"
+        headerActions={selected && <StatusBadge status={selected.status} />}
+      >
+        {selected && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Dates</dt>
+            <dd className="font-mono">{selected.dates}</dd>
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Duration</dt>
+            <dd className="font-mono">{selected.duration} day{selected.duration === 1 ? '' : 's'}</dd>
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Reason</dt>
+            <dd>{selected.reason || '-'}</dd>
+            {selected.rejectionReason && (
+              <>
+                <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Rejected</dt>
+                <dd>{selected.rejectionReason}</dd>
+              </>
+            )}
+          </dl>
+        )}
+      </Dialog>
+    </Dialog>
   );
 }

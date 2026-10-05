@@ -3,6 +3,10 @@ import { Calendar, Plus, Filter, Plane, HeartPulse, MoreVertical, X, Check } fro
 import { LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
+import Dialog from './ui/Dialog';
+import Button from './ui/Button';
+import { Field, Input, Select, Textarea } from './ui/Field';
+import { useToast, ToastTone } from './ui/feedback';
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
@@ -24,20 +28,17 @@ export default function LeaveRequestsView({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
 
   const isEmployee = userRole === 'employee';
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const toast = useToast();
+  const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate) {
-      showToast('Please enter start and end dates.');
+      showToast('Please enter start and end dates.', 'error');
       return;
     }
     const start = new Date(startDate);
@@ -86,14 +87,6 @@ export default function LeaveRequestsView({
 
   return (
     <div className="flex-1 flex flex-col gap-6">
-      {/* Toast notification */}
-      {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-primary text-on-primary py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-on-primary/15">
-          <Check className="w-5 h-5 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -198,7 +191,7 @@ export default function LeaveRequestsView({
                     <td className="px-6 py-4"><StatusBadge status={req.status} /></td>
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => req.rejectionReason ? showToast(`Rejection reason: ${req.rejectionReason}`) : showToast(`Request: ${req.type}`)}
+                        onClick={() => req.rejectionReason ? showToast(`Rejection reason: ${req.rejectionReason}`, 'info') : showToast(`Request: ${req.type}`, 'info')}
                         className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer p-1"
                       >
                         <MoreVertical className="w-5 h-5" />
@@ -222,89 +215,55 @@ export default function LeaveRequestsView({
         />
       )}
 
-      {/* New Request Modal */}
-      {isEmployee && isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant overflow-hidden flex flex-col max-h-full animate-scale-up">
-            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface">
-              <h3 className="text-h2 font-black text-on-surface">New Leave Request</h3>
-              <button
-                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer"
-                onClick={() => setIsModalOpen(false)}
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* New Request */}
+      {isEmployee && (
+        <Dialog
+          open={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title="New leave request"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" form="leave-request-form">
+                Submit request
+              </Button>
+            </>
+          }
+        >
+          <form id="leave-request-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field label="Leave type">
+              {({ id }) => (
+                <Select id={id} value={leaveType} onChange={(e) => setLeaveType(e.target.value as any)}>
+                  <option value="Annual Leave">Annual Leave</option>
+                  <option value="Sick Leave">Sick Leave</option>
+                  <option value="Personal Day">Personal Day</option>
+                  <option value="Unpaid Leave">Unpaid Leave</option>
+                </Select>
+              )}
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Start date">
+                {({ id }) => <Input id={id} type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />}
+              </Field>
+              <Field label="End date">
+                {({ id }) => <Input id={id} type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} />}
+              </Field>
             </div>
-            <div className="p-6 overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Leave Type</label>
-                  <select
-                    value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value as any)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all cursor-pointer font-semibold"
-                  >
-                    <option value="Annual Leave">Annual Leave</option>
-                    <option value="Sick Leave">Sick Leave</option>
-                    <option value="Personal Day">Personal Day</option>
-                    <option value="Unpaid Leave">Unpaid Leave</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Start Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">End Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Reason (Optional)</label>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow resize-none"
-                    placeholder="Provide details if necessary..."
-                    rows={3}
-                  ></textarea>
-                </div>
-
-                <div className="pt-4 border-t border-outline-variant/30 flex justify-end gap-3 shrink-0">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg border border-primary text-primary font-bold text-body-sm hover:bg-primary/5 transition-colors cursor-pointer"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-primary text-on-primary font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+            <Field label="Reason (optional)">
+              {({ id }) => (
+                <Textarea
+                  id={id}
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Provide details if necessary..."
+                />
+              )}
+            </Field>
+          </form>
+        </Dialog>
       )}
     </div>
   );
