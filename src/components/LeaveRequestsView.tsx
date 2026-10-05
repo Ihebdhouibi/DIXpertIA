@@ -8,14 +8,15 @@ interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
   onAddRequest: (newReq: Partial<LeaveRequest>) => void;
   userRole: UserRole;
-  currentUserId?: string;   // <-- added to filter employee's own requests in calendar
+  /** The employee record id, used to filter the calendar to one person. */
+  currentEmployeeId?: number;
 }
 
 export default function LeaveRequestsView({
   leaveRequests,
   onAddRequest,
   userRole,
-  currentUserId
+  currentEmployeeId
 }: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -216,7 +217,7 @@ export default function LeaveRequestsView({
         <CalendarView
           leaveRequests={leaveRequests}
           userRole={userRole}
-          currentUserId={currentUserId}
+          currentEmployeeId={currentEmployeeId}
           onClose={() => setShowCalendar(false)}
         />
       )}

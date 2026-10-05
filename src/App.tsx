@@ -1,12 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice, Project } from './types';
-import {
-  initialPayslips,
-  initialLeaveRequests,
-  initialTeamMembers,
-  initialInvoices,
-  initialProjects
-} from './data';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Client, Employee, Invoice, LeaveRequest, Payslip, User } from './types';
+import * as api from './api';
 import Login from './components/Login';
 import Homepage from './components/Homepage';
 import { ThemeScope } from './theme';
@@ -15,7 +9,6 @@ import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
-import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
 import SettingsView from './components/SettingsView';
@@ -58,49 +51,21 @@ interface AppUser extends User {
 
 export default function App() {
   // --- State ---
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    const saved = localStorage.getItem('dixpertia_user');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        ...parsed,
-        isActive: parsed.isActive !== undefined ? parsed.isActive : true,
-        isVerified: parsed.isVerified !== undefined ? parsed.isVerified : true,
-        createdAt: parsed.createdAt || new Date().toISOString()
-      };
-    }
-    return null;
-  });
+  // Nothing is seeded from a fixture and nothing is read back from
+  // localStorage: every entity below is loaded from the API once there is a
+  // signed-in user, and reloaded after any change (#65). Business data now
+  // lives in one place - the database - so what the admin creates the
+  // accountant sees, and clearing the browser loses nothing.
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [payslips, setPayslips] = useState<Payslip[]>(() => {
-    const saved = localStorage.getItem('dixpertia_payslips');
-    return saved ? JSON.parse(saved) : initialPayslips;
-  });
-
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(() => {
-    const saved = localStorage.getItem('dixpertia_leave_requests');
-    return saved ? JSON.parse(saved) : initialLeaveRequests;
-  });
-
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    const saved = localStorage.getItem('dixpertia_team_members');
-    return saved ? JSON.parse(saved) : initialTeamMembers;
-  });
-
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('dixpertia_invoices');
-    return saved ? JSON.parse(saved) : initialInvoices;
-  });
-
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('dixpertia_projects');
-    return saved ? JSON.parse(saved) : initialProjects;
-  });
-
-  const [users, setUsers] = useState<AppUser[]>(() => {
-    const saved = localStorage.getItem('dixpertia_users');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [payslips, setPayslips] = useState<Payslip[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
@@ -123,23 +88,13 @@ export default function App() {
   }, []);
 
   // --- Notifications state ---
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('dixpertia_notifications');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setNotificationCount(parsed.filter((n: Notification) => !n.read).length);
-      return parsed;
-    }
-    return [];
-  });
+  // Session-only. These were persisted to localStorage, which outlived the
+  // reason they were shown and could not be seen by anyone else anyway. Real,
+  // server-side notifications tied to actual events belong with the accountant
+  // workflow (#64).
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    // Ephemeral notifications are deliberately excluded: they may carry
-    // secrets, and localStorage has no expiry.
-    localStorage.setItem(
-      'dixpertia_notifications',
-      JSON.stringify(notifications.filter(n => !n.ephemeral))
-    );
     setNotificationCount(notifications.filter(n => !n.read).length);
   }, [notifications]);
 
@@ -163,38 +118,70 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // --- Persist state ---
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('dixpertia_user');
-    }
-  }, [currentUser]);
+  // --- Loading everything from the API ---
 
-  useEffect(() => {
-    localStorage.setItem('dixpertia_payslips', JSON.stringify(payslips));
-  }, [payslips]);
+  const refresh = useCallback(async (user: AppUser) => {
+    // Each call is scoped by the server: an employee's request returns their
+    // own payslips and leave, an admin's returns everyone's. The row-level
+    // security policies decide that, not this code, so there is no role check
+    // here to drift out of step.
+    const isPrivileged = user.role === 'admin' || user.role === 'accountant';
+    const results = await Promise.allSettled([
+      api.payslips.list(),
+      api.leaveRequests.list(),
+      api.employees.list(),
+      isPrivileged ? api.invoices.list({ limit: 200 }) : Promise.resolve([]),
+      user.role === 'admin' ? api.users.list() : Promise.resolve([]),
+      isPrivileged ? api.clients.list() : Promise.resolve([]),
+    ]);
 
-  useEffect(() => {
-    localStorage.setItem('dixpertia_leave_requests', JSON.stringify(leaveRequests));
-  }, [leaveRequests]);
+    const [p, l, e, i, u, c] = results;
+    if (p.status === 'fulfilled') setPayslips(p.value);
+    if (l.status === 'fulfilled') setLeaveRequests(l.value);
+    if (e.status === 'fulfilled') setEmployees(e.value);
+    if (i.status === 'fulfilled') setInvoices(i.value as Invoice[]);
+    if (u.status === 'fulfilled') setUsers(u.value as AppUser[]);
+    if (c.status === 'fulfilled') setClients(c.value as Client[]);
 
-  useEffect(() => {
-    localStorage.setItem('dixpertia_team_members', JSON.stringify(teamMembers));
-  }, [teamMembers]);
+    // allSettled rather than all: one failing list should not blank the other
+    // four. The first real failure is surfaced, the rest are left to the next
+    // refresh.
+    const failed = results.find(r => r.status === 'rejected');
+    setLoadError(failed ? (failed as PromiseRejectedResult).reason?.message ?? 'Could not load data' : null);
+  }, []);
 
+  // Restore the session from the token alone. The user is never read from
+  // localStorage: the client would then be deciding its own role.
   useEffect(() => {
-    localStorage.setItem('dixpertia_invoices', JSON.stringify(invoices));
-  }, [invoices]);
+    let cancelled = false;
+    (async () => {
+      if (!api.getToken()) {
+        setSessionChecked(true);
+        return;
+      }
+      try {
+        const me = await api.auth.me();
+        if (cancelled) return;
+        setCurrentUser(me);
+        setShowHomepage(false);
+        await refresh(me);
+      } catch {
+        // An expired or invalid token: fall back to the public site.
+        api.setToken(null);
+      } finally {
+        if (!cancelled) setSessionChecked(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refresh]);
 
+  // Send the user back to the public site when the API rejects the token.
   useEffect(() => {
-    localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_users', JSON.stringify(users));
-  }, [users]);
+    api.setUnauthorizedHandler(() => {
+      setCurrentUser(null);
+      setShowHomepage(true);
+    });
+  }, []);
 
   // --- Handlers with real API calls ---
 
@@ -202,209 +189,90 @@ export default function App() {
   // user attribute, comes from the server's response - never from the client.
   const handleLogin = async (email: string, password: string) => {
     try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
-        return;
-      }
-      const data = await response.json();
-      localStorage.setItem('token', data.access_token);
-      const user = data.user;
-      const appUser: AppUser = {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        department: user.department || 'Operations',
-        avatarUrl: user.avatarUrl || undefined,
-        isActive: user.isActive,
-        isVerified: user.isVerified,
-        createdAt: user.createdAt || new Date().toISOString()
-      };
+      const data = await api.auth.login(email, password);
+      api.setToken(data.access_token);
+      const appUser = data.user as AppUser;
       setCurrentUser(appUser);
       setActiveTab('dashboard');
       setShowHomepage(false);
       setShowLogin(false);
       addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
+      await refresh(appUser);
     } catch (error) {
-      addNotification('Network error during login', 'error');
+      const message = error instanceof api.ApiError ? error.message : 'Network error during login';
+      addNotification(`Login failed: ${message}`, 'error');
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('dixpertia_user');
-    localStorage.removeItem('token');
+    api.setToken(null);
+    // Business data is dropped with the session rather than left in memory for
+    // whoever signs in next on this browser.
+    setPayslips([]);
+    setLeaveRequests([]);
+    setEmployees([]);
+    setInvoices([]);
+    setUsers([]);
+    setClients([]);
+    setNotifications([]);
     setShowHomepage(true);
     setShowUserDropdown(false);
     setShowLogin(false);
   };
 
-  const handleToggleRole = () => {
-    if (!currentUser) return;
-    const toggledRole: UserRole = currentUser.role === 'admin' ? 'employee' : 'admin';
-    const updatedUser: AppUser = {
-      ...currentUser,
-      role: toggledRole,
-      id: toggledRole === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName: toggledRole === 'admin' ? 'David' : 'John',
-      lastName: toggledRole === 'admin' ? 'Admin' : 'Doe',
-      department: toggledRole === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: toggledRole === 'admin'
-        ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-      isActive: true,
-      isVerified: true,
-      createdAt: currentUser.createdAt || new Date().toISOString()
-    };
-    setCurrentUser(updatedUser);
-    setActiveTab('dashboard');
-  };
+  // handleToggleRole is gone (#66). It rewrote the signed-in user's role, name
+  // and id in the browser and re-rendered the admin screens on top of mock
+  // data. The server always refused the admin actions, so nothing could be
+  // done with it - but it showed every employee an admin view of fictional
+  // numbers, which is worse than refusing outright.
 
   // --- Leave handlers ---
-  const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
+  //
+  // Each one calls the API and then reloads from it, rather than editing local
+  // state and hoping the two agree. The server applies the rules - who may
+  // approve, that nobody validates their own request - so the reloaded list is
+  // the truth, including any change someone else made meanwhile.
+
+  const withRefresh = async (action: () => Promise<unknown>, failure: string) => {
     if (!currentUser) return;
-    const req: LeaveRequest = {
-      id: `LR-00${leaveRequests.length + 1}`,
-      employeeId: currentUser.id,
-      employeeName: `${currentUser.firstName} ${currentUser.lastName}`,
-      department: currentUser.department || 'Operations',
-      type: newReq.type || 'Annual Leave',
-      dates: newReq.dates || 'Oct 20, 2024',
-      duration: newReq.duration || 1,
-      status: 'Pending',
-      reason: newReq.reason || ''
-    };
-    setLeaveRequests([req, ...leaveRequests]);
-    addNotification(
-      `New leave request from ${currentUser.firstName} ${currentUser.lastName} (${req.type})`,
-      'warning',
-      'team',
-      'admin'
-    );
-  };
-
-  const handleApproveLeave = (id: string) => {
-    setLeaveRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: 'Approved' as const } : req
-      )
-    );
-    const req = leaveRequests.find(r => r.id === id);
-    if (req && currentUser?.role === 'admin') {
-      addNotification(
-        `Your leave request (${req.type}) has been approved`,
-        'success',
-        undefined,
-        'employee'
-      );
+    try {
+      await action();
+      await refresh(currentUser);
+    } catch (error) {
+      const message = error instanceof api.ApiError ? error.message : failure;
+      addNotification(message, 'error');
     }
   };
 
-  const handleRejectLeave = (id: string, comment: string) => {
-    setLeaveRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: 'Rejected' as const, rejectionReason: comment } : req
-      )
+  const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) =>
+    withRefresh(
+      () => api.leaveRequests.create({
+        type: newReq.type ?? 'Annual Leave',
+        startDate: newReq.startDate,
+        endDate: newReq.endDate,
+        reason: newReq.reason ?? '',
+      }),
+      'Could not submit the leave request',
     );
-    const req = leaveRequests.find(r => r.id === id);
-    if (req && currentUser?.role === 'admin') {
-      addNotification(
-        `Your leave request (${req.type}) has been rejected`,
-        'error',
-        undefined,
-        'employee'
-      );
-    }
-  };
 
-  // --- Other handlers ---
-  const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
-    const emp: TeamMember = {
-      id: `TM-00${teamMembers.length + 1}`,
-      firstName: newEmp.firstName || 'Jane',
-      lastName: newEmp.lastName || 'Doe',
-      email: newEmp.email || 'jane.doe@dixpertia.com',
-      role: newEmp.role || 'Contributor',
-      status: 'Active',
-      initials: newEmp.initials || 'JD'
-    };
-    setTeamMembers([emp, ...teamMembers]);
-  };
+  const handleApproveLeave = (id: string) =>
+    withRefresh(() => api.leaveRequests.approve(id), 'Could not approve the request');
 
-  const handleAddInvoice = (newInv: Partial<Invoice>) => {
-    const inv: Invoice = {
-      id: newInv.id || `INV-2024-00${invoices.length + 1}`,
-      client: newInv.client || 'Faux Client',
-      clientInitials: newInv.clientInitials || 'FC',
-      amount: newInv.amount || 1000.00,
-      dateIssued: newInv.dateIssued || 'Oct 20, 2024',
-      dueDate: newInv.dueDate || 'Nov 20, 2024',
-      status: newInv.status || 'Sent',
-      items: newInv.items || []
-    };
-    setInvoices([inv, ...invoices]);
-  };
+  const handleRejectLeave = (id: string, comment: string) =>
+    withRefresh(() => api.leaveRequests.reject(id, comment), 'Could not reject the request');
 
-  // --- Project handlers ---
-  const handleAddProject = (project: Partial<Project>) => {
-    const newProject: Project = {
-      id: `PRJ-00${projects.length + 1}`,
-      name: project.name || 'Untitled',
-      client: project.client || 'Unknown',
-      description: project.description || '',
-      status: project.status || 'Active',
-      deadline: project.deadline || new Date().toISOString().split('T')[0],
-      teamMembers: project.teamMembers || [],
-      createdAt: new Date().toISOString(),
-    };
-    setProjects([newProject, ...projects]);
-    addNotification(
-      `New project "${newProject.name}" created`,
-      'success',
-      'projects',
-      'admin'
-    );
-  };
+  const handleAddInvoice = (newInv: { client_id: number; date_echeance: string; items: unknown[] }) =>
+    withRefresh(() => api.invoices.create(newInv), 'Could not create the invoice');
 
-  const handleEditProject = (id: string, updates: Partial<Project>) => {
-    setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
-    const proj = projects.find(p => p.id === id);
-    if (proj) {
-      addNotification(
-        `Project "${proj.name}" updated`,
-        'info',
-        'projects',
-        'admin'
-      );
-    }
-  };
-
-  const handleDeleteProject = (id: string) => {
-    const proj = projects.find(p => p.id === id);
-    setProjects(prev => prev.filter(p => p.id !== id));
-    if (proj) {
-      addNotification(
-        `Project "${proj.name}" deleted`,
-        'error',
-        undefined,
-        'admin'
-      );
-    }
-  };
+  const handleAddUser = (body: unknown) =>
+    withRefresh(() => api.users.create(body), 'Could not create the account');
 
   // --- Quick actions ---
   const handleQuickAction = (action: string) => {
     switch (action) {
       case 'approve-leaves': setActiveTab('team'); break;
       case 'create-invoice': setActiveTab('reports'); break;
-      case 'add-project': setActiveTab('projects'); break;
       case 'download-payslip': setActiveTab('payslips'); break;
       case 'view-notifications': setActiveTab('notifications'); break;
       default: break;
@@ -422,78 +290,17 @@ export default function App() {
     setShowLogin(false);
   };
 
+  // Leave and payroll belong to the employee record, not the login account
+  // (#60), so "mine" means this id. An admin account with no employee record
+  // has no leave of its own, which is correct.
+  const myEmployeeId = employees.find(e => e.userId === currentUser?.id)?.id;
+
   // --- Notification filter ---
   const visibleNotifications = notifications.filter(n => {
     if (!n.targetRole) return true;
     return n.targetRole === currentUser?.role;
   });
 
-  // --- User management handlers (admin only) – REAL API ---
-  const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        addNotification('You are not logged in. Please log in again.', 'error');
-        return;
-      }
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          role: newUser.role || 'employee'
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const user: AppUser = {
-          id: data.id,
-          email: data.email,
-          firstName: newUser.firstName!,
-          lastName: newUser.lastName!,
-          role: newUser.role || 'employee',
-          isActive: true,
-          isVerified: false,
-          createdAt: new Date().toISOString(),
-          department: 'Operations',
-          avatarUrl: undefined,
-        };
-        setUsers(prev => [...prev, user]);
-        // The password is also emailed to the new user. It is surfaced here only
-        // as a fallback for when delivery fails, and is marked ephemeral so it is
-        // never written to localStorage. It must not be logged to the console.
-        addNotification(
-          `User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`,
-          'success',
-          undefined,
-          undefined,
-          true
-        );
-      } else {
-        const error = await response.json();
-        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
-      }
-    } catch (error) {
-      addNotification('Network error. Please try again.', 'error');
-    }
-  };
-
-  const handleEditUser = (id: string, updates: Partial<AppUser>) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
-  };
-
-  const handleDeleteUser = (id: string) => {
-    const user = users.find(u => u.id === id);
-    setUsers(prev => prev.filter(u => u.id !== id));
-    if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
-  };
-
-  // --- Render content helper ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
@@ -502,10 +309,10 @@ export default function App() {
         return (
           <DashboardView
             user={currentUser}
-            projects={projects}
             invoices={invoices}
+            payslips={payslips}
             leaveRequests={leaveRequests}
-            teamMembers={teamMembers}
+            employees={employees}
             notifications={visibleNotifications}
             onNavigate={(tab: string) => {
               setActiveTab(tab);
@@ -546,7 +353,7 @@ export default function App() {
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
       case 'invoices':
-        return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+        return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
 
       case 'leave-requests':
         // Employees only. Hiding the sidebar entry is not enough on its own -
@@ -563,10 +370,10 @@ export default function App() {
         }
         return (
           <LeaveRequestsView
-            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            leaveRequests={leaveRequests.filter(req => req.employeeId === myEmployeeId)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
-            currentUserId={currentUser.id}
+            currentEmployeeId={myEmployeeId}
           />
         );
 
@@ -582,29 +389,30 @@ export default function App() {
           );
         }
         const isAdmin = currentUser.role === 'admin';
+        // onEditUser and onDeleteUser are deliberately not passed: the API has
+        // no endpoint for either, and the buttons previously only changed the
+        // browser. Server-side account lifecycle is #62.
         return (
           <UsersView
             users={users}
             onAddUser={isAdmin ? handleAddUser : undefined}
-            onEditUser={isAdmin ? handleEditUser : undefined}
-            onDeleteUser={isAdmin ? handleDeleteUser : undefined}
             userRole={currentUser.role}
           />
         );
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
 
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView
-            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            leaveRequests={leaveRequests.filter(req => req.employeeId === myEmployeeId)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
           />
@@ -614,33 +422,10 @@ export default function App() {
         return (
           <TeamView
             userRole={currentUser.role}
-            teamMembers={teamMembers}
+            employees={employees}
             leaveRequests={leaveRequests}
-            onAddEmployee={handleAddEmployee}
             onApproveLeave={handleApproveLeave}
             onRejectLeave={handleRejectLeave}
-          />
-        );
-
-      case 'projects':
-        if (currentUser.role !== 'admin') {
-          return (
-            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
-              </div>
-            </div>
-          );
-        }
-        return (
-          <ProjectsView
-            projects={projects}
-            onAddProject={handleAddProject}
-            onEditProject={handleEditProject}
-            onDeleteProject={handleDeleteProject}
-            userRole={currentUser.role}
-            teamMembers={teamMembers}
           />
         );
 
@@ -668,6 +453,25 @@ export default function App() {
   };
 
   // --- RENDERING LOGIC (NEW ORDER) ---
+
+  // 0. Hold the first paint until the token has been checked.
+  //
+  // Without this a signed-in user sees the public homepage for a moment on
+  // every reload, because the session is restored asynchronously and
+  // showHomepage starts true. A password-reset link is exempt: it carries its
+  // own token in the URL and does not need a session.
+  if (!sessionChecked && !resetToken) {
+    return (
+      <ThemeScope>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 rounded-full border-2 border-outline-variant border-t-primary animate-spin" />
+            <p className="text-body-sm text-on-surface-variant">Signing you in...</p>
+          </div>
+        </div>
+      </ThemeScope>
+    );
+  }
 
   // 1. If resetToken is present, show ResetPassword
   if (resetToken) {
@@ -724,7 +528,6 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onLogout={handleLogout}
-        onToggleRole={handleToggleRole}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
         onGoHome={handleGoHome}
@@ -899,6 +702,24 @@ export default function App() {
         </header>
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
+          {loadError && (
+            <div
+              role="alert"
+              className="mb-4 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger-container px-4 py-3"
+            >
+              <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-body-sm font-semibold text-danger">Some data could not be loaded</p>
+                <p className="text-caption text-on-surface-variant mt-0.5">{loadError}</p>
+              </div>
+              <button
+                onClick={() => currentUser && refresh(currentUser)}
+                className="text-caption font-bold text-danger hover:underline cursor-pointer shrink-0"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {renderTabContent()}
         </main>
       </div>

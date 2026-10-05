@@ -4,7 +4,7 @@ import {
   CheckCircle, AlertCircle, XCircle, Calendar,
   Download, Plus, ChevronRight
 } from 'lucide-react';
-import { User, Project, Invoice, LeaveRequest, TeamMember } from '../types';
+import { Employee, Invoice, LeaveRequest, Payslip, User } from '../types';
 
 interface Notification {
   id: string;
@@ -17,10 +17,10 @@ interface Notification {
 
 interface DashboardViewProps {
   user: User;
-  projects: Project[];
   invoices: Invoice[];
+  payslips: Payslip[];
   leaveRequests: LeaveRequest[];
-  teamMembers: TeamMember[];
+  employees: Employee[];
   notifications: Notification[];
   onNavigate: (tab: string) => void;
   onQuickAction: (action: string) => void;
@@ -28,29 +28,35 @@ interface DashboardViewProps {
 
 export default function DashboardView({
   user,
-  projects,
   invoices,
+  payslips,
   leaveRequests,
-  teamMembers,
+  employees,
   notifications,
   onNavigate,
   onQuickAction,
 }: DashboardViewProps) {
   // --- Statistics ---
-  const totalProjects = projects.length;
+  // Replaces a "Total Projects" count. The Projects screen was mock data with
+  // no table behind it and was removed in #65; this is the figure the
+  // accountant actually opens the dashboard for.
+  const awaitingBooking = invoices.filter(i => i.processingStatus === 'Pending').length;
   const totalInvoices = invoices.length;
-  const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+  const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + inv.amountTTC, 0);
   const pendingLeaves = leaveRequests.filter(r => r.status === 'Pending').length;
-  const activeTeam = teamMembers.filter(m => m.status === 'Active').length;
+  const activeTeam = employees.filter(e => e.employmentStatus === 'active').length;
 
-  // Project status breakdown
-  const statusCounts = {
-    Active: projects.filter(p => p.status === 'Active').length,
-    'In Progress': projects.filter(p => p.status === 'In Progress').length,
-    Completed: projects.filter(p => p.status === 'Completed').length,
-    'On Hold': projects.filter(p => p.status === 'On Hold').length,
+  // Where the month's invoices have got to in the accountant's workflow (#41).
+  // A separate axis from the commercial status charted below: an invoice is
+  // routinely Paid and still Pending here, because the client has paid and
+  // nobody has booked it yet.
+  const processingCounts = {
+    Pending: invoices.filter(i => i.processingStatus === 'Pending').length,
+    Processed: invoices.filter(i => i.processingStatus === 'Processed').length,
+    Completed: invoices.filter(i => i.processingStatus === 'Completed').length,
+    Archived: invoices.filter(i => i.processingStatus === 'Archived').length,
   };
-  const maxStatusCount = Math.max(...Object.values(statusCounts), 1);
+  const maxProcessingCount = Math.max(...Object.values(processingCounts), 1);
 
   // Invoice status breakdown
   const invoiceStats = {
@@ -64,15 +70,18 @@ export default function DashboardView({
   const recentNotifications = notifications.slice(0, 5);
 
   // Employee-specific: leave balance
-  const employeeLeaveRequests = leaveRequests.filter(r => r.employeeId === user.id);
+  // Resolved through the employee record: leave belongs to the employee, not
+  // the login account (#60).
+  const myEmployeeId = employees.find(e => e.userId === user.id)?.id;
+  const employeeLeaveRequests = leaveRequests.filter(r => r.employeeId === myEmployeeId);
   const upcomingLeave = employeeLeaveRequests
     .filter(r => r.status === 'Approved')
     .sort((a, b) => new Date(a.dates.split('-')[0].trim()).getTime() - new Date(b.dates.split('-')[0].trim()).getTime())[0];
 
-  // Latest payslip (read from localStorage)
-  const latestPayslip = user.role === 'employee'
-    ? JSON.parse(localStorage.getItem('dixpertia_payslips') || '[]')[0]
-    : null;
+  // The newest payslip, from the list the API already returned. It was read
+  // straight out of localStorage, which meant the dashboard showed a figure
+  // nobody else could see and that vanished when the browser was cleared.
+  const latestPayslip = user.role === 'employee' ? payslips[0] ?? null : null;
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
@@ -82,7 +91,7 @@ export default function DashboardView({
           Welcome back, {user.firstName}!
         </h1>
         <p className="text-body-lg text-on-surface-variant mt-1">
-          Here's what's happening with your projects and team.
+          Here's what's happening across your invoices and team.
         </p>
       </div>
 
@@ -93,8 +102,8 @@ export default function DashboardView({
             <FolderOpen className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-caption font-semibold text-on-surface-variant">Total Projects</p>
-            <p className="text-h2 font-black text-on-surface">{totalProjects}</p>
+            <p className="text-caption font-semibold text-on-surface-variant">Awaiting booking</p>
+            <p className="text-h2 font-black text-on-surface">{awaitingBooking}</p>
           </div>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
@@ -135,22 +144,23 @@ export default function DashboardView({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column (2/3): charts */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Project Status Bar Chart */}
+          {/* Where invoices stand in the accountant's workflow (#41) */}
           <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-            <h3 className="font-bold text-body-lg text-on-surface mb-4">Projects by Status</h3>
+            <h3 className="font-bold text-body-lg text-on-surface mb-4">Invoices by processing state</h3>
             <div className="space-y-3">
-              {Object.entries(statusCounts).map(([status, count]) => (
-                <div key={status} className="flex items-center gap-3">
-                  <span className="text-caption font-semibold text-on-surface-variant w-24">{status}</span>
+              {Object.entries(processingCounts).map(([state, count]) => (
+                <div key={state} className="flex items-center gap-3">
+                  <span className="text-caption font-semibold text-on-surface-variant w-24">{state}</span>
                   <div className="flex-1 h-3 bg-surface-variant rounded-full overflow-hidden">
+                    {/* Semantic tones, not raw palette classes (#24, #25). */}
                     <div
                       className={`h-full rounded-full ${
-                        status === 'Active' ? 'bg-blue-500' :
-                        status === 'In Progress' ? 'bg-amber-500' :
-                        status === 'Completed' ? 'bg-emerald-500' :
-                        'bg-gray-400'
+                        state === 'Pending' ? 'bg-warning' :
+                        state === 'Processed' ? 'bg-info' :
+                        state === 'Completed' ? 'bg-success' :
+                        'bg-neutral'
                       } transition-all duration-500`}
-                      style={{ width: `${(count / maxStatusCount) * 100}%` }}
+                      style={{ width: `${(count / maxProcessingCount) * 100}%` }}
                     />
                   </div>
                   <span className="text-caption font-bold text-on-surface w-8 text-right">{count}</span>
@@ -168,7 +178,7 @@ export default function DashboardView({
                   <p className="text-caption font-semibold text-on-surface-variant">{status}</p>
                   <p className="text-h2 font-black text-on-surface">{items.length}</p>
                   <p className="text-caption font-medium text-on-surface-variant">
-                    ${items.reduce((sum, i) => sum + i.amount, 0).toLocaleString()}
+                    ${items.reduce((sum, i) => sum + i.amountTTC, 0).toLocaleString()}
                   </p>
                 </div>
               ))}

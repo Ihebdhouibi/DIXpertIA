@@ -21,7 +21,6 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
-  onToggleRole: () => void;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
   onGoHome: () => void;
@@ -32,7 +31,6 @@ export default function Sidebar({
   activeTab,
   setActiveTab,
   onLogout,
-  onToggleRole,
   isOpenMobile,
   setIsOpenMobile,
   onGoHome,
@@ -53,8 +51,6 @@ export default function Sidebar({
     // Leave Requests: only employee. Accountants are deliberately excluded -
     // they do not manage HR processes (see #10).
     { id: 'leave-requests', label: 'Leave Requests', icon: Calendar, isMock: false, showFor: ['employee'] },
-    // Projects: only admin
-    { id: 'projects', label: 'Projects', icon: Briefcase, isMock: false, showFor: ['admin'] },
     // Payslips: employee and accountant. The accountant access is intentional -
     // #12 deliberately superseded the employee-only rule in #10. Do not revert.
     { id: 'payslips', label: 'Payslips', icon: Receipt, isMock: false, showFor: ['employee' , 'accountant'] },
@@ -151,12 +147,14 @@ export default function Sidebar({
               <><UserCheck className="w-4 h-4" /> Employee Mode</>
             )}
           </div>
-          <button
-            onClick={onToggleRole}
-            className="w-full text-[11px] bg-primary text-on-primary py-1.5 rounded font-bold hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
-          >
-            Switch to {currentUser.role === 'admin' ? 'Employee' : currentUser.role === 'accountant' ? 'Employee' : 'Admin'} View
-          </button>
+          {/*
+            The "Switch to ... View" button was removed in #65 (it is #66's own
+            issue). It rewrote the signed-in user's role, id and name in the
+            browser, so any employee could render the admin screens. The server
+            always refused the admin actions, so nothing could actually be done
+            - but the screens were shown over mock data, which is a more
+            convincing lie than a refusal.
+          */}
         </div>
 
         <button
