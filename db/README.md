@@ -261,6 +261,264 @@ The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
 
+## Income and expense: one table, two directions
+
+The accountant works with invoices both ways: **outgoing** to clients (income)
+and **incoming** from suppliers (expenses). Until #40 the system modelled only
+the first, so storing a supplier bill meant inventing a row in `clients` -- and
+the client list silently mixed people who pay us with people we pay.
+
+`invoices.direction` is `OUTGOING` or `INCOMING`. One table rather than two,
+because the monthly close, the periods, the line items and every report want to
+see both; two tables would have meant duplicating or UNIONing all of it.
+
+`ck_invoice_counterparty` keeps the row coherent: an outgoing invoice has a
+client and no supplier, an incoming one has a supplier and no client. Neither
+both nor neither is possible.
+
+### Two numbers on a supplier bill
+
+| Column | Whose | Example |
+|---|---|---|
+| `numero` | **ours**, always | `FF-2026-0004` |
+| `supplier_reference` | the supplier's, as printed | `2026-001` |
+
+They never share a column. If they did, every report and filter would mix their
+numbering with ours.
+
+Our own number exists because a supplier's is not ours to assign and two
+suppliers may well use the same one. `numero` stays globally unique because both
+series are ours; `FA` is what we issue, `FF` is the internal filing reference for
+what we receive.
+
+### Uniqueness is per supplier, never global
+
+`uq_supplier_reference` is `(supplier_id, supplier_reference)`.
+
+- **Globally unique would be wrong.** Two suppliers both numbering a bill
+  "2026-001" is ordinary, and a global constraint rejects the second one.
+- **No uniqueness would be worse.** The same bill could be entered twice and so
+  **paid twice**. Scoped per supplier, this is a real control against both
+  honest duplication and a supplier resubmitting.
+
+`db/verify_constraints.py` probes both sides: the same reference from a
+*different* supplier must be **accepted**, and from the *same* supplier refused.
+
+### Two series, two counters
+
+`invoice_sequences` is keyed on `(series, year)`. A shared counter would
+interleave sales and purchases, so `FA-2026-0003` could be followed by
+`FA-2026-0007` with the gap taken by a purchase.
+
+Both series are gapless. A purchase taking a number from the sales series is
+refused.
+
+### The chronological rule applies to OUTGOING only
+
+Supplier bills arrive out of date order by nature -- one dated the 3rd is
+routinely booked after one dated the 20th. Applying #39's rule to them would
+reject ordinary bookkeeping.
+
+Before #40 they were spared only because the trigger matched the `FA-` pattern,
+which was an accident of pattern-matching. It is now scoped on `direction`,
+which is what it always meant. `verify_constraints.py` probes a supplier bill
+booked out of order and expects it **accepted**.
+
+### Which month an expense belongs to
+
+`date_emission` -- the supplier's own date, not the day it was entered. That is
+the accrual and VAT treatment, confirmed with the accountant.
+
+The consequence is deliberate: a bill arriving after its month has closed cannot
+be booked to it, because the period seal from #42 refuses it. **A month should
+therefore be closed only once its supplier bills are in.**
+
+### VAT
+
+Direction is what makes VAT reportable. The close records income and cost
+separately on the period:
+
+| | |
+|---|---|
+| `total_ht_outgoing`, `total_ttc_outgoing` | what we invoiced |
+| `total_ht_incoming`, `total_ttc_incoming` | what we were billed |
+
+VAT collected is `ttc - ht` on the outgoing side, VAT deductible the same on the
+incoming side, and the difference is what the return owes. One pair of totals
+would have added revenue to cost and produced a figure meaning nothing.
+
+### Suppliers
+
+`suppliers` is a separate table from `clients`, not one counterparty table with
+a role flag. The same company could in principle be both, but conflating them
+makes every revenue figure that counts clients wrong.
+
+`ux_suppliers_nom_ci` stops the same supplier being created twice under
+different casing -- which would let one bill be entered once under each, and so
+be paid twice.
+
+Row-level security matches the clients policy: admin and accountant read and
+write; an employee sees nothing.
+
+
+## Invoice numbering is gapless
+
+The accountant requires invoice numbers to start at 1 and increase by exactly 1,
+with no gaps and no duplicates (#38). The series **restarts each year**, keeping
+the `FA-YYYY-NNNN` format: `FA-2026-0001` follows `FA-2025-0184`.
+
+Since #40 there are **two** series, each with its own counter: `FA` for what we
+issue and `FF` for the internal reference given to a supplier's bill. Both are
+gapless and neither can take a number from the other.
+
+### Why a counter table and not a sequence
+
+A PostgreSQL sequence is deliberately **not** gapless. It does not roll back
+when a transaction fails, precisely so concurrent writers never block each
+other. An invoice number is a legal artefact, so the opposite trade-off is the
+one wanted here.
+
+`invoice_sequences` holds one row per year, and allocation happens inside the
+transaction that creates the invoice:
+
+```sql
+UPDATE invoice_sequences SET last_number = last_number + 1
+WHERE year = :year RETURNING last_number
+```
+
+That row lock is held until commit, which buys both properties:
+
+- two concurrent creates **serialise**, so neither can take the same number
+- a failed create **rolls the counter back with it**, so no number is burned
+
+Invoice creation therefore serialises on one row per year. That is a deliberate
+choice: a gapless counter and high write concurrency are fundamentally in
+tension, and this company issues a few invoices a day. If volume ever makes the
+lock hurt, the answer is to allocate at *issue* time rather than at draft
+creation, not to drop the lock.
+
+### What this replaced
+
+The number came from `COUNT(*) + 1`, which broke three ways:
+
+| | |
+|---|---|
+| Deleting an invoice | the next create computed a number that already existed, hit `invoices_numero_key` and returned 500 — and kept failing until someone worked out why |
+| Two concurrent creates | both read the same count, both computed the same number, one failed |
+| A failed transaction | left a hole nobody detected |
+
+Measured after the change: 8 concurrent creates produced 8 distinct numbers with
+zero failures.
+
+### An invoice is never deleted
+
+`invoice_is_never_deleted` refuses **every** delete, not only the archived ones
+#41 protects. Deleting any invoice leaves a hole in the series, which is the
+thing the accountant asked to be impossible.
+
+An invoice issued in error is **cancelled**, keeping its row and its number with
+`statut = ANNULEE`, and corrected by a credit note. That is the standard
+accounting answer and the same shape as the correction rule for a closed month.
+
+### The series is enforced, not just generated
+
+`invoice_number_is_sequential` refuses an inserted number that is not exactly
+one more than the highest already issued for its year, so a direct SQL write
+cannot quietly break the series either.
+
+**Scope, stated honestly:** the rule applies only to numbers matching
+`FA-YYYY-NNNN` or `FF-YYYY-NNNN`. Those are our two series; a fixture using
+another prefix (the seeder uses `PERF-`) is outside them. The API never lets a caller choose a number —
+it is generated server-side — so the only writer this governs is a direct SQL
+insert, where the operator is already the database owner.
+
+### Finding a gap
+
+With no deletes and a transactional counter, a gap cannot occur. To check
+anyway:
+
+```sql
+SELECT year, expected
+FROM (
+    SELECT substring(numero from 4 for 4)::int AS year,
+           generate_series(1, max(substring(numero from 9)::int)) AS expected
+    FROM invoices
+    WHERE numero ~ '^FA-[0-9]{4}-[0-9]+$'
+    GROUP BY 1
+) s
+WHERE NOT EXISTS (
+    SELECT 1 FROM invoices
+    WHERE numero = 'FA-' || s.year || '-' || lpad(s.expected::text, 4, '0')
+);
+```
+
+An empty result means the series is intact.
+
+
+## Invoice numbers run in issue-date order
+
+Invoice 3 cannot be dated before invoice 2 (#39). Formally, within one year's
+series, `numero_a < numero_b` implies `date_emission_a <= date_emission_b`.
+
+This held by accident until it was enforced. `date_emission` was hardcoded to
+`date.today()` and `InvoiceCreate` never accepted it, so invoices could only be
+created in order -- an implementation detail, not a guarantee. It would have
+broken the first time anything backdated, imported history, or edited a date.
+
+### Why a trigger and not a CHECK
+
+The invariant holds **between rows**, and a `CHECK` sees only one row. A trigger
+can look at the others, and it is also the only place that catches
+`migrate_data.py` and `insert_invoices.py`, which write to this database
+directly.
+
+`invoice_number_follows_date` fires on insert, and on any update of
+`date_emission` or `numero`. It checks **both directions**, because an update
+can break the order from either side: moving an early invoice's date forward
+past a later one, or a later invoice's date back before an earlier one.
+
+### Dates may repeat
+
+Several invoices are routinely issued on one day, so the rule is "not earlier
+than", never "strictly later than". The second invoice of any morning would
+otherwise be refused. `db/verify_constraints.py` probes exactly that case and
+expects it to be **accepted**.
+
+### Each year is its own series
+
+2028 starts fresh and is not ordered against 2027, matching the per-year
+numbering decided in #38.
+
+### Backdating
+
+Not currently possible through the API: `date_emission` is set server-side and
+`InvoiceCreate` does not accept it. This change does not add backdating; it
+means the invariant will already hold when backdating is added.
+
+Two rules will then apply together: a date cannot break the series order (this
+one), and it cannot fall in a closed month (the period seal from #42). Between
+them, backdating is confined to the open month and to a position consistent with
+the number -- which is the behaviour the accountant described.
+
+### Cost
+
+The two series triggers scan for neighbouring numbers on every insert, which
+`ix_invoices_series` serves -- a partial expression index over the extracted year
+and number, since `substring()` cannot use an ordinary index on `numero`.
+
+Measured with 4000 invoices in one year's series:
+
+| | per insert |
+|---|---|
+| with `ix_invoices_series` | 9.3 ms |
+| without it | 15.1 ms |
+
+Still slow for a hot write path, and deliberately accepted: this company issues
+a few invoices a day, and the alternative is a series the accountant cannot
+rely on. The figure grows with the size of a single year's series, so it is
+worth re-measuring if volume ever changes by an order of magnitude.
+
+
 ## The monthly accounting period
 
 The accountant works the books a month at a time. `accounting_periods` holds one

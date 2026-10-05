@@ -1,7 +1,8 @@
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from sqlalchemy.exc import DatabaseError
+from sqlalchemy import text
+from sqlalchemy.exc import DatabaseError, IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -9,17 +10,26 @@ from app.core.deps import get_current_user, require_roles
 from app.models.invoicing import (
     Client,
     Invoice,
+    InvoiceDirection,
     InvoiceItem,
     InvoiceProcessingStatus,
     InvoiceStatus,
+    Supplier,
 )
 from app.models.user import User
+# InvoiceOut comes from app.schemas.api, not from .invoicing: that module
+# holds the ORM-shaped schemas used to validate input, while the API's
+# output contract is the translated one (#37 Option C). One response shape
+# for every invoice endpoint means the UI never sees French column names.
+from app.schemas.api import InvoiceOut
 from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
     InvoiceCreate,
-    InvoiceOut,
     ProcessingStatusUpdate,
+    SupplierCreate,
+    SupplierInvoiceCreate,
+    SupplierOut,
 )
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
 
@@ -85,12 +95,73 @@ def _trigger_message(exc: DatabaseError) -> str:
     return line
 
 
+# ---- Suppliers ----
+
+@router.get("/suppliers", response_model=list[SupplierOut])
+def list_suppliers(
+    response: Response,
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    return _paginate(response, db.query(Supplier).order_by(Supplier.nom), limit, offset)
+
+
+@router.post("/suppliers", response_model=SupplierOut, status_code=201)
+def create_supplier(payload: SupplierCreate, db: Session = Depends(get_db)):
+    supplier = Supplier(**payload.model_dump())
+    db.add(supplier)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # ux_suppliers_nom_ci. Two rows for one supplier would let the same bill
+        # be entered once under each and so be paid twice.
+        raise HTTPException(
+            status_code=409,
+            detail=f"a supplier named '{payload.nom}' already exists",
+        ) from exc
+    db.refresh(supplier)
+    return supplier
+
+
 # ---- Invoices ----
 
-def _generate_invoice_number(db: Session) -> str:
-    year = date.today().year
-    count = db.query(Invoice).filter(Invoice.numero.like(f"FA-{year}-%")).count() + 1
-    return f"FA-{year}-{count:04d}"
+def _allocate_invoice_number(db: Session, series: str, year: int) -> str:
+    """Take the next number in the year's series (#38).
+
+    The accountant requires the series to start at 1 and increase by exactly 1,
+    with no gaps and no duplicates. This replaces COUNT(*) + 1, which broke
+    three ways: deleting an invoice made the next create collide with a number
+    that already existed and fail with a 500; two concurrent creates computed
+    the same number; and a failed transaction left a hole nobody detected.
+
+    The UPDATE below takes a row lock held until this transaction commits, so a
+    second create waits rather than reading a stale counter. If this
+    transaction rolls back, the counter rolls back with it and the number is
+    handed to the next caller instead of being burned.
+
+    That serialises invoice creation on one row per series and year.
+    Deliberate: a gapless counter and concurrent writes are in tension, and a
+    few invoices a day does not strain it.
+
+    `series` is 'FA' for invoices we issue and 'FF' for the internal reference
+    given to a supplier's bill (#40). They are separate counters, so a purchase
+    can never take a number out of the sales series.
+    """
+    # The year may have issued nothing yet. ON CONFLICT DO NOTHING rather than
+    # a SELECT-then-INSERT, which would race with another first invoice.
+    db.execute(
+        text("INSERT INTO invoice_sequences (series, year, last_number)"
+             " VALUES (:s, :y, 0) ON CONFLICT (series, year) DO NOTHING"),
+        {"s": series, "y": year},
+    )
+    allocated = db.execute(
+        text("UPDATE invoice_sequences SET last_number = last_number + 1"
+             " WHERE series = :s AND year = :y RETURNING last_number"),
+        {"s": series, "y": year},
+    ).scalar_one()
+    return f"{series}-{year}-{allocated:04d}"
 
 
 def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
@@ -108,7 +179,9 @@ def list_invoices(
     db: Session = Depends(get_db),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(0, ge=0),
+    direction: InvoiceDirection | None = None,
     client_id: int | None = None,
+    supplier_id: int | None = None,
     statut: InvoiceStatus | None = None,
     processing_status: InvoiceProcessingStatus | None = None,
     month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$",
@@ -130,8 +203,12 @@ def list_invoices(
         .options(selectinload(Invoice.items))
         .order_by(Invoice.date_emission.desc(), Invoice.id.desc())
     )
+    if direction is not None:
+        query = query.filter(Invoice.direction == direction)
     if client_id is not None:
         query = query.filter(Invoice.client_id == client_id)
+    if supplier_id is not None:
+        query = query.filter(Invoice.supplier_id == supplier_id)
     if statut is not None:
         query = query.filter(Invoice.statut == statut)
     if processing_status is not None:
@@ -140,7 +217,8 @@ def list_invoices(
         start = date(int(month[:4]), int(month[5:]), 1)
         end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
         query = query.filter(Invoice.date_emission >= start, Invoice.date_emission < end)
-    return _paginate(response, query, limit, offset)
+    return [InvoiceOut.from_orm_row(i)
+            for i in _paginate(response, query, limit, offset)]
 
 
 # Creating an invoice is admin-only, overriding the router-wide list. The
@@ -176,19 +254,25 @@ def create_invoice(
             Invoice.idempotency_key == idempotency_key
         ).first()
         if existing:
-            return existing
+            return InvoiceOut.from_orm_row(existing)
+
+    # One date, used for both the series year and the row, so an invoice
+    # created at midnight on 1 January cannot take a 2026 number while
+    # being dated 2025.
+    issued_on = date.today()
 
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
     invoice = Invoice(
-        numero=_generate_invoice_number(db),
+        numero=_allocate_invoice_number(db, "FA", issued_on.year),
         client_id=payload.client_id,
-        date_emission=date.today(),
+        date_emission=issued_on,
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
         statut=InvoiceStatus.BROUILLON,
+        direction=InvoiceDirection.OUTGOING,
         cree_par_id=current_user.id,
         idempotency_key=idempotency_key,
     )
@@ -202,10 +286,81 @@ def create_invoice(
 
     # Validate the response while the transaction can still be rolled back. If
     # this raises, nothing is persisted and the caller may safely retry.
-    response = InvoiceOut.model_validate(invoice, from_attributes=True)
+    response = InvoiceOut.from_orm_row(invoice)
 
     db.commit()
     # TODO: generate PDF (WeasyPrint) + send email to client
+    return response
+
+
+@router.post(
+    "/supplier-invoices",
+    response_model=InvoiceOut,
+    status_code=201,
+    dependencies=[Depends(require_roles("admin", "accountant"))],
+)
+def create_supplier_invoice(
+    payload: SupplierInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Record a bill a supplier issued to us (#40).
+
+    Admin and accountant only: booking an expense is bookkeeping, the same
+    boundary as moving an invoice's processing status.
+
+    The bill keeps the supplier's own number in `supplier_reference` and gets an
+    internal FF-YYYY-NNNN reference of its own in `numero`. Two suppliers both
+    numbering a bill "2026-001" is ordinary, so uniqueness on their reference is
+    per supplier - which is also what stops the same bill being entered, and
+    paid, twice.
+
+    `date_emission` is the supplier's date, not today's. It decides which month
+    the expense belongs to, so a bill whose month has already closed is refused
+    by the period seal from #42 rather than quietly landing in the open one.
+    """
+    if not db.get(Supplier, payload.supplier_id):
+        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+
+    invoice = Invoice(
+        numero=_allocate_invoice_number(db, "FF", payload.date_emission.year),
+        direction=InvoiceDirection.INCOMING,
+        supplier_id=payload.supplier_id,
+        supplier_reference=payload.supplier_reference,
+        date_emission=payload.date_emission,
+        date_echeance=payload.date_echeance,
+        # Taken from the bill, not computed from its lines: the supplier's
+        # totals are theirs, and rounding conventions differ.
+        montant_ht=payload.montant_ht,
+        montant_ttc=payload.montant_ttc,
+        statut=InvoiceStatus.ENVOYEE,
+        cree_par_id=current_user.id,
+    )
+    # The flush is inside the guard, not only the commit: uq_supplier_reference
+    # and the period seal both raise as soon as the row is sent, which is well
+    # before commit. Guarding the commit alone let a duplicate bill surface as
+    # an unhandled 500 instead of the 409 that tells the accountant it is
+    # already recorded.
+    try:
+        db.add(invoice)
+        db.flush()
+        for item in payload.items:
+            db.add(InvoiceItem(invoice_id=invoice.id, **item.model_dump()))
+        db.flush()
+        db.refresh(invoice)
+        # Built before the commit, for the reason set out on create_invoice.
+        response = InvoiceOut.from_orm_row(invoice)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(f"invoice '{payload.supplier_reference}' from this supplier "
+                    "has already been recorded"),
+        ) from exc
+    except DatabaseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
     return response
 
 
@@ -241,7 +396,7 @@ def set_processing_status(
         # is more useful than a generic 409, and it is written for a reader.
         raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
     db.refresh(invoice)
-    return invoice
+    return InvoiceOut.from_orm_row(invoice)
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
@@ -250,7 +405,7 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
-    return invoice
+    return InvoiceOut.from_orm_row(invoice)
 
 
 # ---- Download Invoice PDF (NEW) ----

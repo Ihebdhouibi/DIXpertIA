@@ -19,14 +19,18 @@ from app.models.employee import Employee, EmploymentStatus  # noqa: F401
 from app.models.invoicing import (  # noqa: F401
     Client,
     Invoice,
+    InvoiceDirection,
     InvoiceItem,
+    InvoiceProcessingStatus,
     InvoiceStatus,
+    Supplier,
 )
 from app.models.leaves import (  # noqa: F401
     LeaveRequest,
     LeaveStatus,
     LeaveType,
 )
+from app.models.numbering import InvoiceSequence  # noqa: F401
 from app.models.payroll import Payslip  # noqa: F401
 from app.models.service import Service  # noqa: F401
 from app.models.user import User  # noqa: F401

@@ -1,23 +1,34 @@
 import React, { useState } from 'react';
 import { Plus, Search, Edit, Ban, CheckCircle, X, Calendar, User, FileText, Check, AlertCircle } from 'lucide-react';
-import { TeamMember, LeaveRequest, UserRole } from '../types';
+import { Employee, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
 
 interface TeamViewProps {
   userRole: UserRole;
-  teamMembers: TeamMember[];
+  employees: Employee[];
   leaveRequests: LeaveRequest[];
-  onAddEmployee: (member: Partial<TeamMember>) => void;
   onApproveLeave: (id: string) => void;
   onRejectLeave: (id: string, comment: string) => void;
 }
 
+
+/** Two initials from a display name, for the avatar circle. */
+function initialsOf(name: string): string {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+}
+
+/** The employment status as a label, matching the StatusBadge vocabulary. */
+function employmentLabel(status: string): string {
+  if (status === 'active') return 'Active';
+  if (status === 'on_leave') return 'On Hold';
+  return 'Inactive';
+}
+
 export default function TeamView({
   userRole,
-  teamMembers,
+  employees,
   leaveRequests,
-  onAddEmployee,
   onApproveLeave,
   onRejectLeave,
 }: TeamViewProps) {
@@ -34,7 +45,6 @@ export default function TeamView({
 
   // Admin-only states
   const [activeSubTab, setActiveSubTab] = useState<'employees' | 'leave-approvals'>('employees');
-  const [isAddOpen, setIsAddOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,22 +60,6 @@ export default function TeamView({
   };
 
   // --- Handlers (admin only) ---
-  const handleAddEmployeeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firstName || !lastName || !email || !role) {
-      showToast('Please fill in all required fields.', 'error');
-      return;
-    }
-    const initials = `${firstName[0]}${lastName[0]}`.toUpperCase();
-    onAddEmployee({ firstName, lastName, email, role, status: 'Active', initials });
-    setIsAddOpen(false);
-    showToast(`Profile of ${firstName} ${lastName} created.`);
-    setFirstName('');
-    setLastName('');
-    setEmail('');
-    setRole('');
-  };
-
   const handleApprove = (id: string, name: string) => {
     onApproveLeave(id);
     showToast(`Leave request from ${name} approved.`);
@@ -87,12 +81,12 @@ export default function TeamView({
   };
 
   // --- Filtered employees ---
-  const filteredEmployees = teamMembers.filter(member => {
-    const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
+  const filteredEmployees = employees.filter(member => {
+    const fullName = `${member.name.split(' ')[0]} ${member.name.split(' ').slice(1).join(' ')}`.toLowerCase();
     const query = searchQuery.toLowerCase();
     const matchesSearch = fullName.includes(query) || member.email.toLowerCase().includes(query);
     const matchesRole = selectedRole === 'All Roles' || member.role.toLowerCase().includes(selectedRole.toLowerCase());
-    const matchesStatus = selectedStatus === 'All Status' || member.status === selectedStatus;
+    const matchesStatus = selectedStatus === 'All Status' || employmentLabel(member.employmentStatus) === selectedStatus;
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -135,10 +129,10 @@ export default function TeamView({
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                          {member.initials}
+                          {initialsOf(member.name)}
                         </div>
                         <div>
-                          <div className="font-bold text-body-sm text-on-surface">{member.firstName} {member.lastName}</div>
+                          <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
                         </div>
                       </div>
                     </td>
@@ -149,7 +143,7 @@ export default function TeamView({
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <StatusBadge status={member.status} />
+                      <StatusBadge status={employmentLabel(member.employmentStatus)} />
                     </td>
                   </tr>
                 ))}
@@ -190,15 +184,6 @@ export default function TeamView({
             <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team Dashboard</h1>
             <p className="text-body-lg text-on-surface-variant mt-1">Manage team members and leave requests.</p>
           </div>
-          {activeSubTab === 'employees' && (
-            <button
-              onClick={() => setIsAddOpen(true)}
-              className="bg-primary hover:bg-primary/95 text-on-primary px-5 py-2.5 rounded-lg font-bold text-body-sm transition-all flex items-center gap-2 shadow-sm whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Employee</span>
-            </button>
-          )}
         </div>
 
         {/* Tabs */}
@@ -286,10 +271,10 @@ export default function TeamView({
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                              {member.initials}
+                              {initialsOf(member.name)}
                             </div>
                             <div>
-                              <div className="font-bold text-body-sm text-on-surface">{member.firstName} {member.lastName}</div>
+                              <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
                             </div>
                           </div>
                         </td>
@@ -300,19 +285,19 @@ export default function TeamView({
                           </span>
                         </td>
                         <td className="py-4 px-6">
-                          <StatusBadge status={member.status} />
+                          <StatusBadge status={employmentLabel(member.employmentStatus)} />
                         </td>
                         <td className="py-4 px-6 text-right">
                           <div className="flex justify-end gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => showToast(`Edit ${member.firstName} (not implemented yet)`, 'error')}
+                              onClick={() => showToast(`Edit ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
                               className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer"
                               title="Edit Profile"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => showToast(`Toggle status for ${member.firstName} (not implemented yet)`, 'error')}
+                              onClick={() => showToast(`Toggle status for ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
                               className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/50 rounded transition-colors cursor-pointer"
                               title="Toggle Status"
                             >
@@ -334,7 +319,7 @@ export default function TeamView({
               </div>
               <div className="border-t border-outline-variant bg-surface-container-lowest px-6 py-4 flex items-center justify-between">
                 <span className="text-body-sm text-on-surface-variant font-medium">
-                  Showing {filteredEmployees.length} of {teamMembers.length} employees
+                  Showing {filteredEmployees.length} of {employees.length} employees
                 </span>
               </div>
             </div>
@@ -411,7 +396,7 @@ export default function TeamView({
                             </div>
                             <div>
                               <div className="font-bold text-on-surface">{req.employeeName}</div>
-                              <div className="text-caption text-on-surface-variant font-medium">{req.department}</div>
+                              <div className="text-caption text-on-surface-variant font-medium">{req.jobTitle ?? '-'}</div>
                             </div>
                           </div>
                         </td>
@@ -466,106 +451,18 @@ export default function TeamView({
           </div>
         )}
 
-        {/* Add Employee Modal */}
-        {isAddOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsAddOpen(false)}></div>
-            <div className="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-[500px] flex flex-col max-h-[92%] animate-scale-up border border-outline-variant">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 shrink-0 bg-surface">
-                <h2 className="text-h2 font-black text-on-surface m-0">Add New Employee</h2>
-                <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition-colors cursor-pointer" onClick={() => setIsAddOpen(false)}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto">
-                <form onSubmit={handleAddEmployeeSubmit} className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-on-surface-variant">First Name</label>
-                      <input
-                        required
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                        placeholder="e.g. Jane"
-                        type="text"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-on-surface-variant">Last Name</label>
-                      <input
-                        required
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                        placeholder="e.g. Doe"
-                        type="text"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-on-surface-variant">Work Email</label>
-                    <input
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                      placeholder="jane.doe@dixpertia.com"
-                      type="email"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-on-surface-variant">Role / Department</label>
-                    <select
-                      required
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface cursor-pointer font-medium"
-                    >
-                      <option value="" disabled>Select a role...</option>
-                      <option value="Senior Developer">Senior Developer</option>
-                      <option value="Project Manager">Project Manager</option>
-                      <option value="System Administrator">System Administrator</option>
-                      <option value="Security Analyst">Security Analyst</option>
-                      <option value="HR Coordinator">HR Coordinator</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5 pt-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        checked={sendInvitation}
-                        onChange={(e) => setSendInvitation(e.target.checked)}
-                        className="rounded border-outline-variant text-primary focus:ring-primary w-4 h-4 bg-surface"
-                        type="checkbox"
-                      />
-                      <span className="text-on-surface text-xs font-semibold">Send invitation email to set password</span>
-                    </label>
-                  </div>
-                  <div className="px-6 py-4 border-t border-outline-variant/50 bg-surface flex justify-end gap-3 shrink-0 rounded-b-xl pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddOpen(false)}
-                      className="px-4 py-2 border border-primary text-primary rounded-lg font-bold text-body-sm hover:bg-primary/5 transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
-                    >
-                      Create Profile
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
+        {/*
+          The Add Employee modal was removed in #65. It collected a name and
+          an e-mail and posted nowhere: creating a person is two steps - a
+          login account, then the employee record that carries the
+          employment terms (#60) - and POST /api/employees needs a userId
+          that already exists. That flow belongs with #62.
+        */}
 
         {/* Reject Modal */}
         {isRejectOpen && (
           <div className="fixed inset-0 bg-on-background/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md p-6 border border-outline-variant animate-scale-up">
+            <div className="relative bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md p-6 border border-outline-variant animate-scale-up">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-h2 text-on-surface font-black m-0">Reject Leave Request</h2>
                 <button className="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-surface-variant transition-colors cursor-pointer" onClick={() => setIsRejectOpen(false)}>
@@ -609,7 +506,7 @@ export default function TeamView({
           <CalendarView
             leaveRequests={leaveRequests}
             userRole={userRole}
-            currentUserId={undefined}
+            currentEmployeeId={undefined}
             onClose={() => setShowCalendar(false)}
           />
         )}
@@ -687,10 +584,10 @@ export default function TeamView({
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                        {member.initials}
+                        {initialsOf(member.name)}
                       </div>
                       <div>
-                        <div className="font-bold text-body-sm text-on-surface">{member.firstName} {member.lastName}</div>
+                        <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
                       </div>
                     </div>
                   </td>
@@ -701,7 +598,7 @@ export default function TeamView({
                     </span>
                   </td>
                   <td className="py-4 px-6">
-                    <StatusBadge status={member.status} />
+                    <StatusBadge status={employmentLabel(member.employmentStatus)} />
                   </td>
                 </tr>
               ))}

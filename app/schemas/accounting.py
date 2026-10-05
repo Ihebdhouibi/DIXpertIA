@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 
 from app.models.accounting import PeriodState
-from app.models.invoicing import InvoiceProcessingStatus
+from app.models.invoicing import InvoiceDirection, InvoiceProcessingStatus
 
 
 class BlockingInvoice(BaseModel):
@@ -20,6 +20,7 @@ class BlockingInvoice(BaseModel):
     id: int
     numero: str
     date_emission: date
+    direction: InvoiceDirection
     processing_status: InvoiceProcessingStatus
 
 
@@ -33,8 +34,10 @@ class PeriodOut(BaseModel):
     closed_by_id: str | None = None
     # Recorded at the close. Null while the period is open.
     invoice_count: int | None = None
-    total_ht: Decimal | None = None
-    total_ttc: Decimal | None = None
+    total_ht_outgoing: Decimal | None = None
+    total_ttc_outgoing: Decimal | None = None
+    total_ht_incoming: Decimal | None = None
+    total_ttc_incoming: Decimal | None = None
 
 
 class PeriodSummary(BaseModel):
@@ -47,6 +50,24 @@ class PeriodSummary(BaseModel):
     periode: date
     state: PeriodState
     invoice_count: int
-    total_ht: Decimal
-    total_ttc: Decimal
+    # Income and cost kept apart: added together they mean nothing (#40).
+    total_ht_outgoing: Decimal
+    total_ttc_outgoing: Decimal
+    total_ht_incoming: Decimal
+    total_ttc_incoming: Decimal
     blocking: list[BlockingInvoice] = []
+
+    @property
+    def vat_collected(self) -> Decimal:
+        """VAT charged on what we issued."""
+        return self.total_ttc_outgoing - self.total_ht_outgoing
+
+    @property
+    def vat_deductible(self) -> Decimal:
+        """VAT paid on what we bought, which is reclaimable."""
+        return self.total_ttc_incoming - self.total_ht_incoming
+
+    @property
+    def vat_due(self) -> Decimal:
+        """What the VAT return owes: collected minus deductible."""
+        return self.vat_collected - self.vat_deductible

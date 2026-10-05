@@ -182,32 +182,63 @@ class InvoiceItemOut(BaseModel):
 
 
 class InvoiceOut(BaseModel):
+    """An invoice as the UI reads it (#37 Option C, updated for #40 and #41).
+
+    The translation layer between the ORM and the API lives here on purpose:
+    the columns are French and snake_case because the business is, while the
+    UI contract is English and camelCase. Keeping the seam explicit means
+    renaming a column does not break the frontend, and the frontend never has
+    to know that `statut` and `processing_status` are different axes.
+
+    `counterparty` replaced `client`, because an invoice now has one or the
+    other depending on its direction (#40). A supplier bill rendered through
+    the old field read "Unknown".
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     numero: str
-    client: str
-    clientInitials: str
-    amount: float
+    direction: str
+    # Whoever is on the other side: the client we billed, or the supplier who
+    # billed us. Which it is follows from `direction`.
+    counterparty: str
+    counterpartyInitials: str
+    # The supplier's own number, on an incoming invoice only. Never merged with
+    # `numero`, which is always ours.
+    supplierReference: Optional[str] = None
+    amountHT: float
+    amountTTC: float
     dateIssued: str
     dueDate: str
+    # The commercial state the counterparty sees.
     status: str
+    # The accountant's workflow state - a separate axis, not a spelling of the
+    # line above. An invoice is routinely "Paid" and "Pending" at once.
+    processingStatus: str
     items: list[InvoiceItemOut] = Field(default_factory=list)
 
     @classmethod
     def from_orm_row(cls, row) -> "InvoiceOut":
-        client_name = row.client.nom if row.client else "Unknown"
-        initials = "".join(w[0] for w in client_name.split()[:2]).upper() or "?"
-        statut = row.statut.value if hasattr(row.statut, "value") else (row.statut or "envoyee")
+        direction = getattr(row.direction, "value", row.direction) or "outgoing"
+        party = row.supplier if direction == "incoming" else row.client
+        name = getattr(party, "nom", None) or "Unknown"
+        initials = "".join(w[0] for w in name.split()[:2]).upper() or "?"
+        statut = getattr(row.statut, "value", row.statut) or "envoyee"
+        processing = getattr(row.processing_status, "value", row.processing_status) or "pending"
         return cls(
             id=str(row.id),
             numero=row.numero,
-            client=client_name,
-            clientInitials=initials,
-            amount=float(row.montant_ttc or Decimal(0)),
+            direction=direction,
+            counterparty=name,
+            counterpartyInitials=initials,
+            supplierReference=row.supplier_reference,
+            amountHT=float(row.montant_ht or Decimal(0)),
+            amountTTC=float(row.montant_ttc or Decimal(0)),
             dateIssued=row.date_emission.strftime("%b %d, %Y") if row.date_emission else "-",
             dueDate=row.date_echeance.strftime("%b %d, %Y") if row.date_echeance else "-",
             status=INVOICE_STATUS_TO_API.get(statut, "Sent"),
+            processingStatus=INVOICE_PROCESSING_STATUS_TO_API.get(processing, "Pending"),
             items=[
                 InvoiceItemOut(
                     description=i.designation,
@@ -215,6 +246,83 @@ class InvoiceOut(BaseModel):
                     price=float(i.prix_unitaire or 0),
                     total=float((i.quantite or 0) * (i.prix_unitaire or 0)),
                 )
-                for i in (row.items or [])
+                for i in row.items
             ],
+        )
+
+
+# --- Employees and users ----------------------------------------------------
+
+class EmployeeOut(BaseModel):
+    """An employee, with the name carried by their login account.
+
+    The two are separate records since #60: `employees` holds the employment
+    terms, `users` the login. The UI shows one person, so this joins them back
+    together for display rather than making the frontend do it.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    userId: str
+    name: str
+    email: str
+    jobTitle: Optional[str] = None
+    role: str
+    hiredOn: date
+    employmentStatus: str
+    annualEntitlementDays: int
+
+    @classmethod
+    def from_orm_row(cls, row) -> "EmployeeOut":
+        user = row.user
+        status = row.employment_status
+        return cls(
+            id=row.id,
+            userId=row.user_id,
+            name=f"{user.firstName or ''} {user.lastName or ''}".strip(),
+            email=user.email,
+            jobTitle=row.job_title,
+            role=user.role,
+            hiredOn=row.hired_on,
+            employmentStatus=getattr(status, "value", status),
+            annualEntitlementDays=row.annual_entitlement_days,
+        )
+
+
+class UserOut(BaseModel):
+    """A login account.
+
+    hashedPassword, resetToken and resetTokenExpiry are deliberately absent.
+    The audit found the removed GET /api/data returning whole user rows, hashes
+    included, to any authenticated caller; an explicit output schema is what
+    stops that happening again by accident.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    role: str
+    department: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    isActive: bool
+    isVerified: bool
+    createdAt: Optional[str] = None
+
+    @classmethod
+    def from_orm_row(cls, row) -> "UserOut":
+        return cls(
+            id=row.id,
+            email=row.email,
+            firstName=row.firstName,
+            lastName=row.lastName,
+            role=row.role,
+            department=row.department,
+            avatarUrl=row.avatarUrl,
+            isActive=bool(row.isActive),
+            isVerified=bool(row.isVerified),
+            createdAt=row.createdAt.isoformat() if row.createdAt else None,
         )

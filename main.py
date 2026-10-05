@@ -7,24 +7,31 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import date, datetime, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from jose import JWTError, jwt
 import bcrypt
 from dotenv import load_dotenv
 
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
-from app.schemas.api import LeaveRequestCreate, LeaveRequestOut
+from app.schemas.api import (
+    EmployeeOut,
+    LeaveRequestCreate,
+    LeaveRequestOut,
+    PayslipOut,
+    UserOut,
+)
 from app.core.database import get_db
 # app.models imports every model module, which is what populates SQLAlchemy's
 # registry so relationship("Payslip") and friends can resolve. See its docstring.
 import app.models  # noqa: F401
 from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
+from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, invoicing
 
@@ -355,6 +362,127 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
 # and team members) to any authenticated user, whatever their role. It
 # was removed in #55; per-entity endpoints with explicit response schemas replace
 # it as the UI needs them (#65).
+
+@app.get('/api/me', response_model=UserOut)
+def read_me(current_user: User = Depends(get_current_user)):
+    """The signed-in user, resolved from the bearer token.
+
+    Exists so the browser never has to store the user (#65). Previously the
+    whole user object was kept in localStorage and trusted on reload, which
+    meant the client decided its own role: editing one key in devtools was
+    enough to render the admin screens. The server refused the admin *actions*,
+    so nothing could actually be done - but the UI lied, and the fix is for the
+    identity to come from the token on every load.
+    """
+    return UserOut.from_orm_row(current_user)
+
+
+# Every list endpoint is paginated and capped, as the invoice ones are (#61).
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+
+
+@app.get('/api/leave-requests', response_model=List[LeaveRequestOut])
+def list_leave_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Leave requests the caller is allowed to see.
+
+    No role check here on purpose. The row-level security policy added in #74
+    already decides it: an admin sees every row, and everyone else sees the
+    rows belonging to their own employee record. An accountant therefore sees
+    their own leave and nobody else's - they are an employee with an
+    entitlement like anyone else, and the decision on #10 was that they do not
+    get the leave *administration* screen, not that they cannot see their own.
+
+    Repeating the rule in Python would mean two places to keep in step, and the
+    one that actually holds is the database.
+    """
+    rows = (
+        db.query(LeaveRequest)
+        .options(joinedload(LeaveRequest.employee).joinedload(Employee.user))
+        .order_by(LeaveRequest.date_debut.desc(), LeaveRequest.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [LeaveRequestOut.from_orm_row(r, r.employee) for r in rows]
+
+
+@app.get('/api/payslips', response_model=List[PayslipOut])
+def list_payslips(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Payslips the caller is allowed to see.
+
+    Scoped by the same row-level security policy: an employee sees their own,
+    admin and accountant see all. Verified by db/verify_rls.py, which proves an
+    employee asking directly for someone else's payslip gets no rows.
+    """
+    rows = (
+        db.query(Payslip)
+        .order_by(Payslip.periode.desc(), Payslip.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [PayslipOut.from_orm_row(r) for r in rows]
+
+
+@app.get('/api/employees', response_model=List[EmployeeOut])
+def list_employees(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """The team: employee records with the name from their login account.
+
+    joinedload, not lazy access: the serialiser reads employee.user for every
+    row, which without it is one query per employee (#61).
+    """
+    rows = (
+        db.query(Employee)
+        .options(joinedload(Employee.user))
+        .order_by(Employee.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [EmployeeOut.from_orm_row(r) for r in rows]
+
+
+@app.get('/api/users', response_model=List[UserOut])
+def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Login accounts. Admin only.
+
+    Checked in Python rather than by a policy because `users` is deliberately
+    NOT under row-level security: login, forgot-password and reset-password all
+    read the table with no authenticated identity, so a policy there would break
+    authentication outright. Closing that properly is #76.
+    """
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Admins only")
+    rows = (
+        db.query(User)
+        .order_by(User.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [UserOut.from_orm_row(r) for r in rows]
+
 
 @app.post('/api/leave-requests', status_code=201, response_model=LeaveRequestOut)
 def create_leave_request(

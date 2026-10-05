@@ -180,21 +180,32 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                   <td className="py-4 px-6">
                     <StatusBadge status={u.isActive ? 'Active' : 'Inactive'} />
                   </td>
+                  {/*
+                    Each button appears only if its handler was supplied. The
+                    API has no endpoint for editing or deleting an account yet
+                    (#62), so they are currently hidden rather than shown doing
+                    nothing - a button that silently fails is worse than no
+                    button.
+                  */}
                   {isAdmin && (
                     <td className="py-4 px-6 text-right">
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(u)}
-                          className="p-1.5 text-on-surface-variant hover:text-primary rounded transition-colors cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(u.id, `${u.firstName} ${u.lastName}`)}
-                          className="p-1.5 text-on-surface-variant hover:text-error rounded transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {onEditUser && (
+                          <button
+                            onClick={() => handleOpenEdit(u)}
+                            className="p-1.5 text-on-surface-variant hover:text-primary rounded transition-colors cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {onDeleteUser && (
+                          <button
+                            onClick={() => handleDelete(u.id, `${u.firstName} ${u.lastName}`)}
+                            className="p-1.5 text-on-surface-variant hover:text-error rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   )}

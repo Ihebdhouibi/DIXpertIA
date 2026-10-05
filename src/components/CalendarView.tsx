@@ -18,7 +18,7 @@ const localizer = dateFnsLocalizer({
 interface CalendarViewProps {
   leaveRequests: LeaveRequest[];
   userRole: UserRole;
-  currentUserId?: string;
+  currentEmployeeId?: number;
   onClose: () => void;
 }
 
@@ -31,14 +31,12 @@ interface CalendarEvent {
   resource?: any;
 }
 
-export default function CalendarView({ leaveRequests, userRole, currentUserId, onClose }: CalendarViewProps) {
+export default function CalendarView({ leaveRequests, userRole, currentEmployeeId, onClose }: CalendarViewProps) {
   const events = useMemo(() => {
     let filtered = leaveRequests;
-    if (userRole === 'employee' && currentUserId) {
-      filtered = leaveRequests.filter(req => req.employeeId === currentUserId);
+    if (userRole === 'employee' && currentEmployeeId) {
+      filtered = leaveRequests.filter(req => req.employeeId === currentEmployeeId);
     }
-
-    console.log(' Filtered leave requests:', filtered);
 
     return filtered
       .map((req): CalendarEvent | null => {
@@ -80,9 +78,7 @@ export default function CalendarView({ leaveRequests, userRole, currentUserId, o
         };
       })
       .filter((event): event is CalendarEvent => event !== null);
-  }, [leaveRequests, userRole, currentUserId]);
-
-  console.log(' Generated events:', events);
+  }, [leaveRequests, userRole, currentEmployeeId]);
 
   // Same tones as the status badges, as theme variables so events follow
   // light and dark. Tint fill with tone text and a tone edge: AA in both themes.
