@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Wordmark from './ui/Wordmark';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -65,23 +66,6 @@ const INK_BUTTON =
 const FIELD =
   'w-full px-3 py-2.5 bg-white border border-hairline rounded-lg text-sm text-ink placeholder:text-ink-muted outline-none focus:border-ink focus:ring-1 focus:ring-ink transition';
 const EYEBROW = 'font-mono text-xs font-medium uppercase tracking-[0.18em]';
-
-/** Mark + "DI Xpertia" wordmark, as on the palette sheet. */
-function Wordmark({ onInk = false }: { onInk?: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <img
-        src={onInk ? '/brand/mark-light.svg' : '/brand/mark-dark.svg'}
-        alt=""
-        className="w-8 h-8"
-      />
-      <span className={`text-xl font-bold tracking-[-0.02em] ${onInk ? 'text-paper' : 'text-ink'}`}>
-        DI{' '}
-        <span className={`font-mono font-medium ${onInk ? 'text-lime' : 'text-lime-deep'}`}>Xpertia</span>
-      </span>
-    </span>
-  );
-}
 
 export default function Homepage({ onDashboardClick }: HomepageProps) {
   const [currentPage, setCurrentPage] = useState<Page>('home');

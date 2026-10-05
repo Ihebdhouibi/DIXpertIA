@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import Wordmark from './Wordmark';
 
 /**
  * Shared frame for Login, ForgotPassword and ResetPassword (#29): the app's
@@ -24,13 +25,7 @@ export default function AuthLayout({ title, subtitle, footer, children }: AuthLa
         >
           <div className="p-8 flex flex-col gap-6">
             <div className="flex flex-col gap-5">
-              <span className="inline-flex items-center gap-2" aria-label="DI Xpertia">
-                <img src="/brand/mark-dark.svg" alt="" className="w-8 h-8 dark:hidden" />
-                <img src="/brand/mark-light.svg" alt="" className="w-8 h-8 hidden dark:block" />
-                <span className="text-lg font-bold tracking-[-0.02em]" aria-hidden="true">
-                  DI <span className="font-mono font-medium text-secondary">Xpertia</span>
-                </span>
-              </span>
+              <Wordmark size="sm" />
               <div>
                 <h1 className="text-2xl font-bold tracking-[-0.02em]">{title}</h1>
                 {subtitle && <p className="mt-1.5 text-sm text-on-surface-variant">{subtitle}</p>}

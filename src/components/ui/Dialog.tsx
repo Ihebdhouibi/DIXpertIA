@@ -15,6 +15,30 @@ import Button from './Button';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
   'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * keydown handler for a modal <dialog>: Tab past the last control goes back to
+ * the first, Shift+Tab past the first to the last. Only the innermost open
+ * dialog reacts. Shared with the mobile navigation drawer (#27).
+ */
+export function wrapTab(e: React.KeyboardEvent<HTMLDialogElement>) {
+  if (e.key !== 'Tab') return;
+  const dialog = e.currentTarget;
+  if ((e.target as HTMLElement).closest('dialog') !== dialog) return;
+  const items = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => el.closest('dialog') === dialog && el.offsetParent !== null
+  );
+  if (items.length === 0) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
 export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
 const SIZES: Record<DialogSize, string> = {
@@ -88,25 +112,7 @@ export default function Dialog({
         e.preventDefault();
         onClose();
       }}
-      onKeyDown={(e) => {
-        if (e.key !== 'Tab') return;
-        const dialog = e.currentTarget;
-        // Only the innermost open dialog handles Tab.
-        if ((e.target as HTMLElement).closest('dialog') !== dialog) return;
-        const items = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-          (el) => el.closest('dialog') === dialog && el.offsetParent !== null
-        );
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }}
+      onKeyDown={wrapTab}
       // A click on the dialog element itself is a click on the scrim around the panel.
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
