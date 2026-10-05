@@ -60,9 +60,16 @@ class AccountingPeriod(Base):
     # What the close found, recorded at the moment it ran. The invoices are
     # frozen afterwards, so these should still match a recount at any later
     # date; a mismatch means something bypassed the rules.
+    #
+    # Split by direction (#40). One pair of totals would add revenue to cost and
+    # produce a figure meaning nothing. Kept apart, the same columns also give
+    # the VAT return: ttc - ht on the outgoing side is VAT collected, and on the
+    # incoming side VAT deductible, and the difference is what is owed.
     invoice_count = Column(Integer)
-    total_ht = Column(Numeric(12, 2))
-    total_ttc = Column(Numeric(12, 2))
+    total_ht_outgoing = Column(Numeric(12, 2))
+    total_ttc_outgoing = Column(Numeric(12, 2))
+    total_ht_incoming = Column(Numeric(12, 2))
+    total_ttc_incoming = Column(Numeric(12, 2))
 
     closed_by = relationship("User")
 
@@ -79,10 +86,13 @@ class AccountingPeriod(Base):
         # of it. Without this a row could claim to be closed with no actor.
         CheckConstraint(
             "(state = 'OPEN' AND closed_at IS NULL AND closed_by_id IS NULL"
-            " AND invoice_count IS NULL AND total_ht IS NULL AND total_ttc IS NULL)"
+            " AND invoice_count IS NULL AND total_ht_outgoing IS NULL"
+            " AND total_ttc_outgoing IS NULL AND total_ht_incoming IS NULL"
+            " AND total_ttc_incoming IS NULL)"
             " OR (state = 'CLOSED' AND closed_at IS NOT NULL AND closed_by_id IS NOT NULL"
-            " AND invoice_count IS NOT NULL AND total_ht IS NOT NULL"
-            " AND total_ttc IS NOT NULL)",
+            " AND invoice_count IS NOT NULL AND total_ht_outgoing IS NOT NULL"
+            " AND total_ttc_outgoing IS NOT NULL AND total_ht_incoming IS NOT NULL"
+            " AND total_ttc_incoming IS NOT NULL)",
             name="ck_period_close_is_complete",
         ),
     )

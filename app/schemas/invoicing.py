@@ -2,7 +2,11 @@ from datetime import date
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.invoicing import InvoiceProcessingStatus, InvoiceStatus
+from app.models.invoicing import (
+    InvoiceDirection,
+    InvoiceProcessingStatus,
+    InvoiceStatus,
+)
 
 
 class ClientBase(BaseModel):
@@ -17,6 +21,24 @@ class ClientCreate(ClientBase):
 
 
 class ClientOut(ClientBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierBase(BaseModel):
+    nom: str
+    email: str = ""
+    telephone: str = ""
+    adresse: str = ""
+
+
+class SupplierCreate(SupplierBase):
+    pass
+
+
+class SupplierOut(SupplierBase):
     id: int
 
     class Config:
@@ -55,10 +77,58 @@ class InvoiceCreate(BaseModel):
         return value
 
 
+class SupplierInvoiceCreate(BaseModel):
+    """A bill a supplier issued to us (#40).
+
+    Different from InvoiceCreate in three ways that follow from the direction:
+
+    - `date_emission` is supplied, not today's date. The bill carries the
+      supplier's date, and it is routinely entered days later.
+    - `supplier_reference` is required. It is the number printed on the bill,
+      stored exactly as received; our own FF-YYYY-NNNN reference is separate.
+    - amounts are supplied rather than computed from line items, because a
+      supplier's totals are theirs and may not equal our arithmetic over their
+      lines - rounding conventions differ. Entering what the bill says is the
+      point; inventing a total from the lines would misstate the expense.
+    """
+
+    supplier_id: int
+    supplier_reference: str = Field(min_length=1, max_length=60)
+    date_emission: date
+    date_echeance: date
+    montant_ht: Decimal = Field(ge=0)
+    montant_ttc: Decimal = Field(ge=0)
+    items: list[InvoiceItemCreate] = []
+
+    @field_validator("date_echeance")
+    @classmethod
+    def _due_not_before_issue(cls, value: date, info) -> date:
+        # Mirrors ck_invoices_dates, so the API answers 422 with a field name
+        # rather than letting the database raise and returning 500.
+        issued = info.data.get("date_emission")
+        if issued and value < issued:
+            raise ValueError("date_echeance cannot be before date_emission")
+        return value
+
+    @field_validator("montant_ttc")
+    @classmethod
+    def _ttc_not_below_ht(cls, value: Decimal, info) -> Decimal:
+        # Mirrors ck_invoices_amounts.
+        ht = info.data.get("montant_ht")
+        if ht is not None and value < ht:
+            raise ValueError("montant_ttc cannot be below montant_ht")
+        return value
+
+
 class InvoiceOut(BaseModel):
     id: int
     numero: str
-    client_id: int
+    direction: InvoiceDirection
+    # Exactly one of these is set, decided by the direction.
+    client_id: int | None = None
+    supplier_id: int | None = None
+    # The supplier's own number, on an incoming invoice only.
+    supplier_reference: str | None = None
     date_emission: date
     date_echeance: date
     montant_ht: Decimal

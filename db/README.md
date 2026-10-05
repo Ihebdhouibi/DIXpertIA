@@ -261,11 +261,115 @@ The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
 
+## Income and expense: one table, two directions
+
+The accountant works with invoices both ways: **outgoing** to clients (income)
+and **incoming** from suppliers (expenses). Until #40 the system modelled only
+the first, so storing a supplier bill meant inventing a row in `clients` -- and
+the client list silently mixed people who pay us with people we pay.
+
+`invoices.direction` is `OUTGOING` or `INCOMING`. One table rather than two,
+because the monthly close, the periods, the line items and every report want to
+see both; two tables would have meant duplicating or UNIONing all of it.
+
+`ck_invoice_counterparty` keeps the row coherent: an outgoing invoice has a
+client and no supplier, an incoming one has a supplier and no client. Neither
+both nor neither is possible.
+
+### Two numbers on a supplier bill
+
+| Column | Whose | Example |
+|---|---|---|
+| `numero` | **ours**, always | `FF-2026-0004` |
+| `supplier_reference` | the supplier's, as printed | `2026-001` |
+
+They never share a column. If they did, every report and filter would mix their
+numbering with ours.
+
+Our own number exists because a supplier's is not ours to assign and two
+suppliers may well use the same one. `numero` stays globally unique because both
+series are ours; `FA` is what we issue, `FF` is the internal filing reference for
+what we receive.
+
+### Uniqueness is per supplier, never global
+
+`uq_supplier_reference` is `(supplier_id, supplier_reference)`.
+
+- **Globally unique would be wrong.** Two suppliers both numbering a bill
+  "2026-001" is ordinary, and a global constraint rejects the second one.
+- **No uniqueness would be worse.** The same bill could be entered twice and so
+  **paid twice**. Scoped per supplier, this is a real control against both
+  honest duplication and a supplier resubmitting.
+
+`db/verify_constraints.py` probes both sides: the same reference from a
+*different* supplier must be **accepted**, and from the *same* supplier refused.
+
+### Two series, two counters
+
+`invoice_sequences` is keyed on `(series, year)`. A shared counter would
+interleave sales and purchases, so `FA-2026-0003` could be followed by
+`FA-2026-0007` with the gap taken by a purchase.
+
+Both series are gapless. A purchase taking a number from the sales series is
+refused.
+
+### The chronological rule applies to OUTGOING only
+
+Supplier bills arrive out of date order by nature -- one dated the 3rd is
+routinely booked after one dated the 20th. Applying #39's rule to them would
+reject ordinary bookkeeping.
+
+Before #40 they were spared only because the trigger matched the `FA-` pattern,
+which was an accident of pattern-matching. It is now scoped on `direction`,
+which is what it always meant. `verify_constraints.py` probes a supplier bill
+booked out of order and expects it **accepted**.
+
+### Which month an expense belongs to
+
+`date_emission` -- the supplier's own date, not the day it was entered. That is
+the accrual and VAT treatment, confirmed with the accountant.
+
+The consequence is deliberate: a bill arriving after its month has closed cannot
+be booked to it, because the period seal from #42 refuses it. **A month should
+therefore be closed only once its supplier bills are in.**
+
+### VAT
+
+Direction is what makes VAT reportable. The close records income and cost
+separately on the period:
+
+| | |
+|---|---|
+| `total_ht_outgoing`, `total_ttc_outgoing` | what we invoiced |
+| `total_ht_incoming`, `total_ttc_incoming` | what we were billed |
+
+VAT collected is `ttc - ht` on the outgoing side, VAT deductible the same on the
+incoming side, and the difference is what the return owes. One pair of totals
+would have added revenue to cost and produced a figure meaning nothing.
+
+### Suppliers
+
+`suppliers` is a separate table from `clients`, not one counterparty table with
+a role flag. The same company could in principle be both, but conflating them
+makes every revenue figure that counts clients wrong.
+
+`ux_suppliers_nom_ci` stops the same supplier being created twice under
+different casing -- which would let one bill be entered once under each, and so
+be paid twice.
+
+Row-level security matches the clients policy: admin and accountant read and
+write; an employee sees nothing.
+
+
 ## Invoice numbering is gapless
 
 The accountant requires invoice numbers to start at 1 and increase by exactly 1,
 with no gaps and no duplicates (#38). The series **restarts each year**, keeping
 the `FA-YYYY-NNNN` format: `FA-2026-0001` follows `FA-2025-0184`.
+
+Since #40 there are **two** series, each with its own counter: `FA` for what we
+issue and `FF` for the internal reference given to a supplier's bill. Both are
+gapless and neither can take a number from the other.
 
 ### Why a counter table and not a sequence
 
@@ -323,8 +427,8 @@ one more than the highest already issued for its year, so a direct SQL write
 cannot quietly break the series either.
 
 **Scope, stated honestly:** the rule applies only to numbers matching
-`FA-YYYY-NNNN`. That is the legal series; a fixture using another prefix (the
-seeder uses `PERF-`) is outside it. The API never lets a caller choose a number —
+`FA-YYYY-NNNN` or `FF-YYYY-NNNN`. Those are our two series; a fixture using
+another prefix (the seeder uses `PERF-`) is outside them. The API never lets a caller choose a number —
 it is generated server-side — so the only writer this governs is a direct SQL
 insert, where the operator is already the database owner.
 

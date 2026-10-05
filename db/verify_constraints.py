@@ -195,6 +195,55 @@ PROBES = [
      " montant_ht, montant_ttc, statut, cree_par_id)"
      " VALUES ('FA-2026-0003', 99001, '2026-07-20', '2026-08-20', 100, 119,"
      " 'BROUILLON', :uid)", True),
+    # --- income and expense are distinct (#40) -----------------------------
+    ("invoice naming both a client and a supplier",
+     "INSERT INTO invoices (numero, direction, client_id, supplier_id,"
+     " supplier_reference, date_emission, date_echeance, montant_ht, montant_ttc,"
+     " statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', 99001, 99001, 'X-1', '2026-07-16',"
+     " '2026-08-16', 100, 119, 'ENVOYEE', :uid)"),
+    ("invoice naming no counterparty at all",
+     "INSERT INTO invoices (numero, direction, date_emission, date_echeance,"
+     " montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', '2026-07-16', '2026-08-16', 100, 119,"
+     " 'ENVOYEE', :uid)"),
+    ("outgoing invoice carrying a supplier reference",
+     "INSERT INTO invoices (numero, direction, client_id, supplier_reference,"
+     " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FA-2026-0003', 'OUTGOING', 99001, 'X-1', '2026-07-26',"
+     " '2026-08-26', 100, 119, 'BROUILLON', :uid)"),
+    ("incoming invoice with no supplier reference",
+     "INSERT INTO invoices (numero, direction, supplier_id, date_emission,"
+     " date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', 99001, '2026-07-16', '2026-08-16',"
+     " 100, 119, 'ENVOYEE', :uid)"),
+    ("the same bill entered twice for one supplier",
+     "INSERT INTO invoices (numero, direction, supplier_id, supplier_reference,"
+     " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', 99001, 'SUP-001', '2026-07-16',"
+     " '2026-08-16', 100, 119, 'ENVOYEE', :uid)"),
+    ("purchase taking a number from the sales series",
+     "INSERT INTO invoices (numero, direction, supplier_id, supplier_reference,"
+     " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FA-2026-0009', 'INCOMING', 99001, 'SUP-009', '2026-07-16',"
+     " '2026-08-16', 100, 119, 'ENVOYEE', :uid)"),
+    ("counter row for an unknown series",
+     "INSERT INTO invoice_sequences (series, year, last_number)"
+     " VALUES ('ZZ', 2026, 0)"),
+    # Two suppliers numbering a bill the same way is ordinary and must work:
+    # uniqueness is per supplier, never global.
+    ("the same reference from a different supplier",
+     "INSERT INTO invoices (numero, direction, supplier_id, supplier_reference,"
+     " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', 99002, 'SUP-001', '2026-07-16',"
+     " '2026-08-16', 100, 119, 'ENVOYEE', :uid)", True),
+    # A supplier bill arriving out of date order is ordinary bookkeeping: the
+    # chronological rule is for the sales series only.
+    ("supplier bill booked out of date order",
+     "INSERT INTO invoices (numero, direction, supplier_id, supplier_reference,"
+     " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+     " VALUES ('FF-2026-0002', 'INCOMING', 99001, 'SUP-EARLIER', '2026-07-02',"
+     " '2026-08-02', 100, 119, 'ENVOYEE', :uid)", True),
 ]
 
 
@@ -234,8 +283,9 @@ def main():
         # A closed month (June) and an open one (July), for the period probes.
         conn.execute(text(
             "INSERT INTO accounting_periods (periode, state, closed_at, closed_by_id,"
-            " invoice_count, total_ht, total_ttc)"
-            " VALUES ('2026-06-01', 'CLOSED', now(), :uid, 0, 0, 0)"), {"uid": uid})
+            " invoice_count, total_ht_outgoing, total_ttc_outgoing,"
+            " total_ht_incoming, total_ttc_incoming)"
+            " VALUES ('2026-06-01', 'CLOSED', now(), :uid, 0, 0, 0, 0, 0)"), {"uid": uid})
         conn.execute(text(
             "INSERT INTO accounting_periods (periode) VALUES ('2026-07-01')"))
         # One invoice in the legal series, so the numbering probes have a
@@ -252,8 +302,24 @@ def main():
             " VALUES (99004, 'FA-2026-0002', 99001, '2026-07-20', '2026-08-20',"
             " 100, 119, 'BROUILLON', :uid)"), {"uid": uid})
         conn.execute(text(
-            "INSERT INTO invoice_sequences (year, last_number) VALUES (2026, 2)"
-            " ON CONFLICT (year) DO UPDATE SET last_number = 2"))
+            "INSERT INTO invoice_sequences (series, year, last_number)"
+            " VALUES ('FA', 2026, 2) ON CONFLICT (series, year) DO UPDATE"
+            " SET last_number = 2"))
+        # Two suppliers, so "the same reference under a different supplier"
+        # can be probed as the legitimate case it is.
+        conn.execute(text(
+            "INSERT INTO suppliers (id, nom, email, telephone, adresse)"
+            " VALUES (99001, 'Probe Supplier A', 'a@s.tn', '', ''),"
+            " (99002, 'Probe Supplier B', 'b@s.tn', '', '')"))
+        conn.execute(text(
+            "INSERT INTO invoices (id, numero, direction, supplier_id, supplier_reference,"
+            " date_emission, date_echeance, montant_ht, montant_ttc, statut, cree_par_id)"
+            " VALUES (99005, 'FF-2026-0001', 'INCOMING', 99001, 'SUP-001',"
+            " '2026-07-15', '2026-08-15', 100, 119, 'ENVOYEE', :uid)"), {"uid": uid})
+        conn.execute(text(
+            "INSERT INTO invoice_sequences (series, year, last_number)"
+            " VALUES ('FF', 2026, 1) ON CONFLICT (series, year) DO UPDATE"
+            " SET last_number = 1"))
         conn.execute(text(
             "INSERT INTO payslips (employee_id, periode, montant_brut, montant_net)"
             " VALUES (:eid, '2026-05-01', 100, 80)"), {"eid": eid})
