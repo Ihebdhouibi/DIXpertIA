@@ -125,7 +125,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         {isAdmin && (
           <button
             onClick={() => setIsNewInvoiceOpen(true)}
-            className="bg-primary hover:bg-primary/95 text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
+            className="bg-primary hover:bg-primary/95 text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
           >
             <Plus className="w-5 h-5" />
             <span>New Invoice</span>
@@ -133,7 +133,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col gap-4">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col gap-4">
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-caption font-bold text-on-surface-variant mr-2">Filter by Status:</span>
           {(['All', 'Draft', 'Sent', 'Paid', 'Overdue'] as const).map(f => (
@@ -142,7 +142,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
               onClick={() => setSelectedFilter(f)}
               className={`px-4 py-1.5 rounded-full text-caption font-bold border transition-all cursor-pointer ${
                 selectedFilter === f
-                  ? 'bg-primary border-primary text-white shadow-sm'
+                  ? 'bg-primary border-primary text-on-primary shadow-sm'
                   : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:bg-surface-container-low'
               }`}
             >
@@ -162,7 +162,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
@@ -244,7 +244,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
       {/* Invoice Detail Modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-on-background/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[92%] rounded-xl shadow-[0_8px_32px_rgba(31,56,100,0.2)] border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
+          <div className="bg-surface-container-lowest w-full max-w-4xl max-h-[92%] rounded-xl shadow-[0_8px_32px_rgba(31,56,100,0.2)] border border-outline-variant flex flex-col overflow-hidden animate-scale-up">
             <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface shrink-0">
               <div className="flex items-center gap-4">
                 <h3 className="text-h2 font-black text-on-surface">
@@ -270,7 +270,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
             <div className="flex-1 overflow-auto p-6 bg-surface-container-low">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-6">
-                  <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm">
+                  <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm">
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Summary</h4>
                     <div className="space-y-4">
                       <div>
@@ -291,7 +291,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                       </div>
                     </div>
                   </div>
-                  <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm">
+                  <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm">
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 rounded-md bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-body-sm shadow-sm">
@@ -309,7 +309,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     </div>
                   </div>
                 </div>
-                <div className="lg:col-span-2 bg-white rounded-xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
+                <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
                   <div className="h-12 bg-surface border-b border-outline-variant flex items-center justify-between px-4 select-none">
                     <div className="flex items-center gap-2 text-on-surface-variant font-medium">
                       <button onClick={() => setZoomLevel(prev => Math.max(prev - 10, 50))} className="p-1 hover:bg-surface-container-high rounded cursor-pointer">
@@ -396,7 +396,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
       {/* New Invoice Modal */}
       {isAdmin && isNewInvoiceOpen && (
         <div className="fixed inset-0 z-50 bg-on-background/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">
+          <div className="bg-surface-container-lowest rounded-xl shadow-[0_8px_32px_rgba(3,34,77,0.15)] w-full max-w-md border border-outline-variant overflow-hidden animate-scale-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/50 bg-surface shrink-0">
               <h3 className="text-h2 font-black text-on-surface m-0">Create New Invoice</h3>
               <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition-colors cursor-pointer" onClick={() => setIsNewInvoiceOpen(false)}>
@@ -462,7 +462,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
+                    className="px-4 py-2 bg-primary text-on-primary rounded-lg font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
                   >
                     Create Invoice
                   </button>

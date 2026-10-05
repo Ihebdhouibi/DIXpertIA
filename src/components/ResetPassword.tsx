@@ -63,12 +63,12 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
 
   if (validToken === false) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#e0f2fe]">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background">
+        <div className="bg-surface-container-lowest rounded-xl shadow-lg p-8 max-w-md w-full text-center">
           <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
           <h2 className="text-h2 font-semibold text-on-surface">Invalid Reset Link</h2>
           <p className="text-body-sm text-on-surface-variant mt-2">The reset token is missing or invalid.</p>
-          <button onClick={onComplete} className="mt-4 bg-primary text-white px-4 py-2 rounded-lg font-semibold">
+          <button onClick={onComplete} className="mt-4 bg-primary text-on-primary px-4 py-2 rounded-lg font-semibold">
             Back to Login
           </button>
         </div>
@@ -77,7 +77,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#e0f2fe] relative overflow-hidden">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-primary-container/20 blur-3xl"></div>
         <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-secondary-fixed/30 blur-3xl"></div>
@@ -87,7 +87,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-lg border border-outline-variant/30 overflow-hidden"
+          className="bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/30 overflow-hidden"
         >
           <div className="h-2 w-full bg-primary"></div>
           <div className="p-8 flex flex-col gap-6">
@@ -109,7 +109,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
                       <input
-                        className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition text-body-sm"
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition text-body-sm"
                         id="password"
                         placeholder="••••••••"
                         required
@@ -126,7 +126,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
                       <input
-                        className="w-full bg-white border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition text-body-sm"
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-2 pl-10 pr-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition text-body-sm"
                         id="confirmPassword"
                         placeholder="••••••••"
                         required
@@ -140,7 +140,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-2 w-full bg-primary hover:bg-primary/95 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                    className="mt-2 w-full bg-primary hover:bg-primary/95 text-on-primary font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                   >
                     {loading ? 'Updating...' : 'Reset Password'}
                   </button>

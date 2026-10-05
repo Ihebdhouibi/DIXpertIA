@@ -137,7 +137,7 @@ export default function NotificationsView({
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Filter className="w-4 h-4 text-outline" />
           <span className="text-caption font-bold text-on-surface-variant">Filter by:</span>
@@ -169,7 +169,7 @@ export default function NotificationsView({
             </span>
             <button
               onClick={handleMarkSelectedRead}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg text-caption font-bold hover:bg-primary/90 transition"
+              className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-caption font-bold hover:bg-primary/90 transition"
             >
               Mark read
             </button>
@@ -178,7 +178,7 @@ export default function NotificationsView({
       </div>
 
       {/* Notification List */}
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-on-surface-variant">
             <Bell className="w-12 h-12 mx-auto text-outline/50 mb-3" />

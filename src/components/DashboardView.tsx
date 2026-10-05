@@ -88,7 +88,7 @@ export default function DashboardView({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
           <div className="p-3 rounded-full bg-primary/10 text-primary">
             <FolderOpen className="w-6 h-6" />
           </div>
@@ -97,7 +97,7 @@ export default function DashboardView({
             <p className="text-h2 font-black text-on-surface">{totalProjects}</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
           <div className="p-3 rounded-full bg-secondary/10 text-secondary">
             <FileText className="w-6 h-6" />
           </div>
@@ -111,7 +111,7 @@ export default function DashboardView({
             </p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
           <div className="p-3 rounded-full bg-amber-50 text-amber-600">
             <Clock className="w-6 h-6" />
           </div>
@@ -120,7 +120,7 @@ export default function DashboardView({
             <p className="text-h2 font-black text-on-surface">{pendingLeaves}</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
           <div className="p-3 rounded-full bg-emerald-50 text-emerald-600">
             <Users className="w-6 h-6" />
           </div>
@@ -136,7 +136,7 @@ export default function DashboardView({
         {/* Left column (2/3): charts */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Status Bar Chart */}
-          <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
             <h3 className="font-bold text-body-lg text-on-surface mb-4">Projects by Status</h3>
             <div className="space-y-3">
               {Object.entries(statusCounts).map(([status, count]) => (
@@ -160,7 +160,7 @@ export default function DashboardView({
           </div>
 
           {/* Invoice Status Breakdown */}
-          <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
             <h3 className="font-bold text-body-lg text-on-surface mb-4">Invoices by Status</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {Object.entries(invoiceStats).map(([status, items]) => (
@@ -177,7 +177,7 @@ export default function DashboardView({
 
           {/* Admin Quick Actions */}
           {user.role === 'admin' && (
-            <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+            <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
               <h3 className="font-bold text-body-lg text-on-surface mb-4">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
                 <button
@@ -210,7 +210,7 @@ export default function DashboardView({
         <div className="space-y-6">
           {/* Employee-specific widgets */}
           {user.role === 'employee' && (
-            <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+            <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
               <h3 className="font-bold text-body-lg text-on-surface mb-4">Your Leave Balance</h3>
               <div className="space-y-2 text-caption">
                 <div className="flex justify-between">
@@ -249,7 +249,7 @@ export default function DashboardView({
           )}
 
           {/* Recent Notifications */}
-          <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm">
+          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
             <h3 className="font-bold text-body-lg text-on-surface mb-4">Recent Activity</h3>
             {recentNotifications.length === 0 ? (
               <p className="text-caption text-on-surface-variant">No recent activity</p>

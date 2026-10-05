@@ -47,6 +47,7 @@
 
   /* Primary actions are ink, not lime: lime is reserved for the single accent. */
   --color-primary: var(--color-ink);
+  --color-on-primary: #ffffff;
 
   /*
    * Status tones. Muted on purpose: Signal Lime stays the only bright colour
@@ -73,6 +74,7 @@
   --color-error: var(--color-danger);
   --color-error-container: var(--color-danger-container);
   --color-on-error-container: var(--color-danger);
+  --color-on-error: #ffffff;
 
   /*
    * Deprecated: Material-3 roles with no brand equivalent (the brand has a
@@ -97,6 +99,81 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/*
+ * Dark theme (#80). Same semantic roles, ink grounds and paper text; the
+ * brand colours themselves never change. Applied to a subtree by
+ * <ThemeScope> (src/theme.tsx), which is why every role is re-declared here
+ * instead of relying on references resolved at :root.
+ *
+ * Measured contrast (WCAG 2.1):
+ *   paper on ink 16.66, on card 14.97, on container-highest 11.17
+ *   paper 62% on ink 6.87, on card 6.48, on container-highest 5.38
+ *   ink on paper (primary button) 16.66, ink on lime 14.41
+ *   status text on its tint / on card / on ink:
+ *     success 6.02 / 8.40 / 9.35    warning 6.05 / 8.31 / 9.25
+ *     danger  5.76 / 7.82 / 8.70    info    5.90 / 8.09 / 9.00
+ *     neutral 6.79 / 8.31 / 9.25
+ * Lime Deep is unreadable on ink, so accented text becomes Signal Lime here
+ * (14.41 on ink); it is still a short accent, never running text.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  color-scheme: dark;
+  /* body sits above the scope, so restate the inherited text colour here. */
+  color: var(--color-on-background);
+
+  --color-background: var(--color-ink);
+  --color-on-background: var(--color-paper);
+  --color-surface: var(--color-ink);
+  --color-on-surface: var(--color-paper);
+  --color-on-surface-variant: rgba(243, 242, 238, 0.62);
+
+  /* Raised surfaces: paper tints over ink, lightest on top. */
+  --color-surface-container-lowest: color-mix(in srgb, var(--color-paper) 5%, var(--color-ink));
+  --color-surface-container-low: color-mix(in srgb, var(--color-paper) 7%, var(--color-ink));
+  --color-surface-container: color-mix(in srgb, var(--color-paper) 9%, var(--color-ink));
+  --color-surface-container-high: color-mix(in srgb, var(--color-paper) 12%, var(--color-ink));
+  --color-surface-container-highest: color-mix(in srgb, var(--color-paper) 15%, var(--color-ink));
+
+  --color-outline: rgba(243, 242, 238, 0.62);
+  --color-outline-variant: rgba(243, 242, 238, 0.14);
+
+  --color-primary: var(--color-paper);
+  --color-on-primary: var(--color-ink);
+
+  --color-success: #8CC4A0;
+  --color-success-container: color-mix(in srgb, var(--color-success) 16%, var(--color-surface-container-lowest));
+  --color-warning: #D9B072;
+  --color-warning-container: color-mix(in srgb, var(--color-warning) 16%, var(--color-surface-container-lowest));
+  --color-danger: #EE9C90;
+  --color-danger-container: color-mix(in srgb, var(--color-danger) 16%, var(--color-surface-container-lowest));
+  --color-info: #9DB7D1;
+  --color-info-container: color-mix(in srgb, var(--color-info) 16%, var(--color-surface-container-lowest));
+  --color-neutral: #B4B7B8;
+  --color-neutral-container: var(--color-surface-container-high);
+
+  --color-error: var(--color-danger);
+  --color-error-container: var(--color-danger-container);
+  --color-on-error-container: var(--color-danger);
+  --color-on-error: var(--color-ink);
+
+  /* Deprecated M3 aliases, mirrored from the light theme. */
+  --color-primary-container: var(--color-surface-container-high);
+  --color-on-primary-container: var(--color-paper);
+  --color-primary-fixed: color-mix(in srgb, var(--color-lime) 20%, var(--color-surface-container-lowest));
+  --color-secondary: var(--color-lime);
+  --color-secondary-container: var(--color-lime);
+  --color-on-secondary-container: var(--color-ink);
+  --color-secondary-fixed: color-mix(in srgb, var(--color-lime) 20%, var(--color-surface-container-lowest));
+  --color-on-secondary-fixed: var(--color-paper);
+  --color-tertiary: var(--color-paper);
+  --color-tertiary-container: var(--color-surface-container-high);
+  --color-tertiary-fixed: var(--color-surface-container-high);
+  --color-on-tertiary-fixed-variant: var(--color-paper);
+  --color-surface-variant: var(--color-surface-container-high);
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--color-background);
@@ -105,15 +182,15 @@ body {
 
 /* Dot grid behind the authentication screens */
 .bg-pattern {
-  background-image: radial-gradient(var(--color-hairline) 1px, transparent 1px);
+  background-image: radial-gradient(var(--color-outline-variant) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 /* Glass card styling */
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 80%, transparent);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--color-outline-variant);
 }
 
 /* Custom scrollbars for lists */
@@ -125,9 +202,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-hairline);
+  background: var(--color-outline-variant);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ink-muted);
+  background: var(--color-outline);
 }

@@ -153,7 +153,7 @@ export default function Sidebar({
           </div>
           <button
             onClick={onToggleRole}
-            className="w-full text-[11px] bg-primary text-white py-1.5 rounded font-bold hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
+            className="w-full text-[11px] bg-primary text-on-primary py-1.5 rounded font-bold hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
           >
             Switch to {currentUser.role === 'admin' ? 'Employee' : currentUser.role === 'accountant' ? 'Employee' : 'Admin'} View
           </button>
@@ -178,7 +178,7 @@ export default function Sidebar({
       {isOpenMobile && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsOpenMobile(false)}></div>
-          <div className="relative w-[240px] max-w-xs h-full bg-white z-10 shadow-xl animate-slide-in">
+          <div className="relative w-[240px] max-w-xs h-full bg-surface-container-lowest z-10 shadow-xl animate-slide-in">
             {sidebarContent}
           </div>
         </div>
