@@ -61,12 +61,15 @@ def clear(conn):
     conn.execute(text(
         "DELETE FROM invoice_items WHERE invoice_id IN "
         "(SELECT id FROM invoices WHERE numero LIKE :p)"), {"p": f"{INVOICE_PREFIX}%"})
-    # Seeded invoices include archived ones, which the #41 trigger refuses to
-    # delete. Disabling it here is safe and deliberate: this removes fixtures,
-    # which is exactly the case the rule is not meant to cover.
-    conn.execute(text("ALTER TABLE invoices DISABLE TRIGGER invoice_archived_is_final"))
+    # Two rules refuse these deletes in normal use: #41 protects archived
+    # invoices, and #38 protects every invoice because its number belongs to a
+    # gapless series. Both are correct and neither is meant to cover fixtures,
+    # so this steps past them deliberately rather than working around them.
+    for trigger in ("invoice_archived_is_final", "invoice_is_never_deleted"):
+        conn.execute(text(f"ALTER TABLE invoices DISABLE TRIGGER {trigger}"))
     conn.execute(text("DELETE FROM invoices WHERE numero LIKE :p"), {"p": f"{INVOICE_PREFIX}%"})
-    conn.execute(text("ALTER TABLE invoices ENABLE TRIGGER invoice_archived_is_final"))
+    for trigger in ("invoice_archived_is_final", "invoice_is_never_deleted"):
+        conn.execute(text(f"ALTER TABLE invoices ENABLE TRIGGER {trigger}"))
     conn.execute(text("DELETE FROM clients WHERE nom LIKE :p"), {"p": f"{CLIENT_PREFIX}%"})
     conn.execute(text(
         "DELETE FROM leave_requests WHERE employee_id IN "

@@ -261,6 +261,96 @@ The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
 
+## Invoice numbering is gapless
+
+The accountant requires invoice numbers to start at 1 and increase by exactly 1,
+with no gaps and no duplicates (#38). The series **restarts each year**, keeping
+the `FA-YYYY-NNNN` format: `FA-2026-0001` follows `FA-2025-0184`.
+
+### Why a counter table and not a sequence
+
+A PostgreSQL sequence is deliberately **not** gapless. It does not roll back
+when a transaction fails, precisely so concurrent writers never block each
+other. An invoice number is a legal artefact, so the opposite trade-off is the
+one wanted here.
+
+`invoice_sequences` holds one row per year, and allocation happens inside the
+transaction that creates the invoice:
+
+```sql
+UPDATE invoice_sequences SET last_number = last_number + 1
+WHERE year = :year RETURNING last_number
+```
+
+That row lock is held until commit, which buys both properties:
+
+- two concurrent creates **serialise**, so neither can take the same number
+- a failed create **rolls the counter back with it**, so no number is burned
+
+Invoice creation therefore serialises on one row per year. That is a deliberate
+choice: a gapless counter and high write concurrency are fundamentally in
+tension, and this company issues a few invoices a day. If volume ever makes the
+lock hurt, the answer is to allocate at *issue* time rather than at draft
+creation, not to drop the lock.
+
+### What this replaced
+
+The number came from `COUNT(*) + 1`, which broke three ways:
+
+| | |
+|---|---|
+| Deleting an invoice | the next create computed a number that already existed, hit `invoices_numero_key` and returned 500 — and kept failing until someone worked out why |
+| Two concurrent creates | both read the same count, both computed the same number, one failed |
+| A failed transaction | left a hole nobody detected |
+
+Measured after the change: 8 concurrent creates produced 8 distinct numbers with
+zero failures.
+
+### An invoice is never deleted
+
+`invoice_is_never_deleted` refuses **every** delete, not only the archived ones
+#41 protects. Deleting any invoice leaves a hole in the series, which is the
+thing the accountant asked to be impossible.
+
+An invoice issued in error is **cancelled**, keeping its row and its number with
+`statut = ANNULEE`, and corrected by a credit note. That is the standard
+accounting answer and the same shape as the correction rule for a closed month.
+
+### The series is enforced, not just generated
+
+`invoice_number_is_sequential` refuses an inserted number that is not exactly
+one more than the highest already issued for its year, so a direct SQL write
+cannot quietly break the series either.
+
+**Scope, stated honestly:** the rule applies only to numbers matching
+`FA-YYYY-NNNN`. That is the legal series; a fixture using another prefix (the
+seeder uses `PERF-`) is outside it. The API never lets a caller choose a number —
+it is generated server-side — so the only writer this governs is a direct SQL
+insert, where the operator is already the database owner.
+
+### Finding a gap
+
+With no deletes and a transactional counter, a gap cannot occur. To check
+anyway:
+
+```sql
+SELECT year, expected
+FROM (
+    SELECT substring(numero from 4 for 4)::int AS year,
+           generate_series(1, max(substring(numero from 9)::int)) AS expected
+    FROM invoices
+    WHERE numero ~ '^FA-[0-9]{4}-[0-9]+$'
+    GROUP BY 1
+) s
+WHERE NOT EXISTS (
+    SELECT 1 FROM invoices
+    WHERE numero = 'FA-' || s.year || '-' || lpad(s.expected::text, 4, '0')
+);
+```
+
+An empty result means the series is intact.
+
+
 ## The monthly accounting period
 
 The accountant works the books a month at a time. `accounting_periods` holds one

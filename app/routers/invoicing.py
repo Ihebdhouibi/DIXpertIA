@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session, selectinload
 
@@ -87,10 +88,37 @@ def _trigger_message(exc: DatabaseError) -> str:
 
 # ---- Invoices ----
 
-def _generate_invoice_number(db: Session) -> str:
-    year = date.today().year
-    count = db.query(Invoice).filter(Invoice.numero.like(f"FA-{year}-%")).count() + 1
-    return f"FA-{year}-{count:04d}"
+def _allocate_invoice_number(db: Session, year: int) -> str:
+    """Take the next number in the year's series (#38).
+
+    The accountant requires the series to start at 1 and increase by exactly 1,
+    with no gaps and no duplicates. This replaces COUNT(*) + 1, which broke
+    three ways: deleting an invoice made the next create collide with a number
+    that already existed and fail with a 500; two concurrent creates computed
+    the same number; and a failed transaction left a hole nobody detected.
+
+    The UPDATE below takes a row lock held until this transaction commits, so a
+    second create waits rather than reading a stale counter. If this
+    transaction rolls back, the counter rolls back with it and the number is
+    handed to the next caller instead of being burned.
+
+    That serialises invoice creation on one row per year. Deliberate: a gapless
+    counter and concurrent writes are in tension, and a few invoices a day does
+    not strain it.
+    """
+    # The year may have issued nothing yet. ON CONFLICT DO NOTHING rather than
+    # a SELECT-then-INSERT, which would race with another first invoice.
+    db.execute(
+        text("INSERT INTO invoice_sequences (year, last_number) VALUES (:y, 0)"
+             " ON CONFLICT (year) DO NOTHING"),
+        {"y": year},
+    )
+    allocated = db.execute(
+        text("UPDATE invoice_sequences SET last_number = last_number + 1"
+             " WHERE year = :y RETURNING last_number"),
+        {"y": year},
+    ).scalar_one()
+    return f"FA-{year}-{allocated:04d}"
 
 
 def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
@@ -178,13 +206,18 @@ def create_invoice(
         if existing:
             return existing
 
+    # One date, used for both the series year and the row, so an invoice
+    # created at midnight on 1 January cannot take a 2026 number while
+    # being dated 2025.
+    issued_on = date.today()
+
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
     invoice = Invoice(
-        numero=_generate_invoice_number(db),
+        numero=_allocate_invoice_number(db, issued_on.year),
         client_id=payload.client_id,
-        date_emission=date.today(),
+        date_emission=issued_on,
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
