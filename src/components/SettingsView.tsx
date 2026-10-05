@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { User, Mail, Shield, Bell, Globe, Moon, Sun, Monitor, LogOut, Save, Key } from 'lucide-react';
 import { User as UserType } from '../types';
 import { ThemePreference, setThemePreference, useThemePreference } from '../theme';
+import Button from './ui/Button';
+import { Field, Input, Select } from './ui/Field';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'System', icon: Monitor },
@@ -102,24 +104,24 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
               Notification Preferences
             </h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
                 <span className="text-body-sm font-medium text-on-surface">Email Notifications</span>
                 <input
                   type="checkbox"
                   checked={emailNotifications}
                   onChange={() => setEmailNotifications(!emailNotifications)}
-                  className="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary"
+                  className="w-4 h-4 accent-primary cursor-pointer"
                 />
-              </div>
-              <div className="flex items-center justify-between">
+              </label>
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
                 <span className="text-body-sm font-medium text-on-surface">Push Notifications</span>
                 <input
                   type="checkbox"
                   checked={pushNotifications}
                   onChange={() => setPushNotifications(!pushNotifications)}
-                  className="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary"
+                  className="w-4 h-4 accent-primary cursor-pointer"
                 />
-              </div>
+              </label>
             </div>
           </div>
 
@@ -129,14 +131,14 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
               <Globe className="w-5 h-5 text-primary" />
               Language
             </h2>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full md:w-48 px-3 py-2 border border-outline-variant rounded-lg bg-surface text-body-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-            </select>
+            <Field label="Interface language" className="md:w-56">
+              {({ id }) => (
+                <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)}>
+                  <option value="en">English</option>
+                  <option value="fr">Français</option>
+                </Select>
+              )}
+            </Field>
           </div>
 
           {/* Change Password */}
@@ -145,42 +147,31 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
               <Key className="w-5 h-5 text-primary" />
               Change Password
             </h2>
-            <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
-              <input
-                type="password"
-                placeholder="Current password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <input
-                type="password"
-                placeholder="New password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <button
-                type="submit"
-                className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold hover:bg-primary/95 transition shadow-sm flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Update Password
-              </button>
+            <form className="flex flex-col gap-4 md:max-w-md" onSubmit={(e) => e.preventDefault()}>
+              {/* Placeholders were the only labels; each field now has a real one. */}
+              <Field label="Current password">
+                {({ id }) => <Input id={id} type="password" autoComplete="current-password" />}
+              </Field>
+              <Field label="New password">
+                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+              </Field>
+              <Field label="Confirm new password">
+                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+              </Field>
+              <Button type="submit" className="self-start">
+                <Save className="w-4 h-4" aria-hidden="true" />
+                Update password
+              </Button>
             </form>
           </div>
 
           {/* Danger Zone */}
           <div className="bg-surface-container-lowest rounded-xl border border-error/20 shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-error mb-4">Danger Zone</h2>
-            <button
-              onClick={onLogout}
-              className="bg-error hover:bg-error/90 text-on-error px-4 py-2 rounded-lg font-bold transition flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
+            <Button variant="danger" onClick={onLogout}>
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+              Sign out
+            </Button>
           </div>
         </div>
       </div>
