@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { Plus, Search, Filter, MoreVertical, X, Download, ZoomIn, ZoomOut, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Invoice, UserRole } from '../types';
+import { Invoice, UserRole, Client } from '../types';
 import StatusBadge from './StatusBadge';
 
 interface InvoicesViewProps {
   invoices: Invoice[];
-  onAddInvoice: (invoice: Partial<Invoice>) => void;
+  /** Clients the invoice may be issued to. The API requires a real one. */
+  clients: Client[];
+  onAddInvoice: (invoice: {
+    client_id: number;
+    date_echeance: string;
+    items: { designation: string; quantite: number; prix_unitaire: number; taux_tva: number }[];
+  }) => void;
   userRole: UserRole;
 }
 
-export default function InvoicesView({ invoices, onAddInvoice, userRole }: InvoicesViewProps) {
+export default function InvoicesView({ invoices, clients, onAddInvoice, userRole }: InvoicesViewProps) {
   const isAdmin = userRole === 'admin';
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Draft' | 'Sent' | 'Paid' | 'Overdue'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,10 +24,12 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
   const [zoomLevel, setZoomLevel] = useState(100);
 
   // Form states for new invoice creation
-  const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [invoiceStatus, setInvoiceStatus] = useState<'Draft' | 'Sent' | 'Paid' | 'Overdue'>('Sent');
+  // The status is not chosen here any more: a new invoice is always a draft
+  // and the server sets it (#87). Letting the form pick meant an invoice
+  // could be created already marked Paid.
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -69,43 +77,45 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
 
   const handleNewInvoiceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName || !amount) {
-      showToast('Please specify client and amount.');
+    if (!clientId || !amount || !dueDate) {
+      showToast('Choose a client, an amount and a due date.');
       return;
     }
 
-    const nextId = `INV-2024-00${invoices.length + 1}`;
-    const initials = clientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-
+    // The number, the issue date and the status all come from the server: the
+    // number belongs to a gapless series (#38), and letting the client pick any
+    // of them is how duplicates and out-of-order invoices happen.
     onAddInvoice({
-      id: nextId,
-      client: clientName,
-      clientInitials: initials,
-      amount: parseFloat(amount),
-      dateIssued: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      dueDate: dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-',
-      status: invoiceStatus,
-      items: [
-        { description: 'Consultation & Cloud Integration Services', qty: 1, price: parseFloat(amount), total: parseFloat(amount) }
-      ]
+      client_id: Number(clientId),
+      date_echeance: dueDate,
+      items: [{
+        designation: 'Consultation & Cloud Integration Services',
+        quantite: 1,
+        prix_unitaire: parseFloat(amount),
+        taux_tva: 19,
+      }],
     });
 
     setIsNewInvoiceOpen(false);
-    setClientName('');
+    setClientId('');
     setAmount('');
     setDueDate('');
-    showToast(`Invoice ${nextId} created.`);
   };
 
   const filteredInvoices = invoices.filter(inv => {
     const query = searchQuery.toLowerCase();
-    const matchesSearch = inv.client.toLowerCase().includes(query) || inv.id.toLowerCase().includes(query);
+    const matchesSearch = inv.counterparty.toLowerCase().includes(query) || inv.id.toLowerCase().includes(query);
     const matchesStatus = selectedFilter === 'All' || inv.status === selectedFilter;
     return matchesSearch && matchesStatus;
   });
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+    // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars.
+    // The dinar has three decimal places, which is why minimumFractionDigits is
+    // set rather than left to the default two.
+    return new Intl.NumberFormat('fr-TN', {
+      style: 'currency', currency: 'TND', minimumFractionDigits: 3,
+    }).format(val);
   };
 
   return (
@@ -188,13 +198,13 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-caption shadow-sm">
-                          {inv.clientInitials}
+                          {inv.counterpartyInitials}
                         </div>
-                        <span className="font-semibold text-body-sm text-on-surface">{inv.client}</span>
+                        <span className="font-semibold text-body-sm text-on-surface">{inv.counterparty}</span>
                       </div>
                     </td>
                     <td className="py-4 px-6 font-semibold text-body-sm text-on-surface">
-                      {formatCurrency(inv.amount)}
+                      {formatCurrency(inv.amountTTC)}
                     </td>
                     <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">
                       {inv.dateIssued}
@@ -275,7 +285,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     <div className="space-y-4">
                       <div>
                         <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Total Amount</span>
-                        <span className="text-h1 font-black text-primary tracking-tight">{formatCurrency(selectedInvoice?.amount || 0)}</span>
+                        <span className="text-h1 font-black text-primary tracking-tight">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -295,11 +305,11 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                     <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 rounded-md bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-body-sm shadow-sm">
-                        {selectedInvoice?.clientInitials}
+                        {selectedInvoice?.counterpartyInitials}
                       </div>
                       <div>
-                        <div className="text-body-sm font-bold text-on-surface">{selectedInvoice?.client}</div>
-                        <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice?.client?.toLowerCase().replace(/\s+/g, '')}.example.com</div>
+                        <div className="text-body-sm font-bold text-on-surface">{selectedInvoice?.counterparty}</div>
+                        <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice?.counterparty?.toLowerCase().replace(/\s+/g, '')}.example.com</div>
                       </div>
                     </div>
                     <div className="space-y-1 text-caption text-on-surface-variant font-medium border-t border-outline-variant/30 pt-3">
@@ -346,7 +356,7 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                       <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/50 pt-4 mb-8 text-caption select-none">
                         <div>
                           <span className="block text-outline font-bold uppercase tracking-wider mb-1">Billed To:</span>
-                          <span className="block font-bold text-on-surface">{selectedInvoice?.client}</span>
+                          <span className="block font-bold text-on-surface">{selectedInvoice?.counterparty}</span>
                           <span className="block text-on-surface-variant">123 Business Road, Suite 400</span>
                           <span className="block text-on-surface-variant">San Francisco, CA 94107</span>
                         </div>
@@ -376,11 +386,11 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
                         <div className="w-48 border-t border-outline-variant pt-3">
                           <div className="flex justify-between text-caption text-on-surface-variant font-medium py-1">
                             <span>Subtotal:</span>
-                            <span className="font-mono">{formatCurrency(selectedInvoice?.amount || 0)}</span>
+                            <span className="font-mono">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
                           </div>
                           <div className="flex justify-between text-caption font-bold text-on-surface py-1.5 border-t border-outline-variant/30 mt-2">
                             <span>Total Due:</span>
-                            <span className="font-mono text-primary">{formatCurrency(selectedInvoice?.amount || 0)}</span>
+                            <span className="font-mono text-primary">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
                           </div>
                         </div>
                       </div>
@@ -406,42 +416,46 @@ export default function InvoicesView({ invoices, onAddInvoice, userRole }: Invoi
             <div className="p-6">
               <form onSubmit={handleNewInvoiceSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1">Client Name</label>
+                  <label className="block text-xs font-semibold text-on-surface-variant mb-1">Client</label>
+                  {/*
+                    A chosen client, not a typed name. An invoice references a
+                    real client row, so a free-text field could only ever
+                    produce an invoice that does not belong to anybody.
+                  */}
+                  <select
+                    required
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface cursor-pointer"
+                  >
+                    <option value="">Choose a client</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.nom}</option>
+                    ))}
+                  </select>
+                  {clients.length === 0 && (
+                    <p className="text-caption text-on-surface-variant mt-1">
+                      No clients yet. Add one before issuing an invoice.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface-variant mb-1">Amount (TND, excl. VAT)</label>
                   <input
                     required
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="e.g. Acme Corp"
-                    className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface"
-                    type="text"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="e.g. 12450.000"
+                    className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface font-semibold"
+                    type="number"
+                    step="0.001"
+                    min="0"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1">Amount ($)</label>
-                    <input
-                      required
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="e.g. 12450.00"
-                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface font-semibold"
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1">Status</label>
-                    <select
-                      value={invoiceStatus}
-                      onChange={(e) => setInvoiceStatus(e.target.value as any)}
-                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-sm text-on-surface cursor-pointer font-semibold"
-                    >
-                      <option value="Draft">Draft</option>
-                      <option value="Sent">Sent</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Overdue">Overdue</option>
-                    </select>
-                  </div>
+                  {/*
+                    No status field. A new invoice is always a draft and the
+                    server sets it (#87); offering the choice here meant an
+                    invoice could be created already marked Paid.
+                  */}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-on-surface-variant mb-1">Due Date</label>

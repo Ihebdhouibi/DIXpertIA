@@ -3,9 +3,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.invoicing import (
-    InvoiceDirection,
     InvoiceProcessingStatus,
-    InvoiceStatus,
 )
 
 
@@ -53,13 +51,6 @@ class InvoiceItemCreate(BaseModel):
     quantite: Decimal = Field(default=Decimal(1), gt=0)
     prix_unitaire: Decimal = Field(ge=0)
     taux_tva: Decimal = Field(default=Decimal(19), ge=0, le=100)
-
-
-class InvoiceItemOut(InvoiceItemCreate):
-    id: int
-
-    class Config:
-        from_attributes = True
 
 
 class InvoiceCreate(BaseModel):
@@ -120,26 +111,11 @@ class SupplierInvoiceCreate(BaseModel):
         return value
 
 
-class InvoiceOut(BaseModel):
-    id: int
-    numero: str
-    direction: InvoiceDirection
-    # Exactly one of these is set, decided by the direction.
-    client_id: int | None = None
-    supplier_id: int | None = None
-    # The supplier's own number, on an incoming invoice only.
-    supplier_reference: str | None = None
-    date_emission: date
-    date_echeance: date
-    montant_ht: Decimal
-    montant_ttc: Decimal
-    statut: InvoiceStatus
-    # The accountant's workflow state, independent of `statut` above (#41).
-    processing_status: InvoiceProcessingStatus
-    items: list[InvoiceItemOut] = []
-
-    class Config:
-        from_attributes = True
+# InvoiceOut deliberately does not live here. The API's output contract is the
+# translated one in app/schemas/api.py (#37 Option C): this module holds the
+# ORM-shaped schemas that validate input, and having two classes called
+# InvoiceOut in one codebase was a trap waiting for whoever imported the wrong
+# one.
 
 
 class ProcessingStatusUpdate(BaseModel):

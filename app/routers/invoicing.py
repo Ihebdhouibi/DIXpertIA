@@ -17,11 +17,15 @@ from app.models.invoicing import (
     Supplier,
 )
 from app.models.user import User
+# InvoiceOut comes from app.schemas.api, not from .invoicing: that module
+# holds the ORM-shaped schemas used to validate input, while the API's
+# output contract is the translated one (#37 Option C). One response shape
+# for every invoice endpoint means the UI never sees French column names.
+from app.schemas.api import InvoiceOut
 from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
     InvoiceCreate,
-    InvoiceOut,
     ProcessingStatusUpdate,
     SupplierCreate,
     SupplierInvoiceCreate,
@@ -213,7 +217,8 @@ def list_invoices(
         start = date(int(month[:4]), int(month[5:]), 1)
         end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
         query = query.filter(Invoice.date_emission >= start, Invoice.date_emission < end)
-    return _paginate(response, query, limit, offset)
+    return [InvoiceOut.from_orm_row(i)
+            for i in _paginate(response, query, limit, offset)]
 
 
 # Creating an invoice is admin-only, overriding the router-wide list. The
@@ -249,7 +254,7 @@ def create_invoice(
             Invoice.idempotency_key == idempotency_key
         ).first()
         if existing:
-            return existing
+            return InvoiceOut.from_orm_row(existing)
 
     # One date, used for both the series year and the row, so an invoice
     # created at midnight on 1 January cannot take a 2026 number while
@@ -281,7 +286,7 @@ def create_invoice(
 
     # Validate the response while the transaction can still be rolled back. If
     # this raises, nothing is persisted and the caller may safely retry.
-    response = InvoiceOut.model_validate(invoice, from_attributes=True)
+    response = InvoiceOut.from_orm_row(invoice)
 
     db.commit()
     # TODO: generate PDF (WeasyPrint) + send email to client
@@ -343,8 +348,8 @@ def create_supplier_invoice(
             db.add(InvoiceItem(invoice_id=invoice.id, **item.model_dump()))
         db.flush()
         db.refresh(invoice)
-        # Validated before the commit, for the reason set out on create_invoice.
-        response = InvoiceOut.model_validate(invoice, from_attributes=True)
+        # Built before the commit, for the reason set out on create_invoice.
+        response = InvoiceOut.from_orm_row(invoice)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -391,7 +396,7 @@ def set_processing_status(
         # is more useful than a generic 409, and it is written for a reader.
         raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
     db.refresh(invoice)
-    return invoice
+    return InvoiceOut.from_orm_row(invoice)
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
@@ -400,7 +405,7 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
-    return invoice
+    return InvoiceOut.from_orm_row(invoice)
 
 
 # ---- Download Invoice PDF (NEW) ----
