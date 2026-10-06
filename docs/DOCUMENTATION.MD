@@ -1,86 +1,92 @@
-﻿# DIXpertIA - Enterprise IT Solutions Portal
+# DIXpertIA - Enterprise IT Solutions Portal
 
 ## Overview
 
 DIXpertIA is a full-stack employee portal and admin dashboard for an IT services company.
 
 - Public corporate homepage (Services, About, Contact with form + FAQ).
-- Authentication with role-based views:
+- Authentication with role-based access:
   - **Employee**: payslips, leave requests, team directory.
   - **Accountant**: payslips, invoices, users (read-only).
   - **Admin (HR)**: invoices, projects, users, team, approve/reject leave.
-- Dynamic notifications that respect user roles.
-- Responsive UI: persistent sidebar, mobile drawer, notification bell.
+- Dynamic role-aware notifications.
+- Responsive UI: sidebar, mobile drawer, notification bell.
 
 ## Tech Stack
 
 ### Frontend
-
 - React 18 + TypeScript
-- Vite (dev server, build tool)
+- Vite
 - Tailwind CSS (custom design tokens)
-- Lucide React, Motion (Framer Motion)
+- Lucide React, Motion
 
 ### Backend
 - FastAPI + Uvicorn
-- Pydantic v2 (validation)
-- SQLAlchemy 2 (ORM)
+- Pydantic v2
+- SQLAlchemy 2
 - Alembic (migrations)
-- PostgreSQL (database)
-- ReportLab (PDF generation: payslips, invoices)
-- JWT (python-jose) + bcrypt (passlib) for auth
+- PostgreSQL 17
+- ReportLab (PDF generation)
+- JWT (python-jose) + bcrypt (passlib)
 
 ## Project Structure
 
     app/
-      core/       config, database, security, deps
-      models/     SQLAlchemy models (user, payroll, leaves, invoicing, service)
+      core/       config, database, security, deps, identity
+      models/     SQLAlchemy models
       routers/    API endpoints
       schemas/    Pydantic schemas
       services/   PDF generators
     alembic/      Database migrations
-    db/           Role setup SQL, verification scripts
+    db/           Role setup SQL, verification scripts, README
     src/          React frontend
     main.py       FastAPI entry point
-    seed_users.py Seeds an initial admin user
-    tables.py     Creates the schema (dev only)
+    seed_users.py Seeds an initial user
+    db/README.md  Verified database procedure
 
-## Setup & Running
+## Setup
 
-### 1. Install PostgreSQL and create the database
+The verified database procedure lives in `db/README.md`. Summary:
+
+### 1. Install PostgreSQL 17 and create the database
 
     CREATE DATABASE dixpertia;
 
-Create the application and owner roles (see `db/README.md`):
+### 2. Create the least-privilege roles
 
-    python db/setup_roles.py --superuser-url postgresql://postgres:PASS@HOST:5432/dixpertia
+    python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:5432/dixpertia
 
-### 2. Create the virtual environment and install dependencies
+Record the two URLs it prints; they go into `.env`.
 
-    python -m venv venv
-    venv\Scripts\activate          # Windows
-    source venv/bin/activate       # macOS / Linux
+### 3. Create the virtual environment
+
+    python -m venv .venv
+    .venv\Scripts\activate          # Windows
+    source .venv/bin/activate       # macOS / Linux
     pip install -r requirements-dev.txt
 
-### 3. Configure .env
+### 4. Configure .env
 
     copy .env.example .env
 
-Open `.env` and set at minimum `DATABASE_URL` and `SECRET_KEY` (>= 32 chars):
+Set at minimum `DATABASE_URL`, `SECRET_KEY` (>= 32 chars), and
+`SCHEMA_DATABASE_URL`. Generate a key with:
 
     python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-### 4. Create the schema
+### 5. Build the schema
 
-    python tables.py
-    # Once Alembic migrations are the source of truth:
-    # alembic upgrade head
+    alembic upgrade head
 
-### 5. Seed an admin user
+### 6. Re-run role grants (tables now exist, DELETE grants apply)
 
-    python seed_users.py --admin admin@dixpertia.tn
+    python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:5432/dixpertia --app-password <from step 2> --owner-password <from step 2>
 
-### 6. Run the apps
+### 7. Seed the first administrator
+
+    python seed_users.py --email admin@dixpertia.tn
+
+### 8. Run the apps
 
 Backend (terminal 1):
 
@@ -91,19 +97,24 @@ Frontend (terminal 2):
     npm install
     npm run dev
 
-Frontend: http://localhost:3000 - Backend: http://localhost:8000/docs
+Frontend: http://localhost:3000 - Backend docs: http://localhost:8000/docs
 
-### 7. Enable pre-commit hooks
+### 9. Enable pre-commit hooks
 
     pip install pre-commit
     pre-commit install
 
+## Database rules
+
+Never edit the database by hand, and never use `Base.metadata.create_all()`.
+Schema changes go through Alembic:
+
+    alembic revision --autogenerate -m "short description"
+    alembic upgrade head      # apply
+    alembic downgrade -1      # roll back one revision
+    alembic check             # fail if models and database have drifted
+
 ## Environment Variables
 
 See `.env.example`. Required: `DATABASE_URL`, `SECRET_KEY`.
-Optional: `SCHEMA_DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`,
-`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`,
-`FRONTEND_URL`.
-
-There are no fallbacks for required values: the process refuses to start
-without them.
+There are no fallbacks: the process refuses to start without them.
