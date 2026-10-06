@@ -49,6 +49,53 @@ jobs:
           if [ ${#files[@]} -eq 0 ]; then echo "no python files"; exit 0; fi
           python scripts/check_no_emoji.py "${files[@]}"
 
+  tests:
+    name: api tests (pytest)
+    runs-on: ubuntu-latest
+
+    # A real PostgreSQL, not SQLite and not a mock. Most of what this suite
+    # protects lives in the database - row-level security policies, the
+    # triggers carrying the accountant's rules, CHECK constraints - and none
+    # of it exists anywhere else to be tested against.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: dixpertia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The superuser URL. The suite provisions the two least-privileged roles
+      # from it and points the application at the app role, because a
+      # superuser bypasses row-level security and would make every policy test
+      # pass while proving nothing.
+      TEST_DATABASE_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia_test
+      SECRET_KEY: ci-secret-key-at-least-32-characters-long
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the suite
+        # The schema is built by `alembic upgrade head` inside the session
+        # fixture, from an empty schema, so a migration that only works on an
+        # existing database cannot pass here by accident.
+        run: pytest -q
+
   frontend:
     name: frontend (tsc)
     runs-on: ubuntu-latest

@@ -261,6 +261,48 @@ The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
 
+## Running the test suite
+
+The suite in `tests/` needs a real PostgreSQL, because most of what it checks
+lives in the database: the row-level security policies, the triggers carrying
+the accountant's rules, and the CHECK constraints. None of it exists anywhere
+else to test against, so there is no mock or SQLite path.
+
+```bash
+# A throw-away database. The suite drops and rebuilds its schema on every run.
+createdb -U postgres dixpertia_test
+
+TEST_DATABASE_URL=postgresql://postgres:PASS@localhost:5432/dixpertia_test pytest
+```
+
+Without `TEST_DATABASE_URL` the suite **skips** rather than running, so it can
+never be pointed at a development database by accident -- it truncates the
+business tables between tests.
+
+### The application runs as the least-privileged role
+
+The URL above is a superuser, used only to build the schema and set fixtures
+up. The suite provisions `dixpertia_app` and `dixpertia_owner` from it and
+points the application at the app role, exactly as in production.
+
+That distinction is load-bearing. **A superuser bypasses row-level security
+entirely**, so a suite that let the application connect as one would report
+every policy test as passing while proving nothing. The first version of this
+harness made that mistake and a policy test caught it.
+
+### What it covers
+
+| File | Protects |
+|---|---|
+| `test_authorisation.py` | every route x {anonymous, employee, accountant, admin}, and a check that no route escapes the matrix |
+| `test_invoice_rules.py` | gapless numbering, chronological order, the two series, per-supplier references, the monthly close |
+| `test_row_level_security.py` | an employee cannot read another's payroll; no response carries a password hash |
+
+The schema is built from an empty one by `alembic upgrade head` on every run, so
+a migration that only works against an existing database cannot pass by
+accident.
+
+
 ## Income and expense: one table, two directions
 
 The accountant works with invoices both ways: **outgoing** to clients (income)

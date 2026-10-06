@@ -41,3 +41,14 @@ select = [
 # Its probe table holds one SQL statement per string literal; wrapping them would
 # make the statements harder to read and compare, for no gain.
 "docs/technical-audit/database-audit/01-requests/scripts/run_constraint_probe.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Quiet by default; -v when a failure needs reading.
+addopts = "-q --strict-markers"
+# The suite needs a real PostgreSQL built by the migrations, so it skips
+# loudly rather than silently when TEST_DATABASE_URL is unset. See
+# tests/conftest.py.
+filterwarnings = [
+    "ignore::DeprecationWarning:passlib",
+]
