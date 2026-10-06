@@ -253,7 +253,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         }
     }
 
-@app.post('/api/users', status_code=201)
+# require_admin as a dependency rather than a check inside the body: FastAPI
+# validates the request model before the handler runs, so an in-body role check
+# let a non-admin get a 422 describing the schema before being refused.
+# Authorisation should be decided before anything else is (#57).
+@app.post('/api/users', status_code=201, dependencies=[Depends(require_admin)])
 def create_user(req: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != 'admin':
         raise HTTPException(status_code=403, detail="Only administrators can create users")
