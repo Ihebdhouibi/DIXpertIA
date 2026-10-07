@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Plus, Filter, Plane, HeartPulse, MoreVertical, X, Check } from 'lucide-react';
+import { Calendar, Plus, Plane, HeartPulse, Info } from 'lucide-react';
 import { LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
@@ -7,6 +7,9 @@ import Dialog from './ui/Dialog';
 import Button from './ui/Button';
 import { Field, Input, Select, Textarea } from './ui/Field';
 import { useToast, ToastTone } from './ui/feedback';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { FilterPills } from './ui/TableControls';
+import { useDataStatus } from '../dataStatus';
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
@@ -29,6 +32,7 @@ export default function LeaveRequestsView({
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+  const status = useDataStatus();
 
   const isEmployee = userRole === 'employee';
 
@@ -65,14 +69,17 @@ export default function LeaveRequestsView({
     setLeaveType('Annual Leave');
   };
 
+  // A leave type is a category, not a state: one neutral colour, the icon
+  // tells them apart (sick leave was in the error red).
   const getLeaveIcon = (type: string) => {
+    const icon = 'w-4 h-4 text-on-surface-variant';
     switch (type) {
       case 'Annual Leave':
-        return <Plane className="w-4 h-4 text-primary" />;
+        return <Plane className={icon} aria-hidden="true" />;
       case 'Sick Leave':
-        return <HeartPulse className="w-4 h-4 text-error" />;
+        return <HeartPulse className={icon} aria-hidden="true" />;
       default:
-        return <Calendar className="w-4 h-4 text-secondary" />;
+        return <Calendar className={icon} aria-hidden="true" />;
     }
   };
 
@@ -94,13 +101,10 @@ export default function LeaveRequestsView({
           <p className="text-body-lg text-on-surface-variant mt-1">Manage and track your time off</p>
         </div>
         {isEmployee && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-primary text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-5 h-5" />
-            <span>New Request</span>
-          </button>
+          <Button onClick={() => setIsModalOpen(true)} className="shrink-0">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            New request
+          </Button>
         )}
       </div>
 
@@ -130,80 +134,90 @@ export default function LeaveRequestsView({
             <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
           </div>
         </div>
-        <div
+        {/* A button, not a clickable div: it was unreachable from the keyboard. */}
+        <button
+          type="button"
           onClick={() => setShowCalendar(true)}
-          className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors select-none"
+          className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors"
         >
-          <Calendar className="text-primary mb-2 w-7 h-7" />
-          <span className="font-semibold text-body-sm text-primary">View Calendar</span>
-        </div>
+          <Calendar className="text-on-surface mb-2 w-7 h-7" aria-hidden="true" />
+          <span className="font-semibold text-body-sm text-on-surface">View Calendar</span>
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
-          <h2 className="font-bold text-body-lg text-on-surface">Recent Requests</h2>
-          <div className="flex gap-2">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="px-3 py-1.5 border border-outline-variant rounded-lg text-caption font-medium bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="All">All</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
+      {/* Requests */}
+      <section className="flex flex-col gap-3" aria-labelledby="recent-requests">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 id="recent-requests" className="text-lg font-bold tracking-[-0.02em] text-on-surface">
+            Recent requests
+          </h2>
+          <FilterPills
+            label="Filter by status"
+            options={['All', 'Pending', 'Approved', 'Rejected'] as const}
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+          />
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface">
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Type</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Dates</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Duration</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Status</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="text-body-sm text-on-surface divide-y divide-outline-variant">
-              {filteredRequests.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-on-surface-variant font-medium">
-                    No leave requests found.
-                  </td>
-                </tr>
-              ) : (
-                filteredRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-surface-container-lowest transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          {getLeaveIcon(req.type)}
-                        </div>
-                        <span className="font-semibold text-on-surface">{req.type}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-on-surface-variant font-medium">{req.dates}</td>
-                    <td className="px-6 py-4 font-medium">{req.duration} {req.duration > 1 ? 'days' : 'day'}</td>
-                    <td className="px-6 py-4"><StatusBadge status={req.status} /></td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => req.rejectionReason ? showToast(`Rejection reason: ${req.rejectionReason}`, 'info') : showToast(`Request: ${req.type}`, 'info')}
-                        className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer p-1"
-                      >
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <Table caption="Leave requests">
+          <THead>
+            <Th>Type</Th>
+            <Th numeric>Dates</Th>
+            <Th numeric>Duration</Th>
+            <Th>Status</Th>
+            <Th numeric>
+              <span className="sr-only">Details</span>
+            </Th>
+          </THead>
+          <TBody>
+            {filteredRequests.length > 0 ? (
+              filteredRequests.map((req) => (
+                <Tr key={req.id}>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high">
+                        {getLeaveIcon(req.type)}
+                      </span>
+                      <span className="font-semibold">{req.type}</span>
+                    </div>
+                  </Td>
+                  <Td numeric muted>{req.dates}</Td>
+                  <Td numeric>
+                    {req.duration} {req.duration > 1 ? 'days' : 'day'}
+                  </Td>
+                  <Td>
+                    <StatusBadge status={req.status} />
+                  </Td>
+                  <Td numeric>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        req.rejectionReason
+                          ? showToast(`Rejection reason: ${req.rejectionReason}`, 'info')
+                          : showToast(`Request: ${req.type}`, 'info')
+                      }
+                      aria-label={`Details of the ${req.type} request, ${req.dates}`}
+                      className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                    >
+                      <Info className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </Td>
+                </Tr>
+              ))
+            ) : status.loading ? (
+              <TableState kind="loading" colSpan={5} title="Loading leave requests..." />
+            ) : status.error && leaveRequests.length === 0 ? (
+              <TableState kind="error" colSpan={5} message={status.error} />
+            ) : (
+              <TableState
+                kind="empty"
+                colSpan={5}
+                title={leaveRequests.length === 0 ? 'No leave requests yet' : `No ${selectedStatus.toLowerCase()} requests`}
+                message={leaveRequests.length === 0 && isEmployee ? 'Use "New request" to ask for time off.' : undefined}
+              />
+            )}
+          </TBody>
+        </Table>
+      </section>
 
       {/* Calendar Modal */}
       {showCalendar && (

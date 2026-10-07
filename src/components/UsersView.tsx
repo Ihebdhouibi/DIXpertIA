@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import StatusBadge from './StatusBadge';
 import Dialog from './ui/Dialog';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useConfirm, useToast } from './ui/feedback';
+import Avatar from './ui/Avatar';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { SearchField, TableToolbar } from './ui/TableControls';
+import { useDataStatus } from '../dataStatus';
+import { ROLE_LABEL } from '../navigation';
 
 interface UsersViewProps {
   users: User[];
@@ -25,6 +30,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
   const [lastName, setLastName] = useState('');
   const [role, setRole] = useState<UserRole>('employee');
   const [searchQuery, setSearchQuery] = useState('');
+  const status = useDataStatus();
 
   const toast = useToast();
   const confirm = useConfirm();
@@ -114,114 +120,101 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={handleOpenCreate}
-            className="bg-primary hover:bg-primary/95 text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Add User</span>
-          </button>
+          <Button onClick={handleOpenCreate} className="shrink-0">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Add user
+          </Button>
         )}
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-body-sm text-on-surface placeholder:text-outline"
-          />
-        </div>
-      </div>
+      <TableToolbar>
+        <SearchField label="Search users" value={searchQuery} onChange={setSearchQuery} className="sm:w-96" />
+      </TableToolbar>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface-container-lowest">
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">User</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Email</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Role</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
-                {isAdmin && (
-                  <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/40">
-              {filteredUsers.map((u) => (
-                <tr key={u.id} className="hover:bg-surface-container-low transition-colors group">
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                        {u.firstName[0]}{u.lastName[0]}
-                      </div>
-                      <span className="font-bold text-body-sm text-on-surface">{u.firstName} {u.lastName}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-body-sm text-on-surface-variant">{u.email}</td>
-                  <td className="py-4 px-6">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                      u.role === 'admin'
-                        ? 'bg-primary/10 text-primary border-primary/20'
-                        : u.role === 'accountant'
-                        ? 'bg-info-container text-info border-info/20'
-                        : 'bg-surface-variant text-on-surface-variant border-outline-variant'
-                    }`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <StatusBadge status={u.isActive ? 'Active' : 'Inactive'} />
-                  </td>
-                  {/*
-                    Each button appears only if its handler was supplied. The
-                    API has no endpoint for editing or deleting an account yet
-                    (#62), so they are currently hidden rather than shown doing
-                    nothing - a button that silently fails is worse than no
-                    button.
-                  */}
-                  {isAdmin && (
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex justify-end gap-2">
-                        {onEditUser && (
-                          <button
-                            onClick={() => handleOpenEdit(u)}
-                            className="p-1.5 text-on-surface-variant hover:text-primary rounded transition-colors cursor-pointer"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
-                        {onDeleteUser && (
-                          <button
-                            onClick={() => handleDelete(u.id, `${u.firstName} ${u.lastName}`)}
-                            className="p-1.5 text-on-surface-variant hover:text-error rounded transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                  {!isAdmin && (
-                    <td className="py-4 px-6 text-right text-caption text-on-surface-variant">—</td>
-                  )}
-                </tr>
-              ))}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 5 : 4} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    No users found.
-                  </td>
-                </tr>
+      <Table caption="User accounts">
+        <THead>
+          <Th>User</Th>
+          <Th>Email</Th>
+          <Th>Role</Th>
+          <Th>Status</Th>
+          {/* Only admins get an actions column; it used to render an extra
+              body cell for accountants that had no header. */}
+          {isAdmin && (
+            <Th numeric>
+              <span className="sr-only">Actions</span>
+            </Th>
+          )}
+        </THead>
+        <TBody>
+          {filteredUsers.map((u) => (
+            <Tr key={u.id}>
+              <Td>
+                <div className="flex items-center gap-3">
+                  <Avatar name={`${u.firstName} ${u.lastName}`} size="sm" />
+                  <span className="font-semibold">
+                    {u.firstName} {u.lastName}
+                  </span>
+                </div>
+              </Td>
+              <Td muted>{u.email}</Td>
+              <Td>
+                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">
+                  {ROLE_LABEL[u.role]}
+                </span>
+              </Td>
+              <Td>
+                <StatusBadge status={u.isActive ? 'Active' : 'Inactive'} />
+              </Td>
+              {/*
+                Each button appears only if its handler was supplied. The
+                API has no endpoint for editing or deleting an account yet
+                (#62), so they are currently hidden rather than shown doing
+                nothing - a button that silently fails is worse than no
+                button.
+              */}
+              {isAdmin && (
+                <Td numeric>
+                  <div className="flex justify-end gap-1">
+                    {onEditUser && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(u)}
+                        aria-label={`Edit ${u.firstName} ${u.lastName}`}
+                        className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                      >
+                        <Edit className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
+                    {onDeleteUser && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(u.id, `${u.firstName} ${u.lastName}`)}
+                        aria-label={`Delete ${u.firstName} ${u.lastName}`}
+                        className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-error-container hover:text-error cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                </Td>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </Tr>
+          ))}
+          {filteredUsers.length === 0 &&
+            (status.loading ? (
+              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title="Loading users..." />
+            ) : status.error && users.length === 0 ? (
+              <TableState kind="error" colSpan={isAdmin ? 5 : 4} message={status.error} />
+            ) : (
+              <TableState
+                kind="empty"
+                colSpan={isAdmin ? 5 : 4}
+                title={users.length === 0 ? 'No user accounts' : 'No users match'}
+                message={users.length === 0 ? undefined : 'Try another name or e-mail.'}
+              />
+            ))}
+        </TBody>
+      </Table>
 
       {isAdmin && (
         <Dialog

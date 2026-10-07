@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
-import { Plus, Search, Edit, Ban, CheckCircle, X, Calendar, User, FileText, Check, AlertCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Edit, Ban, CheckCircle, Calendar, FileText } from 'lucide-react';
 import { Employee, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
 import Dialog from './ui/Dialog';
 import Button from './ui/Button';
-import { Field, Textarea } from './ui/Field';
+import Avatar from './ui/Avatar';
+import { Field, Select, Textarea } from './ui/Field';
 import { useToast } from './ui/feedback';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { FilterPills, SearchField, TableToolbar } from './ui/TableControls';
+import { useDataStatus } from '../dataStatus';
 
 interface TeamViewProps {
   userRole: UserRole;
@@ -16,17 +20,21 @@ interface TeamViewProps {
   onRejectLeave: (id: string, comment: string) => void;
 }
 
-
-/** Two initials from a display name, for the avatar circle. */
-function initialsOf(name: string): string {
-  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-}
-
 /** The employment status as a label, matching the StatusBadge vocabulary. */
 function employmentLabel(status: string): string {
   if (status === 'active') return 'Active';
   if (status === 'on_leave') return 'On Hold';
   return 'Inactive';
+}
+
+const STATUS_FILTERS = ['All', 'Active', 'On Hold', 'Inactive'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+const ALL_ROLES = 'All roles';
+
+/** 'YYYY-MM-DD' as a local date (see CalendarView). */
+function localDate(value: string | undefined): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
 
 export default function TeamView({
@@ -37,30 +45,22 @@ export default function TeamView({
   onRejectLeave,
 }: TeamViewProps) {
   const isAdmin = userRole === 'admin';
-  const isEmployee = userRole === 'employee';
   const isAccountant = userRole === 'accountant';
+  const status = useDataStatus();
 
-  // Shared state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState('All Roles');
-  const [selectedStatus, setSelectedStatus] = useState('All Status');
+  const [selectedRole, setSelectedRole] = useState(ALL_ROLES);
+  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('All');
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Admin-only states
+  // Admin only
   const [activeSubTab, setActiveSubTab] = useState<'employees' | 'leave-approvals'>('employees');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('');
-  const [sendInvitation, setSendInvitation] = useState(true);
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionComment, setRejectionComment] = useState('');
 
   const toast = useToast();
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    toast(message, type);
-  };
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => toast(message, type);
 
   // --- Handlers (admin only) ---
   const handleApprove = (id: string, name: string) => {
@@ -83,491 +83,326 @@ export default function TeamView({
     showToast(`Leave request from ${req?.employeeName || 'employee'} rejected.`);
   };
 
-  // --- Filtered employees ---
+  // --- Filters ---
+  // Roles come from the employees themselves; the filter used to offer a
+  // hard-coded "Developer / Manager / Administrator / Analyst" list.
+  const roles = useMemo(
+    () => Array.from(new Set(employees.map(e => e.role).filter(Boolean))).sort(),
+    [employees]
+  );
+
   const filteredEmployees = employees.filter(member => {
-    const fullName = `${member.name.split(' ')[0]} ${member.name.split(' ').slice(1).join(' ')}`.toLowerCase();
     const query = searchQuery.toLowerCase();
-    const matchesSearch = fullName.includes(query) || member.email.toLowerCase().includes(query);
-    const matchesRole = selectedRole === 'All Roles' || member.role.toLowerCase().includes(selectedRole.toLowerCase());
-    const matchesStatus = selectedStatus === 'All Status' || employmentLabel(member.employmentStatus) === selectedStatus;
+    const matchesSearch = member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query);
+    const matchesRole = selectedRole === ALL_ROLES || member.role === selectedRole;
+    const matchesStatus = selectedStatus === 'All' || employmentLabel(member.employmentStatus) === selectedStatus;
     return matchesSearch && matchesRole && matchesStatus;
   });
 
   const pendingRequests = leaveRequests.filter(req => req.status === 'Pending');
+  const approvedCount = leaveRequests.filter(r => r.status === 'Approved').length;
+  // "On leave" was a hard-coded 0: count approved leave covering today.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const onLeaveToday = leaveRequests.filter(r => {
+    if (r.status !== 'Approved') return false;
+    const start = localDate(r.startDate);
+    const end = localDate(r.endDate);
+    return !!start && !!end && start <= today && today <= end;
+  }).length;
 
-  // --- Render: Accountant (read-only) ---
-  if (isAccountant) {
+  // --- The employee directory, shared by the three roles ---
+  const directory = (
+    <>
+      <TableToolbar>
+        <SearchField label="Search employees" value={searchQuery} onChange={setSearchQuery} />
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <FilterPills label="Filter by status" options={STATUS_FILTERS} value={selectedStatus} onChange={setSelectedStatus} />
+          {roles.length > 1 && (
+            <Select
+              aria-label="Filter by role"
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="md:w-48"
+            >
+              <option value={ALL_ROLES}>{ALL_ROLES}</option>
+              {roles.map(r => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+      </TableToolbar>
+
+      <Table
+        caption="Team members"
+        footer={
+          employees.length > 0 && (
+            <p className="border-t border-outline-variant px-5 py-3 text-sm text-on-surface-variant">
+              <span className="font-mono tabular-nums text-on-surface">{filteredEmployees.length}</span> of{' '}
+              <span className="font-mono tabular-nums text-on-surface">{employees.length}</span> employees
+            </p>
+          )
+        }
+      >
+        <THead>
+          <Th>Name</Th>
+          <Th>Email</Th>
+          <Th>Role</Th>
+          <Th>Status</Th>
+          {isAdmin && (
+            <Th numeric>
+              <span className="sr-only">Actions</span>
+            </Th>
+          )}
+        </THead>
+        <TBody>
+          {filteredEmployees.map(member => (
+            <Tr key={member.id}>
+              <Td>
+                <div className="flex items-center gap-3">
+                  <Avatar name={member.name} />
+                  <span className="font-semibold">{member.name}</span>
+                </div>
+              </Td>
+              <Td muted>{member.email}</Td>
+              <Td muted>{member.role || '-'}</Td>
+              <Td>
+                <StatusBadge status={employmentLabel(member.employmentStatus)} />
+              </Td>
+              {isAdmin && (
+                <Td numeric>
+                  {/* Always visible: they used to appear only on mouse hover,
+                      so keyboard users never saw them. */}
+                  <div className="flex justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => showToast(`Edit ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
+                      aria-label={`Edit ${member.name}`}
+                      className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                    >
+                      <Edit className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => showToast(`Toggle status for ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
+                      aria-label={`Change the status of ${member.name}`}
+                      className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-error-container hover:text-error cursor-pointer"
+                    >
+                      <Ban className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </Td>
+              )}
+            </Tr>
+          ))}
+          {filteredEmployees.length === 0 &&
+            (status.loading ? (
+              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title="Loading the team..." />
+            ) : status.error && employees.length === 0 ? (
+              <TableState kind="error" colSpan={isAdmin ? 5 : 4} message={status.error} />
+            ) : (
+              <TableState
+                kind="empty"
+                colSpan={isAdmin ? 5 : 4}
+                title={employees.length === 0 ? 'No team members yet' : 'No one matches'}
+                message={employees.length === 0 ? undefined : 'Try another name, status or role.'}
+              />
+            ))}
+        </TBody>
+      </Table>
+    </>
+  );
+
+  const header = (title: string, subtitle: string) => (
+    <div>
+      <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{title}</h1>
+      <p className="text-body-lg text-on-surface-variant mt-1">{subtitle}</p>
+    </div>
+  );
+
+  // --- Accountant and employee: read-only directory ---
+  if (!isAdmin) {
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-        <div>
-          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team</h1>
-          <p className="text-body-lg text-on-surface-variant mt-1">View team members.</p>
-        </div>
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="border-b border-outline-variant bg-surface-container-lowest">
-                  <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Name</th>
-                  <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Email</th>
-                  <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Role</th>
-                  <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/40">
-                {filteredEmployees.map((member) => (
-                  <tr key={member.id} className="hover:bg-surface-container/50 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                          {initialsOf(member.name)}
-                        </div>
-                        <div>
-                          <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">{member.email}</td>
-                    <td className="py-4 px-6">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-surface-variant text-on-surface-variant border-outline-variant">
-                        {member.role}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <StatusBadge status={employmentLabel(member.employmentStatus)} />
-                    </td>
-                  </tr>
-                ))}
-                {filteredEmployees.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                      No team members found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {isAccountant
+          ? header('Team', 'View team members.')
+          : header('Team Directory', 'View and connect with your colleagues.')}
+        {directory}
       </div>
     );
   }
 
-  // --- Render: Admin (full control) ---
-  if (isAdmin) {
-    return (
-      <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+  // --- Admin: directory and leave approvals ---
+  const tab = (id: 'employees' | 'leave-approvals', label: React.ReactNode) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activeSubTab === id}
+      onClick={() => setActiveSubTab(id)}
+      className={`-mb-px flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-semibold transition-colors cursor-pointer ${
+        activeSubTab === id
+          ? 'border-primary text-on-surface'
+          : 'border-transparent text-on-surface-variant hover:text-on-surface'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team Dashboard</h1>
-            <p className="text-body-lg text-on-surface-variant mt-1">Manage team members and leave requests.</p>
-          </div>
-        </div>
+  const stat = (label: string, value: number, Icon: React.ComponentType<{ className?: string }>) => (
+    <div className="flex items-center gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
+      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-surface-container-high">
+        <Icon className="h-5 w-5 text-on-surface-variant" aria-hidden="true" />
+      </span>
+      <div>
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant">{label}</p>
+        <p className="font-mono text-2xl font-semibold tabular-nums text-on-surface">{value}</p>
+      </div>
+    </div>
+  );
 
-        {/* Tabs */}
-        <div className="border-b border-outline-variant flex gap-4 select-none">
-          <button
-            onClick={() => setActiveSubTab('employees')}
-            className={`py-3 px-1 font-bold text-body-sm border-b-2 transition-all cursor-pointer ${
-              activeSubTab === 'employees'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Employee Management
-          </button>
-          <button
-            onClick={() => setActiveSubTab('leave-approvals')}
-            className={`py-3 px-1 font-bold text-body-sm border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
-              activeSubTab === 'leave-approvals'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
+  return (
+    <div className="flex-1 flex flex-col gap-6 animate-fade-in">
+      {header('Team Dashboard', 'Manage team members and leave requests.')}
+
+      <div role="tablist" aria-label="Team sections" className="flex gap-6 border-b border-outline-variant">
+        {tab('employees', 'Employee Management')}
+        {tab(
+          'leave-approvals',
+          <>
             Leave Approvals
             {pendingRequests.length > 0 && (
-              <span className="bg-error text-on-error font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 font-mono text-[10px] font-medium text-on-error">
                 {pendingRequests.length}
               </span>
             )}
-          </button>
-        </div>
-
-        {/* Employees Tab */}
-        {activeSubTab === 'employees' && (
-          <>
-            <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-              <div className="relative w-full md:max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-body-sm text-on-surface placeholder:text-outline"
-                  placeholder="Search employees..."
-                  type="text"
-                />
-              </div>
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-full md:w-auto px-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary text-body-sm text-on-surface cursor-pointer font-medium"
-                >
-                  <option value="All Roles">All Roles</option>
-                  <option value="Developer">Developer</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Administrator">Administrator</option>
-                  <option value="Analyst">Analyst</option>
-                </select>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full md:w-auto px-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary text-body-sm text-on-surface cursor-pointer font-medium"
-                >
-                  <option value="All Status">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead>
-                    <tr className="border-b border-outline-variant bg-surface-container-lowest">
-                      <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Name</th>
-                      <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Email</th>
-                      <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Role</th>
-                      <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
-                      <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/40">
-                    {filteredEmployees.map((member) => (
-                      <tr key={member.id} className="hover:bg-surface-container/50 transition-colors group">
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                              {initialsOf(member.name)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">{member.email}</td>
-                        <td className="py-4 px-6">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-surface-variant text-on-surface-variant border-outline-variant">
-                            {member.role}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <StatusBadge status={employmentLabel(member.employmentStatus)} />
-                        </td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex justify-end gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => showToast(`Edit ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
-                              className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer"
-                              title="Edit Profile"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => showToast(`Toggle status for ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
-                              className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/50 rounded transition-colors cursor-pointer"
-                              title="Toggle Status"
-                            >
-                              <Ban className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredEmployees.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                          No employees found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t border-outline-variant bg-surface-container-lowest px-6 py-4 flex items-center justify-between">
-                <span className="text-body-sm text-on-surface-variant font-medium">
-                  Showing {filteredEmployees.length} of {employees.length} employees
-                </span>
-              </div>
-            </div>
           </>
         )}
+      </div>
 
-        {/* Leave Approvals Tab */}
-        {activeSubTab === 'leave-approvals' && (
-          <div className="flex flex-col gap-6 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="glass-card rounded-xl p-6 flex items-center gap-4 border border-outline-variant/50 shadow-sm">
-                <div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container shadow-sm">
-                  <FileText className="w-6 h-6 text-on-secondary-container" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Pending Requests</div>
-                  <div className="text-h1 font-black text-on-surface">{pendingRequests.length}</div>
-                </div>
-              </div>
-              <div className="glass-card rounded-xl p-6 flex items-center gap-4 border border-outline-variant/50 shadow-sm">
-                <div className="w-12 h-12 rounded-full bg-primary-fixed text-primary flex items-center justify-center shadow-sm">
-                  <CheckCircle className="w-6 h-6 text-success" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Approved Today</div>
-                  <div className="text-h1 font-black text-on-surface">
-                    {leaveRequests.filter(r => r.status === 'Approved').length}
-                  </div>
-                </div>
-              </div>
-              <div className="glass-card rounded-xl p-6 flex items-center gap-4 border border-outline-variant/50 shadow-sm">
-                <div className="w-12 h-12 rounded-full bg-error-container text-on-error-container flex items-center justify-center shadow-sm">
-                  <Calendar className="w-6 h-6 text-error" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">On Leave</div>
-                  <div className="text-h1 font-black text-on-surface">0</div>
-                </div>
-              </div>
-            </div>
+      {activeSubTab === 'employees' && directory}
 
-            {/* Calendar Button */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-body-lg font-bold text-on-surface">Pending Leave Requests</h2>
-              <button
-                onClick={() => setShowCalendar(true)}
-                className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg font-semibold text-caption hover:bg-primary/20 transition-colors flex items-center gap-2"
-              >
-                <Calendar className="w-4 h-4" />
-                View Calendar
-              </button>
-            </div>
-
-            <div className="glass-card rounded-xl overflow-hidden border border-outline-variant/50 bg-surface-container-lowest shadow-sm">
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-surface-container-low border-b border-outline-variant font-semibold text-caption text-on-surface-variant">
-                    <tr>
-                      <th className="px-6 py-4 uppercase tracking-wider">Employee</th>
-                      <th className="px-6 py-4 uppercase tracking-wider">Dates</th>
-                      <th className="px-6 py-4 uppercase tracking-wider">Type</th>
-                      <th className="px-6 py-4 uppercase tracking-wider">Reason</th>
-                      <th className="px-6 py-4 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 uppercase tracking-wider text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-body-sm divide-y divide-outline-variant/40">
-                    {pendingRequests.map((req) => (
-                      <tr key={req.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed font-bold text-xs shadow-sm">
-                              {req.employeeName.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <div>
-                              <div className="font-bold text-on-surface">{req.employeeName}</div>
-                              <div className="text-caption text-on-surface-variant font-medium">{req.jobTitle ?? '-'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-on-surface font-semibold whitespace-nowrap">
-                          {req.dates}
-                          <br />
-                          <span className="text-caption text-on-surface-variant font-medium">{req.duration} Days</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 rounded-full bg-surface-variant text-on-surface-variant text-xs font-semibold">
-                            {req.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-on-surface font-medium max-w-xs truncate" title={req.reason}>
-                          {req.reason || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-semibold flex items-center w-fit gap-1 shadow-sm">
-                            <Calendar className="w-3.5 h-3.5" />
-                            Pending
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleApprove(req.id, req.employeeName)}
-                              className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => triggerReject(req.id)}
-                              className="px-3 py-1.5 rounded-lg bg-error-container text-on-error-container font-bold text-xs hover:bg-error-container/85 transition-colors cursor-pointer border border-error/10"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {pendingRequests.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="py-12 px-6 text-center text-on-surface-variant font-semibold">
-                          No pending leave requests. ✨
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      {activeSubTab === 'leave-approvals' && (
+        <div className="flex flex-col gap-6 animate-fade-in">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {stat('Pending', pendingRequests.length, FileText)}
+            {stat('Approved', approvedCount, CheckCircle)}
+            {stat('On leave today', onLeaveToday, Calendar)}
           </div>
-        )}
 
-        {/*
-          The Add Employee modal was removed in #65. It collected a name and
-          an e-mail and posted nowhere: creating a person is two steps - a
-          login account, then the employee record that carries the
-          employment terms (#60) - and POST /api/employees needs a userId
-          that already exists. That flow belongs with #62.
-        */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold tracking-[-0.02em] text-on-surface">Pending leave requests</h2>
+            <Button variant="secondary" size="sm" onClick={() => setShowCalendar(true)}>
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              View calendar
+            </Button>
+          </div>
 
-        {/* Reject leave request */}
-        <Dialog
-          open={isRejectOpen}
-          onClose={() => setIsRejectOpen(false)}
-          title="Reject leave request"
-          description="Give a reason for rejecting this request. The employee will see it."
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setIsRejectOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={handleConfirmReject}>
-                Confirm rejection
-              </Button>
-            </>
-          }
-        >
-          <Field label="Rejection reason">
-            {({ id }) => (
-              <Textarea
-                id={id}
-                rows={4}
-                value={rejectionComment}
-                onChange={(e) => setRejectionComment(e.target.value)}
-                placeholder="E.g., Project deadline conflicts..."
-              />
-            )}
-          </Field>
-        </Dialog>
-
-        {/* Calendar Modal */}
-        {showCalendar && (
-          <CalendarView
-            leaveRequests={leaveRequests}
-            userRole={userRole}
-            currentEmployeeId={undefined}
-            onClose={() => setShowCalendar(false)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // --- Render: Employee (read-only directory, no actions) ---
-  return (
-    <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      <div>
-        <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Team Directory</h1>
-        <p className="text-body-lg text-on-surface-variant mt-1">View and connect with your colleagues.</p>
-      </div>
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline w-5 h-5" />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-body-sm text-on-surface placeholder:text-outline"
-            placeholder="Search employees..."
-            type="text"
-          />
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <select
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className="w-full md:w-auto px-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary text-body-sm text-on-surface cursor-pointer font-medium"
-          >
-            <option value="All Roles">All Roles</option>
-            <option value="Developer">Developer</option>
-            <option value="Manager">Manager</option>
-            <option value="Administrator">Administrator</option>
-            <option value="Analyst">Analyst</option>
-          </select>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="w-full md:w-auto px-4 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none focus:border-primary text-body-sm text-on-surface cursor-pointer font-medium"
-          >
-            <option value="All Status">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface-container-lowest">
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Name</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Email</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Role</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/40">
-              {filteredEmployees.map((member) => (
-                <tr key={member.id} className="hover:bg-surface-container/50 transition-colors">
-                  <td className="py-4 px-6">
+          <Table caption="Pending leave requests">
+            <THead>
+              <Th>Employee</Th>
+              <Th numeric>Dates</Th>
+              <Th>Type</Th>
+              <Th>Reason</Th>
+              {/* No status column: every row in this table is Pending. */}
+              <Th numeric>
+                <span className="sr-only">Decision</span>
+              </Th>
+            </THead>
+            <TBody>
+              {pendingRequests.map(req => (
+                <Tr key={req.id}>
+                  <Td>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-body-sm shrink-0">
-                        {initialsOf(member.name)}
-                      </div>
-                      <div>
-                        <div className="font-bold text-body-sm text-on-surface">{member.name}</div>
+                      <Avatar name={req.employeeName} size="sm" />
+                      <div className="whitespace-nowrap">
+                        <div className="font-semibold">{req.employeeName}</div>
+                        <div className="text-xs text-on-surface-variant">{req.jobTitle ?? '-'}</div>
                       </div>
                     </div>
-                  </td>
-                  <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">{member.email}</td>
-                  <td className="py-4 px-6">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-surface-variant text-on-surface-variant border-outline-variant">
-                      {member.role}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    <StatusBadge status={employmentLabel(member.employmentStatus)} />
-                  </td>
-                </tr>
+                  </Td>
+                  <Td numeric>
+                    {req.dates}
+                    <div className="text-xs text-on-surface-variant">
+                      {req.duration} {req.duration === 1 ? 'day' : 'days'}
+                    </div>
+                  </Td>
+                  <Td muted className="whitespace-nowrap">{req.type}</Td>
+                  <Td muted className="max-w-48 truncate" title={req.reason}>
+                    {req.reason || '-'}
+                  </Td>
+                  <Td numeric>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" onClick={() => handleApprove(req.id, req.employeeName)}>
+                        Approve
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => triggerReject(req.id)}>
+                        Reject
+                      </Button>
+                    </div>
+                  </Td>
+                </Tr>
               ))}
-              {filteredEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    No employees found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              {pendingRequests.length === 0 &&
+                (status.loading ? (
+                  <TableState kind="loading" colSpan={5} title="Loading leave requests..." />
+                ) : (
+                  <TableState kind="empty" colSpan={5} title="No pending leave requests" message="Every request has a decision." />
+                ))}
+            </TBody>
+          </Table>
         </div>
-      </div>
+      )}
+
+      {/*
+        The Add Employee modal was removed in #65. It collected a name and
+        an e-mail and posted nowhere: creating a person is two steps - a
+        login account, then the employee record that carries the
+        employment terms (#60) - and POST /api/employees needs a userId
+        that already exists. That flow belongs with #62.
+      */}
+
+      {/* Reject leave request */}
+      <Dialog
+        open={isRejectOpen}
+        onClose={() => setIsRejectOpen(false)}
+        title="Reject leave request"
+        description="Give a reason for rejecting this request. The employee will see it."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsRejectOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmReject}>
+              Confirm rejection
+            </Button>
+          </>
+        }
+      >
+        <Field label="Rejection reason">
+          {({ id }) => (
+            <Textarea
+              id={id}
+              rows={4}
+              value={rejectionComment}
+              onChange={(e) => setRejectionComment(e.target.value)}
+              placeholder="E.g., Project deadline conflicts..."
+            />
+          )}
+        </Field>
+      </Dialog>
+
+      {showCalendar && (
+        <CalendarView
+          leaveRequests={leaveRequests}
+          userRole={userRole}
+          currentEmployeeId={undefined}
+          onClose={() => setShowCalendar(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
-import { FileText, Download, Calendar, DollarSign, Wallet, CreditCard, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FileText, Download, DollarSign, Wallet, CreditCard } from 'lucide-react';
 import { Payslip, UserRole } from '../types';
 import { useToast, ToastTone } from './ui/feedback';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { Pagination } from './ui/TableControls';
+import { Field, Select } from './ui/Field';
+import { useDataStatus } from '../dataStatus';
 
 interface PayslipsViewProps {
   payslips: Payslip[];
@@ -9,7 +13,8 @@ interface PayslipsViewProps {
 }
 
 export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) {
-  const [selectedYear, setSelectedYear] = useState('2024');
+  const [selectedYear, setSelectedYear] = useState('');
+  const status = useDataStatus();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Pagination states
@@ -47,12 +52,24 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
     showToast(`Payslip ${slip.period} opened for printing.`);
   };
 
+  // Years come from the payslips themselves, most recent first, and the most
+  // recent is selected by default. The filter used to default to a hard-coded
+  // "2024" (options 2024-2022), hiding every current payslip, and it called
+  // issuedOn.includes() although issuedOn is optional.
+  const yearOf = (p: Payslip) => (p.period.match(/\d{4}/) ?? p.issuedOn?.match(/\d{4}/))?.[0] ?? '';
+  const years = useMemo(
+    () => Array.from(new Set(payslips.map(yearOf).filter(Boolean))).sort().reverse(),
+    [payslips]
+  );
+  useEffect(() => {
+    if (!years.includes(selectedYear)) setSelectedYear(years[0] ?? '');
+  }, [years, selectedYear]);
+
   // Filter and paginated list
-  const filteredPayslips = payslips.filter(p => p.issuedOn.includes(selectedYear));
+  const filteredPayslips = selectedYear ? payslips.filter(p => yearOf(p) === selectedYear) : payslips;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredPayslips.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredPayslips.length / itemsPerPage);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
@@ -79,22 +96,27 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
           </p>
         </div>
 
-        {/* Period Filter */}
-        <div className="flex items-center gap-2 bg-surface-container-lowest px-3 py-1.5 rounded-lg border border-outline-variant shadow-sm w-full md:w-auto">
-          <Calendar className="text-outline w-5 h-5" />
-          <select
-            value={selectedYear}
-            onChange={(e) => {
-              setSelectedYear(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="bg-transparent border-none text-on-surface font-semibold text-body-sm focus:outline-none cursor-pointer py-1 pr-6 w-full md:w-32"
-          >
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-          </select>
-        </div>
+        {/* Period filter */}
+        {years.length > 0 && (
+          <Field label="Year" className="w-full md:w-36">
+            {({ id }) => (
+              <Select
+                id={id}
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
       </div>
 
       {/* Bento Style Stats Grid */}
@@ -118,7 +140,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
         </div>
 
         <div className="bg-primary text-on-primary rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1px,transparent_1px)] bg-[size:16px_16px]"></div>
+          <div className="absolute inset-0 opacity-15 bg-[radial-gradient(var(--color-on-primary)_1px,transparent_1px)] bg-[size:16px_16px]"></div>
           <div className="absolute top-0 right-0 p-4 opacity-25">
             <CreditCard className="w-16 h-16" />
           </div>
@@ -128,91 +150,70 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
         </div>
       </div>
 
-      {/* Payslips Data Table Container */}
-      <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface-container-low/50">
-                <th className="py-4 px-6 font-semibold text-body-sm text-on-surface-variant">Period</th>
-                <th className="py-4 px-6 font-semibold text-body-sm text-on-surface-variant text-right">Gross Pay</th>
-                <th className="py-4 px-6 font-semibold text-body-sm text-on-surface-variant text-right">Net Pay</th>
-                <th className="py-4 px-6 font-semibold text-body-sm text-on-surface-variant">Issued On</th>
-                <th className="py-4 px-6 font-semibold text-body-sm text-on-surface-variant text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="text-body-sm text-on-surface divide-y divide-outline-variant/40">
-              {currentItems.length > 0 ? (
-                currentItems.map((slip) => (
-                  <tr
-                    key={slip.id}
-                    className="hover:bg-surface-container-low transition-colors group"
+      {/* Payslips */}
+      <Table
+        caption="Payslips"
+        footer={
+          filteredPayslips.length > 0 && (
+            <Pagination
+              page={currentPage}
+              pageSize={itemsPerPage}
+              total={filteredPayslips.length}
+              onPageChange={setCurrentPage}
+              noun="payslips"
+            />
+          )
+        }
+      >
+        <THead>
+          <Th>Period</Th>
+          <Th numeric>Gross pay</Th>
+          <Th numeric>Net pay</Th>
+          <Th numeric>Issued</Th>
+          <Th numeric>
+            <span className="sr-only">Download</span>
+          </Th>
+        </THead>
+        <TBody>
+          {currentItems.length > 0 ? (
+            currentItems.map((slip) => (
+              <Tr key={slip.id}>
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant">
+                      <FileText className="w-4 h-4" aria-hidden="true" />
+                    </span>
+                    <span className="font-semibold">{slip.period}</span>
+                  </div>
+                </Td>
+                <Td numeric muted>{formatCurrency(slip.grossPay)}</Td>
+                <Td numeric className="font-semibold">{formatCurrency(slip.netPay)}</Td>
+                <Td numeric muted>{slip.issuedOn ?? '-'}</Td>
+                <Td numeric>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(slip)}
+                    aria-label={`Download payslip ${slip.period}`}
+                    className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                   >
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all">
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <span className="font-semibold text-on-surface">{slip.period}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-right font-mono text-on-surface-variant">
-                      {formatCurrency(slip.grossPay)}
-                    </td>
-                    <td className="py-4 px-6 text-right font-mono font-bold text-primary">
-                      {formatCurrency(slip.netPay)}
-                    </td>
-                    <td className="py-4 px-6 text-on-surface-variant font-medium">
-                      {slip.issuedOn}
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => handleDownload(slip)}
-                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                        title="Download PDF"
-                      >
-                        <Download className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    No payslips found for the selected year.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination Block */}
-        {filteredPayslips.length > 0 && (
-          <div className="px-6 py-4 border-t border-outline-variant flex items-center justify-between bg-surface-container-lowest">
-            <span className="text-caption text-on-surface-variant font-medium">
-              Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPayslips.length)} of {filteredPayslips.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>
+                    <Download className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </Td>
+              </Tr>
+            ))
+          ) : status.loading ? (
+            <TableState kind="loading" colSpan={5} title="Loading payslips..." />
+          ) : status.error && payslips.length === 0 ? (
+            <TableState kind="error" colSpan={5} message={status.error} />
+          ) : (
+            <TableState
+              kind="empty"
+              colSpan={5}
+              title={payslips.length === 0 ? 'No payslips yet' : `No payslips in ${selectedYear}`}
+            />
+          )}
+        </TBody>
+      </Table>
     </div>
   );
 }

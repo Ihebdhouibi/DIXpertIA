@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, MoreVertical, X, Download, ZoomIn, ZoomOut, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
 import StatusBadge from './StatusBadge';
+import Avatar from './ui/Avatar';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { FilterPills, SearchField, Pagination, TableToolbar } from './ui/TableControls';
+import { useDataStatus } from '../dataStatus';
 import Dialog from './ui/Dialog';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
@@ -23,6 +27,8 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
   const isAdmin = userRole === 'admin';
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Draft' | 'Sent' | 'Paid' | 'Overdue'>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const status = useDataStatus();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -109,6 +115,16 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
     return matchesSearch && matchesStatus;
   });
 
+  // Client-side pages over the loaded list. The old footer always said
+  // "Showing 1-N of N" and its page buttons were disabled.
+  const PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(filteredInvoices.length / PAGE_SIZE));
+  const pageRows = filteredInvoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => setPage(1), [selectedFilter, searchQuery]);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
   const formatCurrency = (val: number) => {
     // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars.
     // The dinar has three decimal places, which is why minimumFractionDigits is
@@ -126,123 +142,100 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
           <p className="text-body-lg text-on-surface-variant mt-1">Manage and track billing across all projects.</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setIsNewInvoiceOpen(true)}
-            className="bg-primary hover:bg-primary/95 text-on-primary font-semibold text-body-sm px-6 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 cursor-pointer shrink-0"
-          >
-            <Plus className="w-5 h-5" />
-            <span>New Invoice</span>
-          </button>
+          <Button onClick={() => setIsNewInvoiceOpen(true)} className="shrink-0">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            New invoice
+          </Button>
         )}
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-5 flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-caption font-bold text-on-surface-variant mr-2">Filter by Status:</span>
-          {(['All', 'Draft', 'Sent', 'Paid', 'Overdue'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setSelectedFilter(f)}
-              className={`px-4 py-1.5 rounded-full text-caption font-bold border transition-all cursor-pointer ${
-                selectedFilter === f
-                  ? 'bg-primary border-primary text-on-primary shadow-sm'
-                  : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:bg-surface-container-low'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-          <div className="ml-auto relative w-full md:w-64 mt-2 md:mt-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-5 h-5" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-medium text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-              placeholder="Search invoices..."
-              type="text"
-            />
-          </div>
-        </div>
-      </div>
+      <TableToolbar>
+        <FilterPills
+          label="Filter by status"
+          showLabel
+          options={['All', 'Draft', 'Sent', 'Paid', 'Overdue'] as const}
+          value={selectedFilter}
+          onChange={setSelectedFilter}
+        />
+        <SearchField label="Search invoices" value={searchQuery} onChange={setSearchQuery} />
+      </TableToolbar>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface-container-lowest">
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Invoice #</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Client</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Amount</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Date Issued</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Due Date</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider">Status</th>
-                <th className="py-4 px-6 font-bold text-caption text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant">
-              {filteredInvoices.length > 0 ? (
-                filteredInvoices.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    onClick={() => setSelectedInvoice(inv)}
-                    className="hover:bg-surface-container-low transition-colors cursor-pointer group"
+      <Table
+        caption="Invoices"
+        footer={
+          filteredInvoices.length > 0 && (
+            <Pagination page={page} pageSize={PAGE_SIZE} total={filteredInvoices.length} onPageChange={setPage} noun="invoices" />
+          )
+        }
+      >
+        <THead>
+          <Th>Invoice</Th>
+          <Th>Client</Th>
+          <Th numeric>Amount</Th>
+          <Th numeric>Issued</Th>
+          <Th numeric>Due</Th>
+          <Th>Status</Th>
+          <Th numeric>
+            <span className="sr-only">Actions</span>
+          </Th>
+        </THead>
+        <TBody>
+          {pageRows.length > 0 ? (
+            pageRows.map((inv) => (
+              <Tr key={inv.id} interactive onClick={() => setSelectedInvoice(inv)}>
+                <Td mono>
+                  {/* The row opens the details; this button is the keyboard path to it. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedInvoice(inv);
+                    }}
+                    className="rounded font-semibold hover:underline cursor-pointer"
                   >
-                    <td className="py-4 px-6 font-mono text-body-sm font-semibold text-primary">{inv.id}</td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-caption shadow-sm">
-                          {inv.counterpartyInitials}
-                        </div>
-                        <span className="font-semibold text-body-sm text-on-surface">{inv.counterparty}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 font-semibold text-body-sm text-on-surface">
-                      {formatCurrency(inv.amountTTC)}
-                    </td>
-                    <td className="py-4 px-6 text-body-sm text-on-surface-variant font-medium">
-                      {inv.dateIssued}
-                    </td>
-                    <td className={`py-4 px-6 text-body-sm font-semibold ${inv.status === 'Overdue' ? 'text-error' : 'text-on-surface-variant'}`}>
-                      {inv.dueDate}
-                    </td>
-                    <td className="py-4 px-6">
-                      <StatusBadge status={inv.status} />
-                    </td>
-                    <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleDownload(inv.id)}
-                        className="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer"
-                      >
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-12 px-6 text-center text-on-surface-variant font-medium">
-                    No invoices found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="border-t border-outline-variant px-6 py-4 flex items-center justify-between bg-surface-container-lowest">
-          <span className="text-caption text-on-surface-variant font-medium">
-            Showing 1-{filteredInvoices.length} of {filteredInvoices.length} results
-          </span>
-          <div className="flex items-center gap-2">
-            <button className="p-1 rounded text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40" disabled>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="w-8 h-8 rounded bg-primary-container text-on-primary-container font-bold text-xs flex items-center justify-center">1</button>
-            <button className="p-1 rounded text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40" disabled>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+                    {inv.id}
+                  </button>
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={inv.counterparty} size="sm" shape="square" />
+                    <span className="font-semibold">{inv.counterparty}</span>
+                  </div>
+                </Td>
+                <Td numeric className="font-semibold">{formatCurrency(inv.amountTTC)}</Td>
+                <Td numeric muted>{inv.dateIssued}</Td>
+                <Td numeric className={inv.status === 'Overdue' ? 'text-error font-semibold' : 'text-on-surface-variant'}>
+                  {inv.dueDate}
+                </Td>
+                <Td>
+                  <StatusBadge status={inv.status} />
+                </Td>
+                <Td numeric onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(inv.id)}
+                    aria-label={`Download invoice ${inv.id}`}
+                    className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </Td>
+              </Tr>
+            ))
+          ) : status.loading ? (
+            <TableState kind="loading" colSpan={7} title="Loading invoices..." />
+          ) : status.error && invoices.length === 0 ? (
+            <TableState kind="error" colSpan={7} message={status.error} />
+          ) : (
+            <TableState
+              kind="empty"
+              colSpan={7}
+              title={invoices.length === 0 ? 'No invoices yet' : 'No invoices match'}
+              message={invoices.length === 0 ? undefined : 'Try another status or search term.'}
+            />
+          )}
+        </TBody>
+      </Table>
 
       {/* Invoice detail */}
       <Dialog
@@ -286,9 +279,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
               <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm">
                 <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-md bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-body-sm shadow-sm">
-                    {selectedInvoice?.counterpartyInitials}
-                  </div>
+                  <Avatar name={selectedInvoice?.counterparty ?? ''} shape="square" />
                   <div>
                     <div className="text-body-sm font-bold text-on-surface">{selectedInvoice?.counterparty}</div>
                     <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice?.counterparty?.toLowerCase().replace(/\s+/g, '')}.example.com</div>
