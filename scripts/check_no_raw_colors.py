@@ -53,7 +53,10 @@ PREFIX = (
 )
 
 RULES = (
-    ("hex colour", re.compile(r"(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")),
+    # Not \b at the end: in a Tailwind arbitrary value the colour is followed
+    # by "_" (radial-gradient(#ffffff_1px,...)), a word character. Letters,
+    # digits and "-" still end the match, so anchors like #add-user pass.
+    ("hex colour", re.compile(r"(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![0-9A-Za-z-])")),
     # Not \b: inside a Tailwind arbitrary value the function follows "_"
     # (shadow-[0_8px_32px_rgba(...)]), a word character, so \b never matched.
     ("colour function", re.compile(r"(?<![A-Za-z])(?:rgba?|hsla?)\(")),
