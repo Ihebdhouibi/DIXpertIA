@@ -37,8 +37,14 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 # Generated per run rather than written down: they only have to be stable for
 # the length of one session, long enough to provision the roles and build the
 # two URLs from them. Nothing reads them afterwards.
-APP_PASSWORD = secrets.token_urlsafe(24)
-OWNER_PASSWORD = secrets.token_urlsafe(24)
+#
+# token_hex, not token_urlsafe: the latter draws from a base64url alphabet that
+# includes "-", so roughly one run in thirty produced a password starting with
+# a dash, which argparse then read as a flag and the whole suite errored at
+# setup with "expected one argument". Hex has no character that is special to
+# argparse, a shell or a URL.
+APP_PASSWORD = secrets.token_hex(16)
+OWNER_PASSWORD = secrets.token_hex(16)
 
 
 def _role_url(role: str, password: str) -> str:
@@ -77,6 +83,17 @@ def _require_database() -> str:
     return TEST_DATABASE_URL
 
 
+def _provision(url: str) -> None:
+    """Create the two application roles and their grants.
+
+    The "--flag=value" form rather than "--flag", "value": argparse reads a
+    value beginning with a dash as another flag, so the separated form makes
+    the suite depend on what a random password happens to start with.
+    """
+    _run("db/setup_roles.py", f"--superuser-url={url}",
+         f"--app-password={APP_PASSWORD}", f"--owner-password={OWNER_PASSWORD}")
+
+
 def _run(script: str, *args: str) -> None:
     """Run one of the db/ provisioning scripts against the test database."""
     result = subprocess.run(
@@ -113,13 +130,11 @@ def database():
 
     # The roles the policies name must exist before the migrations create
     # policies that reference them.
-    _run("db/setup_roles.py", "--superuser-url", url,
-         "--app-password", APP_PASSWORD, "--owner-password", OWNER_PASSWORD)
+    _provision(url)
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
                    cwd=ROOT, check=True, capture_output=True, env=os.environ)
     # Table-level DELETE grants, which could not apply before the tables existed.
-    _run("db/setup_roles.py", "--superuser-url", url,
-         "--app-password", APP_PASSWORD, "--owner-password", OWNER_PASSWORD)
+    _provision(url)
 
     _seed_accounts(superuser)
     # Tests that assert directly in SQL use the owner: it is subject to the
