@@ -1,20 +1,9 @@
-import React from 'react';
-import {
-  LayoutDashboard,
-  Briefcase,
-  FileText,
-  Calendar,
-  Users,
-  Settings,
-  LogOut,
-  ShieldAlert,
-  UserCheck,
-  Home,
-  Bell,
-  Receipt,
-  UserCog
-} from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { LogOut, X } from 'lucide-react';
 import { User } from '../types';
+import { navItemsFor, ROLE_LABEL } from '../navigation';
+import Wordmark from './ui/Wordmark';
+import { wrapTab } from './ui/Dialog';
 
 interface SidebarProps {
   currentUser: User;
@@ -26,6 +15,15 @@ interface SidebarProps {
   onGoHome: () => void;
 }
 
+/*
+ * The "Switch to ... View" button was removed in #65 (it is #66's own issue).
+ * It rewrote the signed-in user's role, id and name in the browser, so any
+ * employee could render the admin screens. The server always refused the
+ * admin actions, so nothing could actually be done - but the screens were
+ * shown over mock data, which is a more convincing lie than a refusal.
+ * The "HR Admin Mode" box that framed it went with #27: the role is shown once,
+ * under the user's name.
+ */
 export default function Sidebar({
   currentUser,
   activeTab,
@@ -35,134 +33,86 @@ export default function Sidebar({
   setIsOpenMobile,
   onGoHome,
 }: SidebarProps) {
-  const handleTabClick = (tabId: string) => {
-    setActiveTab(tabId);
+  const navItems = navItemsFor(currentUser.role);
+  const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || ''}`;
+
+  const go = (id: string, isHome?: boolean) => {
+    if (isHome) onGoHome();
+    else setActiveTab(id);
     setIsOpenMobile(false);
   };
 
-  const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || 'D'}`;
+  const content = (
+    <div className="flex h-full flex-col gap-6 border-r border-outline-variant bg-surface-container-lowest px-4 py-5 select-none">
+      {/* Clear space around the logo: at least the cursor's height (#27, kit rule). */}
+      <div className="px-2.5 py-2.5">
+        <Wordmark size="sm" />
+      </div>
 
-  // Define all possible items with visibility rules
-  const allNavItems = [
-    { id: 'home', label: 'Home', icon: Home, isMock: false, isHome: true },
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, isMock: false },
-    // Invoices: visible to admin and accountant
-    { id: 'invoices', label: 'Invoices', icon: FileText, isMock: false, showFor: ['admin', 'accountant'] },
-    // Leave Requests: only employee. Accountants are deliberately excluded -
-    // they do not manage HR processes (see #10).
-    { id: 'leave-requests', label: 'Leave Requests', icon: Calendar, isMock: false, showFor: ['employee'] },
-    // Payslips: employee and accountant. The accountant access is intentional -
-    // #12 deliberately superseded the employee-only rule in #10. Do not revert.
-    { id: 'payslips', label: 'Payslips', icon: Receipt, isMock: false, showFor: ['employee' , 'accountant'] },
-    // Team: admin and employee (not accountant)
-    { id: 'team', label: currentUser.role === 'admin' ? 'Team Management' : 'Team', icon: Users, isMock: false, showFor: ['admin', 'employee'] },
-    // Users: admin and accountant (read‑only for accountant)
-    { id: 'users', label: 'Users', icon: UserCog, isMock: false, showFor: ['admin', 'accountant'] },
-    // Notifications and Settings: everyone
-    { id: 'notifications', label: 'Notifications', icon: Bell, isMock: false },
-    { id: 'settings', label: 'Settings', icon: Settings, isMock: false },
-  ];
-
-  // Filter items based on role
-  const navItems = allNavItems.filter(item => {
-    if (item.isHome) return true;
-    if (!item.showFor) return true; // dashboard, notifications, settings
-    return item.showFor.includes(currentUser.role);
-  });
-
-  const sidebarContent = (
-    <div className="flex flex-col h-full py-4 gap-2 px-4 bg-surface-container-lowest border-r border-outline-variant select-none">
-      <div className="mb-6 pt-2 px-2 flex flex-col gap-1">
-        <div className="text-primary font-black text-h1 tracking-tight">DIXpertIA</div>
-        <div className="text-[11px] text-outline font-semibold tracking-widest uppercase">
-              {currentUser.role === 'admin' ? 'HR Portal' : currentUser.role === 'accountant' ? 'Accountant Portal' : 'Employee Portal'}
-        </div>
-        </div>
-
-      <div className="mb-6 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center gap-3">
+      <div className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3">
         {currentUser.avatarUrl ? (
           <img
-            alt="User Profile"
-            className="w-11 h-11 rounded-full object-cover border border-outline-variant shadow-sm"
+            alt=""
+            className="h-10 w-10 shrink-0 rounded-full border border-outline-variant object-cover"
             src={currentUser.avatarUrl}
-            onError={(e) => (e.target as HTMLElement).style.display = 'none'}
+            onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
           />
         ) : (
-          <div className="w-11 h-11 rounded-full bg-primary-container text-primary font-bold flex items-center justify-center border border-outline-variant text-sm shadow-sm shrink-0">
+          <div
+            aria-hidden="true"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high font-mono text-sm font-medium text-on-surface"
+          >
             {initials}
           </div>
         )}
         <div className="min-w-0">
-          <p className="font-semibold text-body-sm text-on-surface truncate">{currentUser.firstName} {currentUser.lastName}</p>
-          <p className="text-[11px] text-on-surface-variant truncate font-medium">
-            DIXpertIA {currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Operations'}
+          <p className="truncate text-sm font-semibold text-on-surface">
+            {currentUser.firstName} {currentUser.lastName}
+          </p>
+          <p className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">
+            {ROLE_LABEL[currentUser.role]}
           </p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 flex-1">
-        {navItems.map((item) => {
-          if (item.isHome) {
-            return (
-              <button
-                key={item.id}
-                onClick={() => { onGoHome(); setIsOpenMobile(false); }}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all text-body-sm cursor-pointer select-none font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-              >
-                <Home className="w-5 h-5 text-outline" />
-                <span>Home</span>
-              </button>
-            );
-          }
-          const isActive = activeTab === item.id;
-          const IconComponent = item.icon;
+      <nav aria-label="Main" className="flex flex-1 flex-col gap-1">
+        {navItems.map(({ id, label, icon: Icon, isHome }) => {
+          const active = !isHome && activeTab === id;
           return (
             <button
-              key={item.id}
-              onClick={() => handleTabClick(item.id)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all text-body-sm cursor-pointer select-none font-medium ${
-                isActive
-                  ? 'bg-tertiary-fixed text-on-tertiary-fixed-variant font-bold shadow-sm scale-98'
-                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface scale-95 active:scale-100'
+              key={id}
+              type="button"
+              onClick={() => go(id, isHome)}
+              aria-current={active ? 'page' : undefined}
+              className={`relative flex items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm transition-colors cursor-pointer ${
+                active
+                  ? 'bg-surface-container font-semibold text-on-surface'
+                  : 'font-medium text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
               }`}
             >
-              <IconComponent className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'text-outline'}`} />
-              <span className="truncate">{item.label}</span>
-              {item.isMock && (
-                <span className="ml-auto text-[9px] bg-outline-variant/50 text-on-surface-variant px-1.5 py-0.5 rounded font-bold uppercase tracking-wider scale-90">Mock</span>
+              {/*
+                The active item's indicator echoes the logo's block cursor - Lime
+                Deep on paper, Signal Lime on ink (the `secondary` role), exactly
+                as the mark itself does. The label stays ink.
+              */}
+              {active && (
+                <span aria-hidden="true" className="absolute left-0 top-1/2 h-5 w-1.5 -translate-y-1/2 rounded-sm bg-secondary" />
               )}
+              <Icon className={`h-5 w-5 shrink-0 ${active ? '' : 'text-on-surface-variant'}`} aria-hidden="true" />
+              <span className="truncate">{label}</span>
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      <div className="mt-auto pt-4 border-t border-outline-variant/30 flex flex-col gap-2">
-        <div className="bg-primary-container/40 p-3 rounded-lg border border-primary/10 flex flex-col gap-2 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary">
-            {currentUser.role === 'admin' ? (
-              <><ShieldAlert className="w-4 h-4" /> HR Admin Mode</>
-            ) : currentUser.role === 'accountant' ? (
-              <><ShieldAlert className="w-4 h-4" /> Accountant Mode</>
-            ) : (
-              <><UserCheck className="w-4 h-4" /> Employee Mode</>
-            )}
-          </div>
-          {/*
-            The "Switch to ... View" button was removed in #65 (it is #66's own
-            issue). It rewrote the signed-in user's role, id and name in the
-            browser, so any employee could render the admin screens. The server
-            always refused the admin actions, so nothing could actually be done
-            - but the screens were shown over mock data, which is a more
-            convincing lie than a refusal.
-          */}
-        </div>
-
+      <div className="border-t border-outline-variant pt-4">
         <button
+          type="button"
           onClick={onLogout}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-error hover:bg-error-container/40 transition-all text-body-sm font-semibold cursor-pointer text-left w-full"
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-semibold text-error transition-colors hover:bg-error-container cursor-pointer"
         >
-          <LogOut className="w-5 h-5 text-error" />
-          <span>Sign Out</span>
+          <LogOut className="h-5 w-5" aria-hidden="true" />
+          Sign out
         </button>
       </div>
     </div>
@@ -170,17 +120,57 @@ export default function Sidebar({
 
   return (
     <>
-      <aside className="hidden md:block w-[240px] h-screen shrink-0 sticky top-0">
-        {sidebarContent}
-      </aside>
-      {isOpenMobile && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsOpenMobile(false)}></div>
-          <div className="relative w-[240px] max-w-xs h-full bg-surface-container-lowest z-10 shadow-xl animate-slide-in">
-            {sidebarContent}
-          </div>
+      <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 md:block">{content}</aside>
+      <MobileDrawer open={isOpenMobile} onClose={() => setIsOpenMobile(false)}>
+        {content}
+      </MobileDrawer>
+    </>
+  );
+}
+
+/**
+ * The navigation drawer on small screens: a native modal <dialog> anchored to
+ * the left, so focus is trapped (with Tab wrapping), the page behind is inert,
+ * Escape and a scrim click close it, and focus returns to the menu button.
+ */
+function MobileDrawer({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-label="Navigation"
+      onCancel={(e) => {
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={wrapTab}
+      className="m-0 h-full max-h-none w-[272px] max-w-[85vw] bg-transparent p-0 md:hidden backdrop:bg-ink/60 backdrop:backdrop-blur-sm"
+    >
+      {open && (
+        <div className="relative h-full">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="absolute right-3 top-4 z-10 rounded-lg p-2 text-on-surface-variant hover:bg-surface-container cursor-pointer"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+          {children}
         </div>
       )}
-    </>
+    </dialog>
   );
 }

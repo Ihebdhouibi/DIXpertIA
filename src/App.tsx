@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Homepage from './components/Homepage';
 import { ThemeScope } from './theme';
 import Sidebar from './components/Sidebar';
+import AppHeader from './components/AppHeader';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
@@ -15,17 +16,7 @@ import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
 import ResetPassword from './components/ResetPassword';     // NEW
-import {
-  Bell,
-  Menu,
-  HelpCircle,
-  AlertCircle,
-  CheckCircle,
-  X,
-  User as UserIcon,
-  Settings,
-  LogOut
-} from 'lucide-react';
+import { HelpCircle, AlertCircle } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -70,9 +61,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [showNotificationList, setShowNotificationList] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
   const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
@@ -217,7 +206,6 @@ export default function App() {
     setClients([]);
     setNotifications([]);
     setShowHomepage(true);
-    setShowUserDropdown(false);
     setShowLogin(false);
   };
 
@@ -281,7 +269,6 @@ export default function App() {
 
   const handleGoHome = () => {
     setShowHomepage(true);
-    setShowUserDropdown(false);
     setShowLogin(false);
   };
 
@@ -314,10 +301,7 @@ export default function App() {
             leaveRequests={leaveRequests}
             employees={employees}
             notifications={visibleNotifications}
-            onNavigate={(tab: string) => {
-              setActiveTab(tab);
-              setShowNotificationList(false);
-            }}
+            onNavigate={(tab: string) => setActiveTab(tab)}
             onQuickAction={handleQuickAction}
           />
         );
@@ -342,10 +326,7 @@ export default function App() {
             onClearSelected={(ids) => {
               setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
             }}
-            onNavigate={(link) => {
-              setActiveTab(link);
-              setShowNotificationList(false);
-            }}
+            onNavigate={(link) => setActiveTab(link)}
             userRole={currentUser.role}
           />
         );
@@ -535,172 +516,24 @@ export default function App() {
       />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-surface-container-lowest border-b border-outline-variant px-6 flex items-center justify-between sticky top-0 z-40 shrink-0">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsOpenMobile(true)}
-              className="p-1.5 hover:bg-surface-container rounded-lg md:hidden text-on-surface-variant transition-colors cursor-pointer"
-              title="Menu"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-caption font-bold text-outline uppercase tracking-wider">DIXpertIA</span>
-              <span className="text-caption text-outline-variant">/</span>
-              <span className="text-caption font-bold text-primary capitalize">{activeTab}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 relative">
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-              <span className="text-[11px] font-black uppercase text-primary tracking-wider">
-                {currentUser.role === 'admin' ? 'HR Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Employee'} View
-              </span>
-            </div>
-
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotificationList(!showNotificationList)}
-                className="p-1.5 hover:bg-surface-container text-on-surface-variant hover:text-on-surface rounded-full transition-all relative cursor-pointer"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5" />
-                {notificationCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-error text-on-error font-black text-[9px] rounded-full flex items-center justify-center animate-bounce shadow-sm">
-                    {notificationCount}
-                  </span>
-                )}
-              </button>
-
-              {showNotificationList && (
-                <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/60 py-2 z-50 animate-scale-up">
-                  <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">
-                    <span className="font-bold text-caption text-on-surface">Notifications</span>
-                    <div className="flex gap-2">
-                      {visibleNotifications.some(n => !n.read) && (
-                        <button
-                          onClick={() => {
-                            setNotifications(prev =>
-                              prev.map(n =>
-                                !n.targetRole || n.targetRole === currentUser.role
-                                  ? { ...n, read: true }
-                                  : n
-                              )
-                            );
-                          }}
-                          className="text-xs text-secondary hover:underline cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setShowNotificationList(false)}
-                        className="text-xs text-secondary hover:underline cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-outline-variant/30 max-h-64 overflow-y-auto">
-                    {visibleNotifications.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-xs text-on-surface-variant">
-                        No notifications
-                      </div>
-                    ) : (
-                      visibleNotifications.slice(0, 10).map((notif) => (
-                        <div
-                          key={notif.id}
-                          className={`px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer ${
-                            !notif.read ? 'bg-primary/5' : ''
-                          }`}
-                          onClick={() => {
-                            setNotifications(prev =>
-                              prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
-                            );
-                            if (notif.link) {
-                              setActiveTab(notif.link);
-                              setShowNotificationList(false);
-                            }
-                          }}
-                        >
-                          <div className="flex items-start gap-2">
-                            {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />}
-                            {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />}
-                            {notif.type === 'error' && <X className="w-4 h-4 text-danger shrink-0 mt-0.5" />}
-                            <div className="flex-1">
-                              <p className="text-xs font-semibold text-on-surface">{notif.message}</p>
-                              <p className="text-[10px] text-outline mt-1">
-                                {new Date(notif.timestamp).toLocaleString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* User Avatar with Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="w-8 h-8 rounded-full bg-primary text-on-primary font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
-                title="User menu"
-              >
-                {currentUser.firstName[0]}{currentUser.lastName[0]}
-              </button>
-
-              {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/60 py-1 z-50 animate-scale-up">
-                  <div className="px-4 py-2 border-b border-outline-variant/30">
-                    <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
-                    <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <UserIcon className="w-4 h-4" />
-                    Profile
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
-                  <hr className="border-outline-variant/30 my-1" />
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm text-error hover:bg-error-container/30 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          currentUser={currentUser}
+          activeTab={activeTab}
+          notifications={visibleNotifications}
+          unreadCount={notificationCount}
+          onOpenNavigation={() => setIsOpenMobile(true)}
+          onMarkAllRead={() => {
+            setNotifications(prev =>
+              prev.map(n => (!n.targetRole || n.targetRole === currentUser.role ? { ...n, read: true } : n))
+            );
+          }}
+          onOpenNotification={(notif) => {
+            setNotifications(prev => prev.map(n => (n.id === notif.id ? { ...n, read: true } : n)));
+            if (notif.link) setActiveTab(notif.link);
+          }}
+          onOpenSettings={() => setActiveTab('settings')}
+          onLogout={handleLogout}
+        />
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
           {loadError && (
