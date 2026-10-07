@@ -1,0 +1,45 @@
+# Git
+.git
+.github
+.gitignore
+
+# Python virtualenvs
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+build/
+npm-debug.log*
+yarn-error.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Temporary scripts
+test_conn.py
+insert_invoices.py
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build artifacts
+*.log
+*.pdf
+uploads/
+
+# Brand assets
+design/

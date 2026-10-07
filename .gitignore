@@ -50,3 +50,6 @@ db.json
 !/design/DI Xpertia Logo Concepts/exports/palette/
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.css
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.json
+
+# Env backups
+.env.backup
