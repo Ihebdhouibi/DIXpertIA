@@ -307,7 +307,7 @@ export default function TeamView({
               <Th numeric>Dates</Th>
               <Th>Type</Th>
               <Th>Reason</Th>
-              <Th>Status</Th>
+              {/* No status column: every row in this table is Pending. */}
               <Th numeric>
                 <span className="sr-only">Decision</span>
               </Th>
@@ -318,7 +318,7 @@ export default function TeamView({
                   <Td>
                     <div className="flex items-center gap-3">
                       <Avatar name={req.employeeName} size="sm" />
-                      <div>
+                      <div className="whitespace-nowrap">
                         <div className="font-semibold">{req.employeeName}</div>
                         <div className="text-xs text-on-surface-variant">{req.jobTitle ?? '-'}</div>
                       </div>
@@ -330,12 +330,9 @@ export default function TeamView({
                       {req.duration} {req.duration === 1 ? 'day' : 'days'}
                     </div>
                   </Td>
-                  <Td muted>{req.type}</Td>
-                  <Td muted className="max-w-xs truncate" title={req.reason}>
+                  <Td muted className="whitespace-nowrap">{req.type}</Td>
+                  <Td muted className="max-w-48 truncate" title={req.reason}>
                     {req.reason || '-'}
-                  </Td>
-                  <Td>
-                    <StatusBadge status={req.status} />
                   </Td>
                   <Td numeric>
                     <div className="flex items-center justify-end gap-2">
@@ -351,9 +348,9 @@ export default function TeamView({
               ))}
               {pendingRequests.length === 0 &&
                 (status.loading ? (
-                  <TableState kind="loading" colSpan={6} title="Loading leave requests..." />
+                  <TableState kind="loading" colSpan={5} title="Loading leave requests..." />
                 ) : (
-                  <TableState kind="empty" colSpan={6} title="No pending leave requests" message="Every request has a decision." />
+                  <TableState kind="empty" colSpan={5} title="No pending leave requests" message="Every request has a decision." />
                 ))}
             </TBody>
           </Table>
