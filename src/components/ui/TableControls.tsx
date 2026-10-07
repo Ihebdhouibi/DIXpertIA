@@ -13,8 +13,10 @@ interface FilterPillsProps<T extends string> {
   /** Accessible name of the group, e.g. "Filter by status". */
   label: string;
   options: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
+  value: NoInfer<T>;
+  // NoInfer: T comes from `options` only, so a state setter typed with the
+  // option union is accepted instead of widening T to string.
+  onChange: (value: NoInfer<T>) => void;
   /** Visible label before the pills; defaults to none. */
   showLabel?: boolean;
   renderOption?: (option: T) => React.ReactNode;

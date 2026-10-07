@@ -6,6 +6,7 @@ import Homepage from './components/Homepage';
 import { ThemeScope } from './theme';
 import Sidebar from './components/Sidebar';
 import AppHeader from './components/AppHeader';
+import { DataStatusContext } from './dataStatus';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
@@ -50,6 +51,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -115,6 +117,7 @@ export default function App() {
     // security policies decide that, not this code, so there is no role check
     // here to drift out of step.
     const isPrivileged = user.role === 'admin' || user.role === 'accountant';
+    setLoading(true);
     const results = await Promise.allSettled([
       api.payslips.list(),
       api.leaveRequests.list(),
@@ -137,6 +140,7 @@ export default function App() {
     // refresh.
     const failed = results.find(r => r.status === 'rejected');
     setLoadError(failed ? (failed as PromiseRejectedResult).reason?.message ?? 'Could not load data' : null);
+    setLoading(false);
   }, []);
 
   // Restore the session from the token alone. The user is never read from
@@ -554,7 +558,11 @@ export default function App() {
               </button>
             </div>
           )}
-          {renderTabContent()}
+          <DataStatusContext.Provider
+            value={{ loading, error: loadError, retry: () => { if (currentUser) refresh(currentUser); } }}
+          >
+            {renderTabContent()}
+          </DataStatusContext.Provider>
         </main>
       </div>
     </div></ThemeScope>

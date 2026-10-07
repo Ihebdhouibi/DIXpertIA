@@ -17,11 +17,14 @@ import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Inbox, Loader2 } from 'lu
 export function Table({
   caption,
   className = '',
+  footer,
   children,
 }: {
   /** Visually hidden table caption, read by screen readers. */
   caption?: string;
   className?: string;
+  /** Rendered under the table inside the same card, e.g. <Pagination>. */
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -32,6 +35,7 @@ export function Table({
           {children}
         </table>
       </div>
+      {footer}
     </div>
   );
 }
