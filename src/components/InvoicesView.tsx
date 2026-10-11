@@ -1,34 +1,54 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Download, ZoomIn, ZoomOut } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ColumnDef,
+  PaginationState,
+  RowSelectionState,
+  SortingState,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
+import { Plus, Download, ZoomIn, ZoomOut, ArrowRight, X } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
-import StatusBadge from './StatusBadge';
+import StatusBadge, { ProcessingBadge } from './StatusBadge';
 import Avatar from './ui/Avatar';
-import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
-import { FilterPills, SearchField, Pagination, TableToolbar } from './ui/TableControls';
-import { useDataStatus } from '../dataStatus';
+import { Table, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { FilterPills, Pagination } from './ui/TableControls';
+import * as api from '../api';
+import {
+  COMMERCIAL_STATUSES,
+  COMMERCIAL_TO_API,
+  PROCESSING_ACTION,
+  PROCESSING_ACTION_SHORT,
+  PROCESSING_STATUSES,
+  PROCESSING_TO_API,
+  CommercialStatus,
+  ProcessingStatus,
+  nextProcessingStatus,
+} from '../invoiceStatus';
 import Dialog from './ui/Dialog';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useToast, ToastTone } from './ui/feedback';
 
 interface InvoicesViewProps {
-  invoices: Invoice[];
+  /** Kept for the dashboard's sake; this view loads its own pages from the server (#113). */
+  invoices?: Invoice[];
   /** Clients the invoice may be issued to. The API requires a real one. */
   clients: Client[];
   onAddInvoice: (invoice: {
     client_id: number;
     date_echeance: string;
     items: { designation: string; quantite: number; prix_unitaire: number; taux_tva: number }[];
-  }) => void;
+  }) => unknown;
   userRole: UserRole;
 }
 
-export default function InvoicesView({ invoices, clients, onAddInvoice, userRole }: InvoicesViewProps) {
+export default function InvoicesView({ clients, onAddInvoice, userRole }: InvoicesViewProps) {
   const isAdmin = userRole === 'admin';
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Draft' | 'Sent' | 'Paid' | 'Overdue'>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const status = useDataStatus();
+  // Who may move an invoice through the books (the API allows admin and
+  // accountant, #96); everyone else sees the list read-only.
+  const canProcess = userRole === 'admin' || userRole === 'accountant';
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -91,7 +111,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
     // The number, the issue date and the status all come from the server: the
     // number belongs to a gapless series (#38), and letting the client pick any
     // of them is how duplicates and out-of-order invoices happen.
-    onAddInvoice({
+    Promise.resolve(onAddInvoice({
       client_id: Number(clientId),
       date_echeance: dueDate,
       items: [{
@@ -100,7 +120,7 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
         prix_unitaire: parseFloat(amount),
         taux_tva: 19,
       }],
-    });
+    })).then(reload);
 
     setIsNewInvoiceOpen(false);
     setClientId('');
@@ -108,22 +128,88 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
     setDueDate('');
   };
 
-  const filteredInvoices = invoices.filter(inv => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = inv.counterparty.toLowerCase().includes(query) || inv.id.toLowerCase().includes(query);
-    const matchesStatus = selectedFilter === 'All' || inv.status === selectedFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // --- Server-driven list (#113) -------------------------------------------
+  // Filters, sorting and pagination are query parameters of GET /api/invoices,
+  // so they cover every invoice, not the first 200 the app preloads.
+  const [month, setMonth] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
+  const [direction, setDirection] = useState<'' | 'outgoing' | 'incoming'>('');
+  const [commercial, setCommercial] = useState<'All' | CommercialStatus>('All');
+  const [processing, setProcessing] = useState<'All' | ProcessingStatus>('All');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 });
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [rows, setRows] = useState<Invoice[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [moving, setMoving] = useState(false);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  // Client-side pages over the loaded list. The old footer always said
-  // "Showing 1-N of N" and its page buttons were disabled.
-  const PAGE_SIZE = 10;
-  const pageCount = Math.max(1, Math.ceil(filteredInvoices.length / PAGE_SIZE));
-  const pageRows = filteredInvoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => setPage(1), [selectedFilter, searchQuery]);
+  const filtersActive = !!(month || clientFilter || direction || commercial !== 'All' || processing !== 'All');
+
+  // A new filter starts from page one with nothing selected.
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+    setRowSelection({});
+  }, [month, clientFilter, direction, commercial, processing, sorting]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const sort = sorting[0] ? `${sorting[0].desc ? '-' : ''}${sorting[0].id}` : '-date';
+    api.invoices
+      .page({
+        limit: pagination.pageSize,
+        offset: pagination.pageIndex * pagination.pageSize,
+        sort,
+        month: month || undefined,
+        client_id: clientFilter || undefined,
+        direction: direction || undefined,
+        statut: commercial === 'All' ? undefined : COMMERCIAL_TO_API[commercial],
+        processing_status: processing === 'All' ? undefined : PROCESSING_TO_API[processing],
+      })
+      .then(({ rows: page, total: count }) => {
+        if (cancelled) return;
+        setRows(page);
+        setTotal(count);
+        setLoadError(null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not load invoices');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month, clientFilter, direction, commercial, processing, sorting, pagination, reloadKey]);
+
+  /** Move invoices to `target`, one request each (no bulk endpoint yet - #115). */
+  const moveTo = async (targets: Invoice[], target: ProcessingStatus) => {
+    if (targets.length === 0) return;
+    setMoving(true);
+    const results = await Promise.allSettled(
+      targets.map((inv) => api.invoices.setProcessingStatus(inv.id, PROCESSING_TO_API[target])),
+    );
+    setMoving(false);
+    const done = results.filter((r) => r.status === 'fulfilled').length;
+    const refused = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (done) showToast(`${done} invoice${done === 1 ? '' : 's'} ${target.toLowerCase()}.`);
+    if (refused) {
+      const failed = results.length - done;
+      showToast(
+        `${failed} invoice${failed === 1 ? '' : 's'} not moved: ${refused.reason?.message ?? 'refused by the server'}`,
+        'error',
+      );
+    }
+    setRowSelection({});
+    reload();
+  };
+
+  const formatDirection = (inv: Invoice) => (inv.direction === 'incoming' ? 'Incoming' : 'Outgoing');
 
   const formatCurrency = (val: number) => {
     // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars.
@@ -132,6 +218,180 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
     return new Intl.NumberFormat('fr-TN', {
       style: 'currency', currency: 'TND', minimumFractionDigits: 3,
     }).format(val);
+  };
+
+  // --- Columns ---------------------------------------------------------------
+  // meta.numeric right-aligns a column in mono; ids 'date' and 'amount' are the
+  // API's sort keys, so TanStack's sorting state maps straight onto ?sort=.
+  const columns = useMemo<ColumnDef<Invoice>[]>(() => {
+    const cols: ColumnDef<Invoice>[] = [];
+    if (canProcess) {
+      cols.push({
+        id: 'select',
+        enableSorting: false,
+        header: ({ table }) => (
+          <input
+            type="checkbox"
+            aria-label="Select every invoice on this page that can move"
+            className="h-4 w-4 accent-primary cursor-pointer"
+            checked={table.getIsAllPageRowsSelected()}
+            ref={(el) => {
+              if (el) el.indeterminate = table.getIsSomePageRowsSelected();
+            }}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            aria-label={`Select invoice ${row.original.numero}`}
+            className="h-4 w-4 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect()}
+            onChange={row.getToggleSelectedHandler()}
+          />
+        ),
+      });
+    }
+    cols.push(
+      {
+        id: 'numero',
+        header: 'Invoice',
+        enableSorting: false,
+        meta: { mono: true },
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => setSelectedInvoice(row.original)}
+            className="rounded font-semibold hover:underline cursor-pointer"
+          >
+            {row.original.numero}
+          </button>
+        ),
+      },
+      {
+        id: 'counterparty',
+        header: 'Client / supplier',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <Avatar name={row.original.counterparty} size="sm" shape="square" />
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{row.original.counterparty}</div>
+              <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">
+                {formatDirection(row.original)}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        // An accessor is what makes a TanStack column sortable; the value itself
+        // is never compared here (manualSorting), the server orders by it.
+        id: 'amount',
+        accessorFn: (inv) => inv.amountTTC,
+        header: 'Amount',
+        meta: { numeric: true },
+        cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountTTC)}</span>,
+      },
+      {
+        id: 'date',
+        accessorFn: (inv) => inv.dateIssued,
+        // Issue and due dates share one column, stacked like the counterparty,
+        // so the row action still fits at desktop widths.
+        header: 'Issued / due',
+        meta: { numeric: true },
+        cell: ({ row }) => (
+          <div>
+            <div className="text-on-surface-variant">{row.original.dateIssued}</div>
+            <div
+              className={`text-[11px] ${row.original.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface-variant'}`}
+            >
+              due {row.original.dueDate}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        enableSorting: false,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        id: 'processing',
+        header: 'Books',
+        enableSorting: false,
+        cell: ({ row }) => <ProcessingBadge status={row.original.processingStatus} />,
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        meta: { numeric: true },
+        cell: ({ row }) => {
+          const next = nextProcessingStatus(row.original.processingStatus);
+          return (
+            <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+              {canProcess && next && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={moving}
+                  onClick={() => moveTo([row.original], next)}
+                  aria-label={`${PROCESSING_ACTION[next]}: invoice ${row.original.numero}`}
+                  title={PROCESSING_ACTION[next]}
+                >
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  {PROCESSING_ACTION_SHORT[next]}
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDownload(row.original.id)}
+                aria-label={`Download invoice ${row.original.numero}`}
+                className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          );
+        },
+      },
+    );
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canProcess, moving]);
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+    // Everything happens on the server; TanStack keeps the state and the UI.
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
+    rowCount: total,
+    enableSortingRemoval: false,
+    // An invoice can be selected for a bulk move only while it has a next step.
+    enableRowSelection: (row) => canProcess && nextProcessingStatus(row.original.processingStatus) !== null,
+    state: { sorting, pagination, rowSelection },
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
+  });
+
+  const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+  const selectedByTarget = (target: ProcessingStatus) =>
+    selected.filter((inv) => nextProcessingStatus(inv.processingStatus) === target);
+
+  const clearFilters = () => {
+    setMonth('');
+    setClientFilter('');
+    setDirection('');
+    setCommercial('All');
+    setProcessing('All');
   };
 
   return (
@@ -149,90 +409,165 @@ export default function InvoicesView({ invoices, clients, onAddInvoice, userRole
         )}
       </div>
 
-      <TableToolbar>
-        <FilterPills
-          label="Filter by status"
-          showLabel
-          options={['All', 'Draft', 'Sent', 'Paid', 'Overdue'] as const}
-          value={selectedFilter}
-          onChange={setSelectedFilter}
-        />
-        <SearchField label="Search invoices" value={searchQuery} onChange={setSearchQuery} />
-      </TableToolbar>
+      {/* Filters - each one is a query parameter of GET /api/invoices */}
+      <div className="flex flex-col gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Month">
+            {({ id }) => <Input id={id} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />}
+          </Field>
+          <Field label="Client">
+            {({ id }) => (
+              <Select id={id} value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+                <option value="">All clients</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nom}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Direction">
+            {({ id }) => (
+              <Select id={id} value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
+                <option value="">Incoming and outgoing</option>
+                <option value="outgoing">Outgoing (we bill)</option>
+                <option value="incoming">Incoming (we are billed)</option>
+              </Select>
+            )}
+          </Field>
+          <Field label="Status">
+            {({ id }) => (
+              <Select id={id} value={commercial} onChange={(e) => setCommercial(e.target.value as typeof commercial)}>
+                <option value="All">All statuses</option>
+                {COMMERCIAL_STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FilterPills
+            label="Books"
+            showLabel
+            options={['All', ...PROCESSING_STATUSES] as const}
+            value={processing}
+            onChange={setProcessing}
+          />
+          {filtersActive && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="w-4 h-4" aria-hidden="true" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Bulk actions on the selection */}
+      {selected.length > 0 && (
+        <div
+          role="region"
+          aria-label="Selected invoices"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-outline-variant bg-surface-container px-4 py-3"
+        >
+          <span className="text-sm text-on-surface">
+            <span className="font-mono tabular-nums font-semibold">{selected.length}</span> selected
+          </span>
+          {(['Processed', 'Completed'] as const).map((target) => {
+            const eligible = selectedByTarget(target);
+            return (
+              eligible.length > 0 && (
+                <Button key={target} size="sm" loading={moving} onClick={() => moveTo(eligible, target)}>
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  {PROCESSING_ACTION[target]} ({eligible.length})
+                </Button>
+              )
+            );
+          })}
+          <Button variant="ghost" size="sm" onClick={() => setRowSelection({})}>
+            Clear selection
+          </Button>
+        </div>
+      )}
 
       <Table
         caption="Invoices"
         footer={
-          filteredInvoices.length > 0 && (
-            <Pagination page={page} pageSize={PAGE_SIZE} total={filteredInvoices.length} onPageChange={setPage} noun="invoices" />
+          total > 0 && (
+            <Pagination
+              page={pagination.pageIndex + 1}
+              pageSize={pagination.pageSize}
+              total={total}
+              onPageChange={(p) => table.setPageIndex(p - 1)}
+              noun="invoices"
+            />
           )
         }
       >
-        <THead>
-          <Th>Invoice</Th>
-          <Th>Client</Th>
-          <Th numeric>Amount</Th>
-          <Th numeric>Issued</Th>
-          <Th numeric>Due</Th>
-          <Th>Status</Th>
-          <Th numeric>
-            <span className="sr-only">Actions</span>
-          </Th>
-        </THead>
+        <thead className="border-b border-outline-variant bg-surface-container-low">
+          {table.getHeaderGroups().map((group) => (
+            <tr key={group.id}>
+              {group.headers.map((header) => {
+                const meta = header.column.columnDef.meta as { numeric?: boolean } | undefined;
+                const sortable = header.column.getCanSort();
+                return (
+                  <Th
+                    key={header.id}
+                    numeric={meta?.numeric}
+                    sort={sortable ? header.column.getIsSorted() : undefined}
+                    onSort={sortable ? () => header.column.toggleSorting(header.column.getIsSorted() !== 'desc') : undefined}
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </Th>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
         <TBody>
-          {pageRows.length > 0 ? (
-            pageRows.map((inv) => (
-              <Tr key={inv.id} interactive onClick={() => setSelectedInvoice(inv)}>
-                <Td mono>
-                  {/* The row opens the details; this button is the keyboard path to it. */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedInvoice(inv);
-                    }}
-                    className="rounded font-semibold hover:underline cursor-pointer"
-                  >
-                    {inv.id}
-                  </button>
-                </Td>
-                <Td>
-                  <div className="flex items-center gap-3">
-                    <Avatar name={inv.counterparty} size="sm" shape="square" />
-                    <span className="font-semibold">{inv.counterparty}</span>
-                  </div>
-                </Td>
-                <Td numeric className="font-semibold">{formatCurrency(inv.amountTTC)}</Td>
-                <Td numeric muted>{inv.dateIssued}</Td>
-                <Td numeric className={inv.status === 'Overdue' ? 'text-error font-semibold' : 'text-on-surface-variant'}>
-                  {inv.dueDate}
-                </Td>
-                <Td>
-                  <StatusBadge status={inv.status} />
-                </Td>
-                <Td numeric onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(inv.id)}
-                    aria-label={`Download invoice ${inv.id}`}
-                    className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" aria-hidden="true" />
-                  </button>
-                </Td>
-              </Tr>
-            ))
-          ) : status.loading ? (
-            <TableState kind="loading" colSpan={7} title="Loading invoices..." />
-          ) : status.error && invoices.length === 0 ? (
-            <TableState kind="error" colSpan={7} message={status.error} />
-          ) : (
+          {loading && rows.length === 0 ? (
+            <TableState kind="loading" colSpan={columns.length} title="Loading invoices..." />
+          ) : loadError ? (
+            <TableState
+              kind="error"
+              colSpan={columns.length}
+              message={loadError}
+              action={
+                <Button variant="secondary" size="sm" onClick={reload}>
+                  Retry
+                </Button>
+              }
+            />
+          ) : rows.length === 0 ? (
             <TableState
               kind="empty"
-              colSpan={7}
-              title={invoices.length === 0 ? 'No invoices yet' : 'No invoices match'}
-              message={invoices.length === 0 ? undefined : 'Try another status or search term.'}
+              colSpan={columns.length}
+              title={filtersActive ? 'No invoices match' : 'No invoices yet'}
+              message={filtersActive ? 'Try another month, client or status.' : undefined}
+              action={
+                filtersActive && (
+                  <Button variant="secondary" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )
+              }
             />
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <Tr key={row.id} selected={row.getIsSelected()} className={loading ? 'opacity-60' : ''}>
+                {row.getVisibleCells().map((cell) => {
+                  const meta = cell.column.columnDef.meta as { numeric?: boolean; mono?: boolean } | undefined;
+                  return (
+                    <Td key={cell.id} numeric={meta?.numeric} mono={meta?.mono}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </Td>
+                  );
+                })}
+              </Tr>
+            ))
           )}
         </TBody>
       </Table>
