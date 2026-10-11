@@ -55,6 +55,9 @@ def test_a_draft_is_corrected_and_its_totals_recomputed(client, admin, draft):
     assert body["amountTTC"] == pytest.approx(1290)
     assert [i["description"] for i in body["items"]] == ["Consulting", "Travel"]
     assert body["numero"] == draft["numero"], "the legal number never changes"
+    # What the edit form needs to prefill itself without losing anything.
+    assert [i["vatRate"] for i in body["items"]] == [19, 0]
+    assert body["dueDateIso"] == "2028-01-31"
 
 
 def test_the_lines_are_replaced_not_appended(client, admin, draft, database):
