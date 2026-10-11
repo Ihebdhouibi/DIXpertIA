@@ -1,10 +1,15 @@
 import React from 'react';
 import {
-  FolderOpen, FileText, Clock, Users,
-  CheckCircle, AlertCircle, XCircle, Calendar,
-  Download, Plus, ChevronRight
+  AlertCircle, ArrowRight, Calendar, CheckCircle, ChevronRight,
+  Download, FileText, Info, Loader2, XCircle,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Employee, Invoice, LeaveRequest, Payslip, User } from '../types';
+import { useDataStatus } from '../dataStatus';
+import { formatTND } from '../format';
+import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
+import Button from './ui/Button';
+import { FormAlert } from './ui/Field';
 
 interface Notification {
   id: string;
@@ -26,6 +31,87 @@ interface DashboardViewProps {
   onQuickAction: (action: string) => void;
 }
 
+// App loads at most this many invoices (the API's page cap). The figures below
+// are computed from that list, so past the cap they cover only part of the
+// invoices - said on screen until the server computes them (#120).
+const INVOICE_LOAD_CAP = 200;
+
+const PROCESSING_STATES = ['Pending', 'Processed', 'Completed', 'Archived'] as const;
+const PROCESSING_TONE = { Pending: 'warning', Processed: 'info', Completed: 'success', Archived: 'neutral' } as const;
+const COMMERCIAL_STATES = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled'] as const;
+
+const ROLE_INTRO: Record<User['role'], string> = {
+  admin: 'Invoices waiting on the books, leave to decide and your team at a glance.',
+  accountant: 'Where the invoices stand in the books, and what is waiting for you.',
+  employee: 'Your leave requests, your next time off and your latest payslip.',
+};
+
+const NOTIFICATION_ICON: Record<Notification['type'], { icon: LucideIcon; className: string }> = {
+  info: { icon: Info, className: 'text-info' },
+  success: { icon: CheckCircle, className: 'text-success' },
+  warning: { icon: AlertCircle, className: 'text-warning' },
+  error: { icon: XCircle, className: 'text-danger' },
+};
+
+const CARD = 'rounded-xl border border-outline-variant bg-surface-container-lowest';
+const EYEBROW = 'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant';
+
+interface Metric {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  /** Tab the card opens. */
+  to?: string;
+  /** The view's one Signal Lime accent: the figure this role came for. */
+  highlight?: boolean;
+}
+
+function MetricCard({ metric, loading, onNavigate }: { metric: Metric; loading: boolean; onNavigate: (tab: string) => void }) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <p className={EYEBROW}>{metric.label}</p>
+        {metric.highlight && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-lime ring-2 ring-lime/30" />}
+      </div>
+      <p className="mt-3 font-mono text-3xl font-semibold tabular-nums tracking-tight text-on-surface">
+        {loading ? <span className="text-on-surface-variant">–</span> : metric.value}
+      </p>
+      {metric.hint && !loading && (
+        <p className="mt-1 font-mono text-xs tabular-nums text-on-surface-variant">{metric.hint}</p>
+      )}
+      {metric.to && (
+        <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant group-hover:text-on-surface">
+          Open <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </span>
+      )}
+    </>
+  );
+  const frame = `${CARD} p-5 text-left ${metric.highlight ? 'border-on-surface/30' : ''}`;
+  return metric.to ? (
+    <button
+      type="button"
+      onClick={() => onNavigate(metric.to!)}
+      className={`${frame} group cursor-pointer transition-colors hover:bg-surface-container-low`}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={frame}>{body}</div>
+  );
+}
+
+function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className={`${CARD} p-6`}>
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold text-on-surface">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export default function DashboardView({
   user,
   invoices,
@@ -36,278 +122,287 @@ export default function DashboardView({
   onNavigate,
   onQuickAction,
 }: DashboardViewProps) {
-  // --- Statistics ---
-  // Replaces a "Total Projects" count. The Projects screen was mock data with
-  // no table behind it and was removed in #65; this is the figure the
-  // accountant actually opens the dashboard for.
-  const awaitingBooking = invoices.filter(i => i.processingStatus === 'Pending').length;
-  const totalInvoices = invoices.length;
-  const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + inv.amountTTC, 0);
-  const pendingLeaves = leaveRequests.filter(r => r.status === 'Pending').length;
-  const activeTeam = employees.filter(e => e.employmentStatus === 'active').length;
+  const { loading, error, retry } = useDataStatus();
+  const seesInvoices = user.role === 'admin' || user.role === 'accountant';
 
-  // Where the month's invoices have got to in the accountant's workflow (#41).
-  // A separate axis from the commercial status charted below: an invoice is
-  // routinely Paid and still Pending here, because the client has paid and
-  // nobody has booked it yet.
-  const processingCounts = {
-    Pending: invoices.filter(i => i.processingStatus === 'Pending').length,
-    Processed: invoices.filter(i => i.processingStatus === 'Processed').length,
-    Completed: invoices.filter(i => i.processingStatus === 'Completed').length,
-    Archived: invoices.filter(i => i.processingStatus === 'Archived').length,
-  };
-  const maxProcessingCount = Math.max(...Object.values(processingCounts), 1);
+  // --- Invoices (admin and accountant) ---
+  const totalAmount = invoices.reduce((sum, inv) => sum + inv.amountTTC, 0);
+  // Where the invoices have got to in the accountant's workflow (#41). A
+  // separate axis from the commercial status: an invoice is routinely Paid and
+  // still Pending here, because the client has paid and nobody has booked it yet.
+  const processingCounts = PROCESSING_STATES.map((state) => ({
+    state,
+    count: invoices.filter((i) => i.processingStatus === state).length,
+  }));
+  const countOf = (state: (typeof PROCESSING_STATES)[number]) =>
+    processingCounts.find((p) => p.state === state)?.count ?? 0;
+  const commercialStats = COMMERCIAL_STATES.map((status) => {
+    const items = invoices.filter((i) => i.status === status);
+    return { status, count: items.length, amount: items.reduce((sum, i) => sum + i.amountTTC, 0) };
+  });
+  const capped = invoices.length >= INVOICE_LOAD_CAP;
 
-  // Invoice status breakdown
-  const invoiceStats = {
-    Paid: invoices.filter(i => i.status === 'Paid'),
-    Sent: invoices.filter(i => i.status === 'Sent'),
-    Overdue: invoices.filter(i => i.status === 'Overdue'),
-    Draft: invoices.filter(i => i.status === 'Draft'),
-  };
+  // --- Leave and team ---
+  const pendingLeaves = leaveRequests.filter((r) => r.status === 'Pending').length;
+  const activeTeam = employees.filter((e) => e.employmentStatus === 'active').length;
 
-  // Recent notifications (last 5)
-  const recentNotifications = notifications.slice(0, 5);
-
-  // Employee-specific: leave balance
+  // --- Employee: their own records ---
   // Resolved through the employee record: leave belongs to the employee, not
   // the login account (#60).
-  const myEmployeeId = employees.find(e => e.userId === user.id)?.id;
-  const employeeLeaveRequests = leaveRequests.filter(r => r.employeeId === myEmployeeId);
-  const upcomingLeave = employeeLeaveRequests
-    .filter(r => r.status === 'Approved')
-    .sort((a, b) => new Date(a.dates.split('-')[0].trim()).getTime() - new Date(b.dates.split('-')[0].trim()).getTime())[0];
-
-  // The newest payslip, from the list the API already returned. It was read
-  // straight out of localStorage, which meant the dashboard showed a figure
-  // nobody else could see and that vanished when the browser was cleared.
+  const myEmployeeId = employees.find((e) => e.userId === user.id)?.id;
+  const myLeave = leaveRequests.filter((r) => r.employeeId === myEmployeeId);
+  // The next approved leave that has not ended yet, by its real start date.
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingLeave = myLeave
+    .filter((r) => r.status === 'Approved' && r.endDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
   const latestPayslip = user.role === 'employee' ? payslips[0] ?? null : null;
+  const unread = notifications.filter((n) => !n.read).length;
+
+  const metrics: Metric[] =
+    user.role === 'admin'
+      ? [
+          { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
+          { label: 'Invoices', value: invoices.length, hint: formatTND(totalAmount), to: 'invoices' },
+          { label: 'Leave to decide', value: pendingLeaves, hint: 'pending requests', to: 'team' },
+          { label: 'Active team', value: activeTeam, hint: `${employees.length} employees in total`, to: 'team' },
+        ]
+      : user.role === 'accountant'
+        ? [
+            { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
+            { label: 'To complete', value: countOf('Processed'), hint: 'invoices in Processed', to: 'invoices' },
+            { label: 'Completed', value: countOf('Completed'), hint: 'ready for the month close', to: 'invoices' },
+            { label: 'Invoiced', value: invoices.length, hint: formatTND(totalAmount), to: 'invoices' },
+          ]
+        : [
+            {
+              label: 'Pending requests',
+              value: myLeave.filter((r) => r.status === 'Pending').length,
+              hint: 'waiting for a decision',
+              to: 'leave-requests',
+              highlight: true,
+            },
+            {
+              label: 'Next leave',
+              value: upcomingLeave ? upcomingLeave.startDate : 'None',
+              hint: upcomingLeave ? `${upcomingLeave.type} · ${upcomingLeave.duration} days` : 'nothing approved ahead',
+              to: 'leave-requests',
+            },
+            {
+              label: 'Latest payslip',
+              value: latestPayslip ? latestPayslip.period : 'None',
+              hint: latestPayslip ? `net ${formatTND(latestPayslip.netPay)}` : 'none issued yet',
+              to: 'payslips',
+            },
+            { label: 'Unread', value: unread, hint: 'notifications', to: 'notifications' },
+          ];
+
+  const maxProcessing = Math.max(...processingCounts.map((p) => p.count), 1);
+  const recentNotifications = notifications.slice(0, 5);
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {/* Welcome header */}
       <div>
         <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">
-          Welcome back, {user.firstName}!
+          Welcome back, {user.firstName}
         </h1>
-        <p className="text-body-lg text-on-surface-variant mt-1">
-          Here's what's happening across your invoices and team.
+        <p className="text-body-lg text-on-surface-variant mt-1">{ROLE_INTRO[user.role]}</p>
+      </div>
+
+      {error && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex-1">
+            <FormAlert>Some figures could not be loaded: {error}</FormAlert>
+          </div>
+          <Button variant="secondary" size="sm" onClick={retry}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-busy={loading || undefined}>
+        {metrics.map((m) => (
+          <MetricCard key={m.label} metric={m} loading={loading} onNavigate={onNavigate} />
+        ))}
+      </div>
+
+      {seesInvoices && capped && !loading && (
+        <p className="text-xs text-on-surface-variant">
+          Invoice figures cover the {INVOICE_LOAD_CAP} most recent invoices.
         </p>
-      </div>
+      )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-primary/10 text-primary">
-            <FolderOpen className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-caption font-semibold text-on-surface-variant">Awaiting booking</p>
-            <p className="text-h2 font-black text-on-surface">{awaitingBooking}</p>
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-secondary/10 text-secondary">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-caption font-semibold text-on-surface-variant">Invoices</p>
-            <p className="text-h2 font-black text-on-surface">
-              {totalInvoices}
-              <span className="text-body-sm font-medium text-on-surface-variant ml-1">
-                (${totalInvoiceAmount.toLocaleString()})
-              </span>
-            </p>
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-warning-container text-warning">
-            <Clock className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-caption font-semibold text-on-surface-variant">Pending Leaves</p>
-            <p className="text-h2 font-black text-on-surface">{pendingLeaves}</p>
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-full bg-success-container text-success">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-caption font-semibold text-on-surface-variant">Active Team</p>
-            <p className="text-h2 font-black text-on-surface">{activeTeam}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Two‑column layout: Charts + Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column (2/3): charts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Where invoices stand in the accountant's workflow (#41) */}
-          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-            <h3 className="font-bold text-body-lg text-on-surface mb-4">Invoices by processing state</h3>
-            <div className="space-y-3">
-              {Object.entries(processingCounts).map(([state, count]) => (
-                <div key={state} className="flex items-center gap-3">
-                  <span className="text-caption font-semibold text-on-surface-variant w-24">{state}</span>
-                  <div className="flex-1 h-3 bg-surface-variant rounded-full overflow-hidden">
-                    {/* Semantic tones, not raw palette classes (#24, #25). */}
-                    <div
-                      className={`h-full rounded-full ${
-                        state === 'Pending' ? 'bg-warning' :
-                        state === 'Processed' ? 'bg-info' :
-                        state === 'Completed' ? 'bg-success' :
-                        'bg-neutral'
-                      } transition-all duration-500`}
-                      style={{ width: `${(count / maxProcessingCount) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-caption font-bold text-on-surface w-8 text-right">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Invoice Status Breakdown */}
-          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-            <h3 className="font-bold text-body-lg text-on-surface mb-4">Invoices by Status</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {Object.entries(invoiceStats).map(([status, items]) => (
-                <div key={status} className="p-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-center">
-                  <p className="text-caption font-semibold text-on-surface-variant">{status}</p>
-                  <p className="text-h2 font-black text-on-surface">{items.length}</p>
-                  <p className="text-caption font-medium text-on-surface-variant">
-                    ${items.reduce((sum, i) => sum + i.amountTTC, 0).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Admin Quick Actions */}
-          {user.role === 'admin' && (
-            <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-              <h3 className="font-bold text-body-lg text-on-surface mb-4">Quick Actions</h3>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => onQuickAction('approve-leaves')}
-                  className="px-4 py-2 bg-warning-container text-warning border border-warning/25 rounded-lg font-semibold text-caption hover:border-warning/50 transition-colors flex items-center gap-2"
-                >
-                  <Clock className="w-4 h-4" />
-                  Approve Leaves
-                </button>
-                <button
-                  onClick={() => onQuickAction('create-invoice')}
-                  className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg font-semibold text-caption hover:bg-primary/20 transition-colors flex items-center gap-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  Create Invoice
-                </button>
-                <button
-                  onClick={() => onQuickAction('add-project')}
-                  className="px-4 py-2 bg-secondary/10 text-secondary border border-secondary/20 rounded-lg font-semibold text-caption hover:bg-secondary/20 transition-colors flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Project
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right column (1/3): Recent Activity & Employee Widgets */}
-        <div className="space-y-6">
-          {/* Employee-specific widgets */}
-          {user.role === 'employee' && (
-            <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-              <h3 className="font-bold text-body-lg text-on-surface mb-4">Your Leave Balance</h3>
-              <div className="space-y-2 text-caption">
-                <div className="flex justify-between">
-                  <span className="text-on-surface-variant">Annual Leave</span>
-                  <span className="font-bold text-on-surface">14 days left</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-on-surface-variant">Sick Leave</span>
-                  <span className="font-bold text-on-surface">5 days left</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-on-surface-variant">Personal Days</span>
-                  <span className="font-bold text-on-surface">2 days left</span>
-                </div>
-                {upcomingLeave && (
-                  <div className="mt-4 pt-4 border-t border-outline-variant/30">
-                    <p className="text-caption font-semibold text-on-surface-variant">Upcoming Leave</p>
-                    <p className="text-body-sm font-bold text-on-surface">{upcomingLeave.type}</p>
-                    <p className="text-caption text-on-surface-variant">{upcomingLeave.dates}</p>
-                  </div>
-                )}
-                {latestPayslip && (
-                  <div className="mt-4 pt-4 border-t border-outline-variant/30">
-                    <p className="text-caption font-semibold text-on-surface-variant">Latest Payslip</p>
-                    <button
-                      onClick={() => onQuickAction('download-payslip')}
-                      className="mt-1 text-primary font-semibold text-caption hover:underline flex items-center gap-1"
-                    >
-                      <Download className="w-3 h-3" />
-                      {latestPayslip.period}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Recent Notifications */}
-          <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm">
-            <h3 className="font-bold text-body-lg text-on-surface mb-4">Recent Activity</h3>
-            {recentNotifications.length === 0 ? (
-              <p className="text-caption text-on-surface-variant">No recent activity</p>
-            ) : (
-              <ul className="divide-y divide-outline-variant/30 -mx-2">
-                {recentNotifications.map((notif) => (
-                  <li
-                    key={notif.id}
-                    className={`px-2 py-2.5 hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer ${!notif.read ? 'bg-primary/5' : ''}`}
-                    onClick={() => {
-                      if (notif.link) {
-                        onNavigate(notif.link);
-                      }
-                    }}
-                  >
-                    <div className="flex items-start gap-2">
-                      {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />}
-                      {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-success shrink-0 mt-0.5" />}
-                      {notif.type === 'error' && <XCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-on-surface truncate">{notif.message}</p>
-                        <p className="text-[10px] text-outline mt-0.5">
-                          {new Date(notif.timestamp).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      {notif.link && (
-                        <ChevronRight className="w-4 h-4 text-outline shrink-0 mt-1" />
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              onClick={() => onNavigate('notifications')}
-              className="mt-3 text-caption text-primary font-semibold hover:underline flex items-center gap-1"
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {seesInvoices && (
+            <Section
+              title="Invoices by processing state"
+              aside={<span className={EYEBROW}>{invoices.length} invoices</span>}
             >
-              View all
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
+              {loading ? (
+                <LoadingRow />
+              ) : invoices.length === 0 ? (
+                <p className="text-sm text-on-surface-variant">No invoices yet.</p>
+              ) : (
+                // Each bar carries its label and its count, so no value relies on colour.
+                <ul className="space-y-3">
+                  {processingCounts.map(({ state, count }) => (
+                    <li key={state} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-3">
+                      <span className="text-sm text-on-surface-variant">{state}</span>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-surface-container-high">
+                        <div
+                          className={`h-full rounded-full ${TONE_CLASSES[PROCESSING_TONE[state]].dot} transition-all duration-500`}
+                          style={{ width: `${(count / maxProcessing) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-right font-mono text-sm font-semibold tabular-nums text-on-surface">
+                        {count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
+
+          {seesInvoices && (
+            <Section title="Invoices by status">
+              {loading ? (
+                <LoadingRow />
+              ) : (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                  {commercialStats.map(({ status, count, amount }) => (
+                    <li key={status} className="rounded-lg border border-outline-variant p-3">
+                      <StatusBadge status={status} tone={statusTone(status)} />
+                      <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-on-surface">{count}</p>
+                      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-on-surface-variant" title={formatTND(amount)}>
+                        {formatTND(amount)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
+
+          {user.role === 'admin' && (
+            <Section title="Quick actions">
+              <div className="flex flex-wrap gap-3">
+                <Button variant="secondary" size="sm" onClick={() => onQuickAction('approve-leaves')}>
+                  <Calendar className="h-4 w-4" aria-hidden="true" />
+                  Review leave requests
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => onQuickAction('create-invoice')}>
+                  <FileText className="h-4 w-4" aria-hidden="true" />
+                  Create an invoice
+                </Button>
+              </div>
+            </Section>
+          )}
+
+          {user.role === 'employee' && (
+            <Section title="Your leave">
+              <dl className="space-y-4 text-sm">
+                <div>
+                  <dt className={EYEBROW}>Balance</dt>
+                  {/* The balance used to be three invented figures. Until the
+                      server holds entitlements (#121), say so instead. */}
+                  <dd className="mt-1 text-on-surface-variant">Leave balances are not available yet.</dd>
+                </div>
+                <div>
+                  <dt className={EYEBROW}>Next approved leave</dt>
+                  <dd className="mt-1 text-on-surface">
+                    {upcomingLeave ? (
+                      <>
+                        <span className="font-semibold">{upcomingLeave.type}</span>{' '}
+                        <span className="font-mono tabular-nums text-on-surface-variant">{upcomingLeave.dates}</span>
+                      </>
+                    ) : (
+                      <span className="text-on-surface-variant">None scheduled.</span>
+                    )}
+                  </dd>
+                </div>
+                {latestPayslip && (
+                  <div>
+                    <dt className={EYEBROW}>Latest payslip</dt>
+                    <dd className="mt-1">
+                      <Button variant="ghost" size="sm" onClick={() => onQuickAction('download-payslip')}>
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        {latestPayslip.period}
+                      </Button>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </Section>
+          )}
         </div>
+
+        <Section
+          title="Recent activity"
+          aside={
+            <button
+              type="button"
+              onClick={() => onNavigate('notifications')}
+              className="inline-flex items-center gap-1 rounded text-xs font-semibold text-on-surface-variant hover:text-on-surface cursor-pointer"
+            >
+              View all <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          }
+        >
+          {recentNotifications.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">No recent activity.</p>
+          ) : (
+            <ul className="-mx-2 divide-y divide-outline-variant">
+              {recentNotifications.map((notif) => {
+                const { icon: Icon, className } = NOTIFICATION_ICON[notif.type];
+                const content = (
+                  <>
+                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${className}`} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-sm ${notif.read ? 'text-on-surface-variant' : 'font-semibold text-on-surface'}`}>
+                        {!notif.read && <span className="sr-only">Unread: </span>}
+                        {notif.message}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] tabular-nums text-on-surface-variant">
+                        {new Date(notif.timestamp).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                    </span>
+                    {!notif.read && <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface" />}
+                    {notif.link && <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-on-surface-variant" aria-hidden="true" />}
+                  </>
+                );
+                const row = 'flex w-full items-start gap-2.5 rounded-lg px-2 py-2.5 text-left';
+                return (
+                  <li key={notif.id}>
+                    {notif.link ? (
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(notif.link!)}
+                        className={`${row} cursor-pointer transition-colors hover:bg-surface-container-low`}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      <div className={row}>{content}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
       </div>
     </div>
+  );
+}
+
+function LoadingRow() {
+  return (
+    <p className="flex items-center gap-2 text-sm text-on-surface-variant" role="status">
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…
+    </p>
   );
 }
