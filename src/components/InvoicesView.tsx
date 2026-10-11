@@ -8,7 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, Download, ZoomIn, ZoomOut, ArrowRight, X } from 'lucide-react';
+import { Plus, Download, ZoomIn, ZoomOut, ArrowRight, X, Pencil } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
 import StatusBadge, { ProcessingBadge } from './StatusBadge';
 import Avatar from './ui/Avatar';
@@ -27,6 +27,7 @@ import {
   nextProcessingStatus,
 } from '../invoiceStatus';
 import Dialog from './ui/Dialog';
+import InvoiceEditDialog from './InvoiceEditDialog';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useToast, ToastTone } from './ui/feedback';
@@ -51,6 +52,8 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
   const canProcess = userRole === 'admin' || userRole === 'accountant';
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
+  // The draft being corrected (#125), opened from the invoice detail.
+  const [editing, setEditing] = useState<Invoice | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
 
   // Form states for new invoice creation
@@ -582,6 +585,14 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
         headerActions={
           <>
             <StatusBadge status={selectedInvoice?.status || 'Draft'} />
+            {/* Only a draft we issued can be corrected, by the admin, and not
+                once its month is closed; the server refuses anything else. */}
+            {isAdmin && selectedInvoice && selectedInvoice.direction === 'outgoing'
+              && selectedInvoice.status === 'Draft' && selectedInvoice.processingStatus !== 'Archived' && (
+              <Button variant="secondary" size="sm" onClick={() => setEditing(selectedInvoice)}>
+                <Pencil className="w-4 h-4" aria-hidden="true" /> Edit
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => handleDownload(selectedInvoice?.id || '')}>
               <Download className="w-4 h-4" aria-hidden="true" /> Download
             </Button>
@@ -707,6 +718,19 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
             </div>
           </div>
       </Dialog>
+
+      {isAdmin && (
+        <InvoiceEditDialog
+          invoice={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setEditing(null);
+            setSelectedInvoice(updated);
+            showToast(`Invoice ${updated.numero} updated.`);
+            reload();
+          }}
+        />
+      )}
 
       {/* New invoice */}
       {isAdmin && (

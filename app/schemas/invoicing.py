@@ -68,6 +68,20 @@ class InvoiceCreate(BaseModel):
         return value
 
 
+class InvoiceUpdate(BaseModel):
+    """Correction of a draft invoice (#125): the full set of lines and the due date.
+
+    The lines replace the existing ones rather than being patched one by one,
+    so a correction is a single request that either applies whole or not at
+    all. Everything else - number, issue date, client, direction - is not
+    editable and is deliberately absent. At least one line: a correction is not
+    a way to empty an invoice.
+    """
+
+    date_echeance: date
+    items: list[InvoiceItemCreate] = Field(min_length=1)
+
+
 class SupplierInvoiceCreate(BaseModel):
     """A bill a supplier issued to us (#40).
 

@@ -28,6 +28,7 @@ from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
     InvoiceCreate,
+    InvoiceUpdate,
     ProcessingStatusUpdate,
     SupplierCreate,
     SupplierInvoiceCreate,
@@ -415,6 +416,71 @@ def set_processing_status(
         raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
     db.refresh(invoice)
     return InvoiceOut.from_orm_row(invoice)
+
+
+# Admin only, like creation: the accountant reviews invoices and notes the
+# changes needed; the admin makes them (#118). Letting the reviewer edit what
+# she reviews would remove the separation of duties creation already keeps.
+@router.patch(
+    "/invoices/{invoice_id}",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
+def update_invoice(
+    invoice_id: int,
+    payload: InvoiceUpdate,
+    db: Session = Depends(get_db),
+):
+    """Correct a draft invoice: replace its lines and its due date (#125).
+
+    Only a draft of an invoice we issue can change. The checks here exist to
+    answer with a clear status before touching anything; the rule itself is
+    held by two triggers (invoice_draft_is_editable, invoice_lines_follow_their_
+    invoice), so a direct SQL write is refused too, and a race between this
+    check and the write is still caught at the database.
+
+    Totals are recomputed from the new lines with the same arithmetic as
+    creation; the client never supplies them.
+    """
+    invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    if invoice.direction != InvoiceDirection.OUTGOING:
+        raise HTTPException(
+            status_code=409,
+            detail=f"invoice {invoice.numero} is a supplier bill; only invoices we issue can be edited",
+        )
+    if invoice.statut != InvoiceStatus.BROUILLON:
+        raise HTTPException(
+            status_code=409,
+            detail=f"invoice {invoice.numero} is no longer a draft and cannot be edited; "
+                   "correct it with a new document",
+        )
+    # Mirrors ck_invoices_dates with a field-level answer instead of a 500.
+    if payload.date_echeance < invoice.date_emission:
+        raise HTTPException(status_code=422, detail="date_echeance cannot be before the issue date")
+
+    items_data = [item.model_dump() for item in payload.items]
+    montant_ht, montant_ttc = _compute_totals(items_data)
+    try:
+        # Lines first, totals after: both are guarded, and the order keeps the
+        # invoice and its lines consistent at every statement.
+        invoice.items.clear()
+        db.flush()
+        for item in items_data:
+            db.add(InvoiceItem(invoice_id=invoice.id, **item))
+        invoice.date_echeance = payload.date_echeance
+        invoice.montant_ht = montant_ht
+        invoice.montant_ttc = montant_ttc
+        db.flush()
+        db.refresh(invoice)
+        # Built before the commit, for the reason set out on create_invoice.
+        response = InvoiceOut.from_orm_row(invoice)
+        db.commit()
+    except DatabaseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
+    return response
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)

@@ -83,9 +83,14 @@ GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO dixpertia_app;
 
 -- DELETE is granted only where the application deletes rows:
 --   app/routers/services.py:44   db.delete(service)
+--   app/routers/invoicing.py     update_invoice replaces a DRAFT's lines (#125)
 -- Nothing else deletes, so nothing else gets DELETE. In particular `users`,
 -- `invoices`, `payslips` and `leave_requests` are append/update only - an
 -- accounting record must not be removable by the application role.
+-- `invoice_items` is the one accounting table with DELETE, and only because the
+-- trigger invoice_lines_follow_their_invoice refuses it for any invoice that
+-- is no longer a draft or is archived: the lines of an issued invoice remain
+-- impossible to remove.
 -- Guarded: on a fresh database this script runs BEFORE the tables exist
 -- (database created -> roles -> migrations -> re-run for table grants). An
 -- unguarded GRANT would abort the whole script with UndefinedTable.
@@ -93,7 +98,7 @@ DO $$
 DECLARE
     tbl text;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['services'] LOOP
+    FOREACH tbl IN ARRAY ARRAY['services', 'invoice_items'] LOOP
         IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = tbl) THEN
             EXECUTE format('GRANT DELETE ON TABLE public.%I TO dixpertia_app', tbl);
         ELSE

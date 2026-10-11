@@ -63,6 +63,9 @@ ROUTES = [
 
     # --- bookkeeping: narrower than billing, rh excluded --------------------
     ("POST", "/api/invoices", ADMIN_ONLY),
+    # Correcting a draft (#125): admin only, like creation - the accountant
+    # reviews invoices and must not edit what she reviews.
+    ("PATCH", "/api/invoices/1", ADMIN_ONLY),
     ("POST", "/api/supplier-invoices", BOOKKEEPING),
     ("PATCH", "/api/invoices/1/processing-status", BOOKKEEPING),
     ("GET", "/api/periods", BOOKKEEPING),
