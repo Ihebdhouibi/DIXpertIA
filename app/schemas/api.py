@@ -179,6 +179,8 @@ class InvoiceItemOut(BaseModel):
     qty: float
     price: float
     total: float
+    # The VAT rate, so a draft can be edited without losing it (#125).
+    vatRate: float
 
 
 class InvoiceOut(BaseModel):
@@ -211,6 +213,8 @@ class InvoiceOut(BaseModel):
     amountTTC: float
     dateIssued: str
     dueDate: str
+    # The due date as YYYY-MM-DD, for a date input; `dueDate` is for display.
+    dueDateIso: Optional[str] = None
     # The commercial state the counterparty sees.
     status: str
     # The accountant's workflow state - a separate axis, not a spelling of the
@@ -237,6 +241,7 @@ class InvoiceOut(BaseModel):
             amountTTC=float(row.montant_ttc or Decimal(0)),
             dateIssued=row.date_emission.strftime("%b %d, %Y") if row.date_emission else "-",
             dueDate=row.date_echeance.strftime("%b %d, %Y") if row.date_echeance else "-",
+            dueDateIso=row.date_echeance.isoformat() if row.date_echeance else None,
             status=INVOICE_STATUS_TO_API.get(statut, "Sent"),
             processingStatus=INVOICE_PROCESSING_STATUS_TO_API.get(processing, "Pending"),
             items=[
@@ -245,6 +250,7 @@ class InvoiceOut(BaseModel):
                     qty=float(i.quantite or 0),
                     price=float(i.prix_unitaire or 0),
                     total=float((i.quantite or 0) * (i.prix_unitaire or 0)),
+                    vatRate=float(i.taux_tva if i.taux_tva is not None else 0),
                 )
                 for i in row.items
             ],

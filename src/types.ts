@@ -84,6 +84,8 @@ export interface InvoiceItem {
   qty: number;
   price: number;
   total: number;
+  /** VAT rate in percent (#125). */
+  vatRate: number;
 }
 
 export interface Invoice {
@@ -100,6 +102,8 @@ export interface Invoice {
   amountTTC: number;
   dateIssued: string;
   dueDate: string;
+  /** The due date as YYYY-MM-DD, for a date input; `dueDate` is for display. */
+  dueDateIso?: string | null;
   /** The commercial state the counterparty sees. */
   status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
   /**

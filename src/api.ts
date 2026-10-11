@@ -129,6 +129,20 @@ async function readError(res: Response): Promise<string> {
 
 // --- Authentication ---------------------------------------------------------
 
+/** One invoice line as the API takes it: the database's own column names. */
+export interface InvoiceLineInput {
+  designation: string;
+  quantite: number;
+  prix_unitaire: number;
+  taux_tva: number;
+}
+
+/** Body of PATCH /api/invoices/{id} (#125). */
+export interface InvoiceUpdate {
+  date_echeance: string;
+  items: InvoiceLineInput[];
+}
+
 export interface LoginResult {
   access_token: string;
   token_type: string;
@@ -175,6 +189,9 @@ export const invoices = {
       body: JSON.stringify({ processing_status: processingStatus }),
     }),
   get: (id: number) => request<Invoice>(`/api/invoices/${id}`),
+  /** Correct a draft: replace its lines and its due date (#125). Admin only. */
+  update: (id: string | number, body: InvoiceUpdate) =>
+    request<Invoice>(`/api/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   create: (body: unknown) =>
     request<Invoice>('/api/invoices', { method: 'POST', body: JSON.stringify(body) }),
 };
