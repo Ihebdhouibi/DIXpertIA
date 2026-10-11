@@ -264,7 +264,7 @@ export default function App() {
   const handleQuickAction = (action: string) => {
     switch (action) {
       case 'approve-leaves': setActiveTab('team'); break;
-      case 'create-invoice': setActiveTab('reports'); break;
+      case 'create-invoice': setActiveTab('invoices'); break;
       case 'download-payslip': setActiveTab('payslips'); break;
       case 'view-notifications': setActiveTab('notifications'); break;
       default: break;
