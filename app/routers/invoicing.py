@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError, IntegrityError
@@ -44,6 +46,16 @@ DEFAULT_PAGE_SIZE = 50
 # A hard cap, not a suggestion: without one, ?limit=1000000 restores the
 # original behaviour on request.
 MAX_PAGE_SIZE = 200
+
+# The orders GET /api/invoices accepts. A closed list rather than a column name
+# taken from the query string, so the client cannot sort on arbitrary columns.
+InvoiceSort = Literal["date", "-date", "amount", "-amount"]
+SORT_COLUMNS = {
+    "date": (Invoice.date_emission, False),
+    "-date": (Invoice.date_emission, True),
+    "amount": (Invoice.montant_ttc, False),
+    "-amount": (Invoice.montant_ttc, True),
+}
 
 
 def _paginate(response: Response, query, limit: int, offset: int):
@@ -186,8 +198,9 @@ def list_invoices(
     processing_status: InvoiceProcessingStatus | None = None,
     month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$",
                               description="YYYY-MM: invoices issued in that month"),
+    sort: InvoiceSort = Query("-date", description="date | -date | amount | -amount (- = descending)"),
 ):
-    """List invoices, newest first.
+    """List invoices, newest first unless `sort` says otherwise.
 
     selectinload is what stops the 1+N: InvoiceOut serialises `items`, so
     without it each invoice in the page triggered its own query for its lines -
@@ -198,10 +211,15 @@ def list_invoices(
     invoices share one, and without a tie-break their relative order is
     undefined, so paging could show a row twice or skip it entirely.
     """
+    # Sorting happens here, not in the browser: the list is paginated, so
+    # sorting one page client-side would rank 50 rows out of thousands (#113).
+    # Every order tie-breaks on id, for the same stable-paging reason as below.
+    column, descending = SORT_COLUMNS[sort]
     query = (
         db.query(Invoice)
         .options(selectinload(Invoice.items))
-        .order_by(Invoice.date_emission.desc(), Invoice.id.desc())
+        .order_by(column.desc() if descending else column.asc(),
+                  Invoice.id.desc() if descending else Invoice.id.asc())
     )
     if direction is not None:
         query = query.filter(Invoice.direction == direction)

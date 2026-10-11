@@ -61,3 +61,21 @@ export default function StatusBadge({ status, tone, className = '' }: StatusBadg
     </span>
   );
 }
+
+/**
+ * The accountant's processing status (#96) is a second axis, with its own map
+ * rather than more keys in STATUS_TONES: "Completed" already means a project
+ * state there, and an invoice is routinely Paid and Pending at once (#94, #113).
+ */
+export type ProcessingStatus = 'Pending' | 'Processed' | 'Completed' | 'Archived';
+
+const PROCESSING_TONES: Record<ProcessingStatus, StatusTone> = {
+  Pending: 'warning', // nobody has handled it yet
+  Processed: 'info', // booked
+  Completed: 'success', // booked and reconciled with the payment
+  Archived: 'neutral', // its month is closed; read-only
+};
+
+export function ProcessingBadge({ status, className = '' }: { status: ProcessingStatus; className?: string }) {
+  return <StatusBadge status={status} tone={PROCESSING_TONES[status]} className={className} />;
+}
