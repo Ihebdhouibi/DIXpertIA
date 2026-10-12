@@ -48,8 +48,11 @@ that ticket.
 
 ## Conventions
 
-- Issues, pull requests, commit messages and code comments are written in
-  **English**.
+- Issues, pull requests, commit messages, code comments and code identifiers
+  are written in **English**.
+- The language of user-facing strings (UI labels, API error messages, PDFs) is
+  an open decision, tracked in #135. Until it is settled, follow the wording
+  already used around the code you change.
 - Commit messages use the prefixes already in the history: `feat:`, `fix:`,
   `chore:`, `design:`.
 
