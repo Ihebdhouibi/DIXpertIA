@@ -77,3 +77,14 @@ repos:
         # and rgb() literals, raw Tailwind palette classes and bg/text-white in
         # src/ (#25). Scrims and the unthemed public homepage are allowed; any
         # other exception needs a `raw-color-ok: <reason>` marker.
+
+      - id: check-text-sizes
+        name: no undeclared text-* classes in frontend source
+        entry: python scripts/check_text_sizes.py
+        language: system
+        files: ^src/.*\.(ts|tsx|css)$
+        pass_filenames: false
+        # Tailwind silently generates nothing for an unknown class: text-h1 and
+        # friends were used for months before being declared, so every title
+        # rendered at body size (#122). Runs over all of src/ whenever a source
+        # file or src/index.css changes, so removing a token fails too.

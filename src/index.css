@@ -101,6 +101,30 @@
 
   --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* 3. Type scale (#122). The views used these names long before they were
+     declared, so every title rendered at body size. The brand kit fixes the
+     typefaces but not the sizes; this scale is set here, on 4px steps, with
+     tighter leading and tracking as size grows. Each name generates
+     `text-<name>` with its line height (and letter spacing for headings).
+     scripts/check_text_sizes.py refuses a size class that is not declared. */
+  --text-display: 2.5rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-h1: 2rem;
+  --text-h1--line-height: 1.15;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h3: 1.25rem;
+  --text-h3--line-height: 1.3;
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.6;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.5;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.4;
 }
 
 /*
