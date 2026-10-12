@@ -48,12 +48,14 @@ that ticket.
 
 ## Conventions
 
-- Issues, pull requests, commit messages and code comments are written in
-  **English**.
+- Issues, pull requests, commit messages, code comments and code identifiers
+  are written in **English**.
+- **User-facing strings stay in French** — UI labels, API error messages,
+  email bodies, PDF content. These will be migrated to i18n keys in a future
+  iteration; until then, keep the French wording consistent across the app and
+  do not translate them in individual PRs.
 - Commit messages use the prefixes already in the history: `feat:`, `fix:`,
-  `chore:`, `design:`.
-
-## Team
+  `chore:`, `design:`.## Team
 
 | GitHub | Role |
 |---|---|

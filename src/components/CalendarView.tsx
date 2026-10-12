@@ -67,7 +67,6 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
         const start = parseLocalDate(req.startDate);
         const last = parseLocalDate(req.endDate);
         if (!start || !last) {
-          console.warn('Leave request with an invalid date range:', req.id, req.startDate, req.endDate);
           return null;
         }
         const end = new Date(last);
