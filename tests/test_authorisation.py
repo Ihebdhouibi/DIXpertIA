@@ -59,7 +59,8 @@ ROUTES = [
     ("POST", "/api/suppliers", BILLING),
     ("GET", "/api/invoices", BILLING),
     ("GET", "/api/invoices/1", BILLING),
-    ("GET", "/api/invoices/FA-2026-0001/download", BILLING),
+    # By internal id since #86; the generic /api/invoices/1 normalisation below covers it.
+    ("GET", "/api/invoices/1/download", BILLING),
 
     # --- bookkeeping: narrower than billing, rh excluded --------------------
     ("POST", "/api/invoices", ADMIN_ONLY),
@@ -137,8 +138,6 @@ def test_every_route_is_covered(app):
         # Normalise the sample ids back to their templates.
         normalised = (path
                       .replace("/api/leave-requests/1/", "/api/leave-requests/{req_id}/")
-                      .replace("/api/invoices/FA-2026-0001/download",
-                               "/api/invoices/{invoice_number}/download")
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")
                       .replace("/api/invoices/1", "/api/invoices/{invoice_id}")

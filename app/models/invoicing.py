@@ -103,9 +103,12 @@ class Supplier(Base):
 
     id = Column(Integer, primary_key=True)
     nom = Column(String(150), nullable=False)
-    email = Column(String(100), default="")
-    telephone = Column(String(30), default="")
-    adresse = Column(Text, default="")
+    # '' means "not given". NOT NULL with a server default, so a row inserted
+    # outside the ORM cannot store NULL either - the invoice PDF crashed on one
+    # (#86).
+    email = Column(String(100), default="", server_default=text("''"), nullable=False)
+    telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
+    adresse = Column(Text, default="", server_default=text("''"), nullable=False)
 
     invoices = relationship("Invoice", back_populates="supplier")
 
@@ -121,9 +124,12 @@ class Client(Base):
 
     id = Column(Integer, primary_key=True)
     nom = Column(String(150), nullable=False)
-    email = Column(String(100), default="")
-    telephone = Column(String(30), default="")
-    adresse = Column(Text, default="")
+    # '' means "not given". NOT NULL with a server default, so a row inserted
+    # outside the ORM cannot store NULL either - the invoice PDF crashed on one
+    # (#86).
+    email = Column(String(100), default="", server_default=text("''"), nullable=False)
+    telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
+    adresse = Column(Text, default="", server_default=text("''"), nullable=False)
 
     invoices = relationship("Invoice", back_populates="client")
 
