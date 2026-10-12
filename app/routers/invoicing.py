@@ -492,45 +492,27 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     return InvoiceOut.from_orm_row(invoice)
 
 
-# ---- Download Invoice PDF (NEW) ----
-@router.get("/invoices/{invoice_number}/download")
-def download_invoice(
-    invoice_number: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Generate and download an invoice as PDF.
-    """
-    invoice = (
-        db.query(Invoice)
-        .options(selectinload(Invoice.items), selectinload(Invoice.client))
-        .filter(Invoice.numero == invoice_number)
-        .first()
-    )
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+def _pdf_data(invoice: Invoice) -> dict:
+    """What the PDF generator needs from an invoice.
 
-    # Build items list
-    items = []
-    for item in invoice.items:
-        items.append({
+    The counterparty follows the direction (#40): the client for an invoice we
+    issue, the supplier for a bill we received. Reading only `invoice.client`
+    printed "Unknown" on every supplier bill (#86).
+    """
+    party = invoice.supplier if invoice.direction == InvoiceDirection.INCOMING else invoice.client
+    items = [
+        {
             "description": item.designation,
             "qty": float(item.quantite),
             "price": float(item.prix_unitaire),
-            "total": float(item.quantite * item.prix_unitaire)
-        })
-
-    # Client info
-    client = invoice.client
-    client_name = client.nom if client else "Unknown"
-    client_address = client.adresse if client else "N/A"
-
-    # Prepare data for PDF generator
-    invoice_data = {
+            "total": float(item.quantite * item.prix_unitaire),
+        }
+        for item in invoice.items
+    ]
+    return {
         "invoice_id": invoice.numero,
-        "client": client_name,
-        "client_address": client_address,
+        "client": party.nom if party else "",
+        "client_address": party.adresse if party else "",
         "date_issued": invoice.date_emission.strftime("%b %d, %Y"),
         "due_date": invoice.date_echeance.strftime("%b %d, %Y"),
         "status": (
@@ -543,7 +525,21 @@ def download_invoice(
         "total": float(invoice.montant_ttc),
     }
 
-    pdf_bytes = generate_invoice_pdf(invoice_data)
+
+# By the internal id, like every other invoice route. It used to match
+# `numero`, while the UI sends the id, so the Download button answered 404 for
+# every invoice (#86). The id also exists before an invoice has a legal number,
+# which drafts will not have once #118 assigns it at approval.
+@router.get("/invoices/{invoice_id}/download")
+def download_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """Generate and download an invoice as PDF."""
+    invoice = db.get(Invoice, invoice_id, options=[
+        selectinload(Invoice.items), selectinload(Invoice.client), selectinload(Invoice.supplier),
+    ])
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+
+    pdf_bytes = generate_invoice_pdf(_pdf_data(invoice))
     filename = f"Invoice_{invoice.numero}.pdf"
 
     return Response(

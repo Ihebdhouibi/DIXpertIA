@@ -67,8 +67,10 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
   const toast = useToast();
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
-  // ✅ Updated download handler
-  const handleDownload = async (id: string) => {
+  // By internal id: the route takes the id, which exists before an invoice has
+  // a legal number (#86, #118). The number only names the file.
+  const handleDownload = async (invoice: Invoice) => {
+    const { id, numero } = invoice;
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -92,12 +94,12 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Invoice_${id}.pdf`;
+      a.download = `Invoice_${numero}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      showToast(`Invoice ${id} downloaded.`);
+      showToast(`Invoice ${numero} downloaded.`);
     } catch (error) {
       console.error('Download error:', error);
       showToast('Network error. Please try again.', 'error');
@@ -351,7 +353,7 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
               )}
               <button
                 type="button"
-                onClick={() => handleDownload(row.original.id)}
+                onClick={() => handleDownload(row.original)}
                 aria-label={`Download invoice ${row.original.numero}`}
                 className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
               >
@@ -593,7 +595,7 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
                 <Pencil className="w-4 h-4" aria-hidden="true" /> Edit
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => handleDownload(selectedInvoice?.id || '')}>
+            <Button variant="ghost" size="sm" onClick={() => selectedInvoice && handleDownload(selectedInvoice)}>
               <Download className="w-4 h-4" aria-hidden="true" /> Download
             </Button>
           </>

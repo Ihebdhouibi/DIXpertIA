@@ -5,6 +5,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
 from reportlab.lib.enums import TA_RIGHT, TA_LEFT
 from datetime import datetime
+from xml.sax.saxutils import escape
 
 # Map status values to human-readable labels
 # Maps the commercial status to the label printed on the PDF. Accepts both the
@@ -25,6 +26,18 @@ STATUS_MAP = {
     "Overdue": "Overdue",
     "Draft": "Draft",
 }
+
+def _text(value) -> str:
+    """A stored value made safe for a ReportLab Paragraph (#86).
+
+    Paragraph parses its text as markup. A name or a line containing a known
+    tag left open, such as "R&D <b>" or "<i>Acme", made the whole PDF fail
+    with ValueError, and a closed one silently changed the formatting instead
+    of being printed. A NULL address raised TypeError. Missing values become an
+    empty string; markup characters are escaped, so stored text prints as is.
+    """
+    return escape("" if value is None else str(value))
+
 
 def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     """
@@ -74,9 +87,9 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     )
 
     # Extract data
-    invoice_id = invoice_data.get('invoice_id', '')
-    client = invoice_data.get('client', '')
-    client_address = invoice_data.get('client_address', 'N/A')
+    invoice_id = _text(invoice_data.get('invoice_id'))
+    client = _text(invoice_data.get('client'))
+    client_address = invoice_data.get('client_address') or ''
     date_issued = invoice_data.get('date_issued', '')
     due_date = invoice_data.get('due_date', '')
     status_raw = invoice_data.get('status', 'Sent')
@@ -95,7 +108,7 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     # --- Invoice title, number, date ---
     inv_title = Paragraph("INVOICE", title_style)
     inv_number = Paragraph(f"<b>{invoice_id}</b>", header_style)
-    inv_date = Paragraph(f"Date: {date_issued}", header_style)
+    inv_date = Paragraph(f"Date: {_text(date_issued)}", header_style)
 
     header_table_data = [
         [inv_title, inv_number],
@@ -117,13 +130,12 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     # --- Client and Due Date ---
     billed_to = Paragraph("<b>BILLED TO:</b>", label_style)
     client_name = Paragraph(client, value_style)
-    address_lines = client_address.split('\n') if '\n' in client_address else [client_address]
-    client_addr = Paragraph("<br/>".join(address_lines), value_style)
+    client_addr = Paragraph("<br/>".join(_text(line) for line in client_address.split('\n')), value_style)
 
     due_label = Paragraph("<b>DUE DATE:</b>", label_style)
-    due_value = Paragraph(due_date, value_style)
+    due_value = Paragraph(_text(due_date), value_style)
     status_label = Paragraph("<b>Status:</b>", label_style)
-    status_value = Paragraph(status, status_style)
+    status_value = Paragraph(_text(status), status_style)
 
     left_data = [[billed_to], [client_name], [client_addr]]
     right_data = [[due_label, due_value],
@@ -162,7 +174,7 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
              Paragraph("<b>Total</b>", header_style)]
         ]
         for item in items:
-            desc = Paragraph(item.get('description', ''), value_style)
+            desc = Paragraph(_text(item.get('description')), value_style)
             qty = Paragraph(str(item.get('qty', 0)), value_style)
             price = Paragraph(f"${item.get('price', 0):.2f}", value_style)
             total_item = Paragraph(f"${item.get('total', 0):.2f}", value_style)
