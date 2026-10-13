@@ -531,8 +531,16 @@ def _pdf_data(invoice: Invoice) -> dict:
 # every invoice (#86). The id also exists before an invoice has a legal number,
 # which drafts will not have once #118 assigns it at approval.
 @router.get("/invoices/{invoice_id}/download")
-def download_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    """Generate and download an invoice as PDF."""
+def download_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    inline: bool = Query(False, description="Display in the browser instead of saving (#127)."),
+):
+    """Generate an invoice as PDF, to save or, with ?inline=true, to display.
+
+    The invoice detail embeds the same file the Download button saves, so what
+    the accountant reviews is exactly what the client receives (#127, #118).
+    """
     invoice = db.get(Invoice, invoice_id, options=[
         selectinload(Invoice.items), selectinload(Invoice.client), selectinload(Invoice.supplier),
     ])
@@ -545,5 +553,5 @@ def download_invoice(invoice_id: int, db: Session = Depends(get_db)):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{filename}"'}
     )

@@ -126,3 +126,27 @@ def test_an_issued_invoice_prints_the_client():
         montant_ht=Decimal(100), montant_ttc=Decimal(119), items=[],
     )
     assert _pdf_data(sale)["client"] == "Acme Corporation"
+
+
+# --- #127: the detail embeds the real PDF and shows real contact details -----
+
+def test_the_pdf_can_be_displayed_inline(client, admin):
+    invoice = issue(client, admin, make_client(client, admin))
+    saved = client.get(f"/api/invoices/{invoice['id']}/download", headers=admin)
+    shown = client.get(f"/api/invoices/{invoice['id']}/download?inline=true", headers=admin)
+    assert saved.headers["content-disposition"].startswith("attachment;")
+    assert shown.headers["content-disposition"].startswith("inline;")
+    assert shown.content.startswith(b"%PDF")
+
+
+def test_an_invoice_carries_its_counterparty_contact_details(client, admin):
+    client_id = make_client(client, admin, adresse="1 rue de Tunis\n1000 Tunis")
+    invoice = issue(client, admin, client_id)
+    body = client.get(f"/api/invoices/{invoice['id']}", headers=admin).json()
+    assert body["counterpartyEmail"] == "a@acme.tn"
+    assert body["counterpartyAddress"] == "1 rue de Tunis\n1000 Tunis"
+
+
+def test_missing_contact_details_read_as_empty(client, admin):
+    invoice = issue(client, admin, make_client(client, admin, adresse=""))
+    assert client.get(f"/api/invoices/{invoice['id']}", headers=admin).json()["counterpartyAddress"] == ""
