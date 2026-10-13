@@ -96,6 +96,9 @@ export interface Invoice {
   /** The client we billed, or the supplier who billed us. */
   counterparty: string;
   counterpartyInitials: string;
+  /** Their contact details as stored; '' when not given (#127). */
+  counterpartyEmail?: string;
+  counterpartyAddress?: string;
   /** The supplier's own number, on an incoming invoice only. */
   supplierReference?: string | null;
   amountHT: number;

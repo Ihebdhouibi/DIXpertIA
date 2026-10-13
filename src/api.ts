@@ -49,11 +49,8 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
-async function request<T>(
-  path: string,
-  init: RequestInit = {},
-  onResponse?: (res: Response) => void,
-): Promise<T> {
+/** Sends an authenticated request and turns a refusal into an ApiError. */
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken();
   const res = await fetch(path, {
     ...init,
@@ -75,7 +72,15 @@ async function request<T>(
   if (!res.ok) {
     throw new ApiError(res.status, await readError(res));
   }
+  return res;
+}
 
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  onResponse?: (res: Response) => void,
+): Promise<T> {
+  const res = await send(path, init);
   onResponse?.(res);
 
   if (res.status === 204) return undefined as T;
@@ -189,6 +194,12 @@ export const invoices = {
       body: JSON.stringify({ processing_status: processingStatus }),
     }),
   get: (id: number) => request<Invoice>(`/api/invoices/${id}`),
+  /**
+   * The invoice PDF the server generates (#86), as a Blob. `inline` asks for a
+   * copy to display rather than save; the invoice detail embeds it (#127).
+   */
+  pdf: async (id: string | number, inline = false) =>
+    (await send(`/api/invoices/${id}/download${inline ? '?inline=true' : ''}`)).blob(),
   /** Correct a draft: replace its lines and its due date (#125). Admin only. */
   update: (id: string | number, body: InvoiceUpdate) =>
     request<Invoice>(`/api/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

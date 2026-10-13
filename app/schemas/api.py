@@ -206,6 +206,10 @@ class InvoiceOut(BaseModel):
     # billed us. Which it is follows from `direction`.
     counterparty: str
     counterpartyInitials: str
+    # Their contact details as stored, '' when not given (#86 made them NOT
+    # NULL). The invoice detail showed an invented address instead (#127).
+    counterpartyEmail: str = ""
+    counterpartyAddress: str = ""
     # The supplier's own number, on an incoming invoice only. Never merged with
     # `numero`, which is always ours.
     supplierReference: Optional[str] = None
@@ -236,6 +240,8 @@ class InvoiceOut(BaseModel):
             direction=direction,
             counterparty=name,
             counterpartyInitials=initials,
+            counterpartyEmail=getattr(party, "email", None) or "",
+            counterpartyAddress=getattr(party, "adresse", None) or "",
             supplierReference=row.supplier_reference,
             amountHT=float(row.montant_ht or Decimal(0)),
             amountTTC=float(row.montant_ttc or Decimal(0)),

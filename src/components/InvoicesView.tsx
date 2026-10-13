@@ -8,7 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, Download, ZoomIn, ZoomOut, ArrowRight, X, Pencil } from 'lucide-react';
+import { Plus, Download, ArrowRight, X, Pencil } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
 import StatusBadge, { ProcessingBadge } from './StatusBadge';
 import Avatar from './ui/Avatar';
@@ -28,6 +28,7 @@ import {
 } from '../invoiceStatus';
 import Dialog from './ui/Dialog';
 import InvoiceEditDialog from './InvoiceEditDialog';
+import InvoicePdfPreview from './InvoicePdfPreview';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useToast, ToastTone } from './ui/feedback';
@@ -45,6 +46,8 @@ interface InvoicesViewProps {
   userRole: UserRole;
 }
 
+const DETAIL_LABEL = 'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant self-center whitespace-nowrap';
+
 export default function InvoicesView({ clients, onAddInvoice, userRole }: InvoicesViewProps) {
   const isAdmin = userRole === 'admin';
   // Who may move an invoice through the books (the API allows admin and
@@ -54,7 +57,8 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   // The draft being corrected (#125), opened from the invoice detail.
   const [editing, setEditing] = useState<Invoice | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(100);
+  // Bumped after an edit so the embedded PDF is generated again (#127).
+  const [pdfVersion, setPdfVersion] = useState(0);
 
   // Form states for new invoice creation
   const [clientId, setClientId] = useState('');
@@ -70,39 +74,18 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
   // By internal id: the route takes the id, which exists before an invoice has
   // a legal number (#86, #118). The number only names the file.
   const handleDownload = async (invoice: Invoice) => {
-    const { id, numero } = invoice;
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        showToast('Please log in again.', 'error');
-        return;
-      }
-
-      const response = await fetch(`/api/invoices/${id}/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        showToast(`Download failed: ${errorText || response.statusText}`, 'error');
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = URL.createObjectURL(await api.invoices.pdf(invoice.id));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Invoice_${numero}.pdf`;
+      a.download = `Invoice_${invoice.numero}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      showToast(`Invoice ${numero} downloaded.`);
+      URL.revokeObjectURL(url);
+      showToast(`Invoice ${invoice.numero} downloaded.`);
     } catch (error) {
-      console.error('Download error:', error);
-      showToast('Network error. Please try again.', 'error');
+      showToast(`Download failed: ${error instanceof Error ? error.message : 'network error'}`, 'error');
     }
   };
 
@@ -577,11 +560,11 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
         </TBody>
       </Table>
 
-      {/* Invoice detail */}
+      {/* Invoice detail (#127): real figures on the left, the real PDF on the right. */}
       <Dialog
         open={selectedInvoice !== null}
         onClose={() => setSelectedInvoice(null)}
-        title={`Invoice ${selectedInvoice?.id ?? ''}`}
+        title={`Invoice ${selectedInvoice?.numero ?? ''}`}
         size="xl"
         bodyClassName="overflow-auto p-6 bg-surface-container-low"
         headerActions={
@@ -601,124 +584,65 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
           </>
         }
       >
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 flex flex-col gap-6">
-              <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm">
-                <h4 className="font-bold text-body-sm text-on-surface mb-4">Summary</h4>
-                <div className="space-y-4">
-                  <div>
-                    <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Total Amount</span>
-                    <span className="text-h1 font-black text-primary tracking-tight">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Issued Date</span>
-                      <span className="text-body-sm text-on-surface font-semibold">{selectedInvoice?.dateIssued}</span>
-                    </div>
-                    <div>
-                      <span className="block text-caption text-on-surface-variant mb-1 font-semibold">Due Date</span>
-                      <span className={`text-body-sm font-bold ${selectedInvoice?.status === 'Overdue' ? 'text-error' : 'text-on-surface'}`}>
-                        {selectedInvoice?.dueDate}
-                      </span>
-                    </div>
+        {selectedInvoice && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="flex flex-col gap-6">
+              <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
+                <h3 className="mb-4 text-sm font-semibold text-on-surface">Summary</h3>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
+                  <dt className={DETAIL_LABEL}>Excl. VAT</dt>
+                  <dd className="text-right font-mono tabular-nums text-on-surface">{formatCurrency(selectedInvoice.amountHT)}</dd>
+                  <dt className={DETAIL_LABEL}>VAT</dt>
+                  <dd className="text-right font-mono tabular-nums text-on-surface">
+                    {formatCurrency(selectedInvoice.amountTTC - selectedInvoice.amountHT)}
+                  </dd>
+                  <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>Total incl. VAT</dt>
+                  <dd className="border-t border-outline-variant pt-3 text-right font-mono text-base font-semibold tabular-nums text-on-surface">
+                    {formatCurrency(selectedInvoice.amountTTC)}
+                  </dd>
+                  <dt className={DETAIL_LABEL}>Issued</dt>
+                  <dd className="text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>
+                  <dt className={DETAIL_LABEL}>Due</dt>
+                  <dd className={`text-right font-mono tabular-nums ${selectedInvoice.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface'}`}>
+                    {selectedInvoice.dueDate}
+                  </dd>
+                  <dt className={DETAIL_LABEL}>Books</dt>
+                  <dd className="text-right"><ProcessingBadge status={selectedInvoice.processingStatus} /></dd>
+                </dl>
+              </section>
+
+              <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
+                <h3 className="mb-4 text-sm font-semibold text-on-surface">
+                  {selectedInvoice.direction === 'incoming' ? 'Supplier' : 'Client'}
+                </h3>
+                <div className="flex items-center gap-3">
+                  <Avatar name={selectedInvoice.counterparty} shape="square" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-on-surface">{selectedInvoice.counterparty}</p>
+                    {selectedInvoice.counterpartyEmail && (
+                      <p className="truncate text-xs text-on-surface-variant" title={selectedInvoice.counterpartyEmail}>
+                        {selectedInvoice.counterpartyEmail}
+                      </p>
+                    )}
                   </div>
                 </div>
-              </div>
-              <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm">
-                <h4 className="font-bold text-body-sm text-on-surface mb-4">Client Information</h4>
-                <div className="flex items-center gap-3 mb-4">
-                  <Avatar name={selectedInvoice?.counterparty ?? ''} shape="square" />
-                  <div>
-                    <div className="text-body-sm font-bold text-on-surface">{selectedInvoice?.counterparty}</div>
-                    <div className="text-caption text-on-surface-variant font-medium">{selectedInvoice?.counterparty?.toLowerCase().replace(/\s+/g, '')}.example.com</div>
-                  </div>
-                </div>
-                <div className="space-y-1 text-caption text-on-surface-variant font-medium border-t border-outline-variant/30 pt-3">
-                  <p>123 Business Road, Suite 400</p>
-                  <p>San Francisco, CA 94107</p>
-                  <p>United States</p>
-                </div>
-              </div>
+                {/* The address as stored, line breaks kept; nothing invented when it is missing. */}
+                <p className="mt-4 whitespace-pre-line border-t border-outline-variant pt-3 text-sm text-on-surface-variant">
+                  {selectedInvoice.counterpartyAddress || 'No address on file.'}
+                </p>
+                {selectedInvoice.supplierReference && (
+                  <p className="mt-3 text-xs text-on-surface-variant">
+                    Supplier reference <span className="font-mono text-on-surface">{selectedInvoice.supplierReference}</span>
+                  </p>
+                )}
+              </section>
             </div>
-            <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
-              <div className="h-12 bg-surface border-b border-outline-variant flex items-center justify-between px-4 select-none">
-                <div className="flex items-center gap-2 text-on-surface-variant font-medium">
-                  <button onClick={() => setZoomLevel(prev => Math.max(prev - 10, 50))} className="p-1 hover:bg-surface-container-high rounded cursor-pointer">
-                    <ZoomOut className="w-4 h-4" />
-                  </button>
-                  <span className="font-mono text-caption">{zoomLevel}%</span>
-                  <button onClick={() => setZoomLevel(prev => Math.min(prev + 10, 150))} className="p-1 hover:bg-surface-container-high rounded cursor-pointer">
-                    <ZoomIn className="w-4 h-4" />
-                  </button>
-                </div>
-                <span className="text-caption text-on-surface-variant font-semibold">Page 1 of 1</span>
-              </div>
-              <div className="flex-1 bg-surface-variant overflow-auto p-4 md:p-8 flex items-start justify-center">
-                <div
-                  style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-                  className="bg-surface-container-lowest w-full max-w-[580px] shadow-lg aspect-[1/1.4] p-8 border border-outline-variant relative transition-transform"
-                >
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
-                    <span className="font-sans text-[90px] font-black rotate-45 text-on-surface">PREVIEW</span>
-                  </div>
-                  <div className="flex justify-between items-start mb-8 select-none">
-                    <div>
-                      <div className="font-sans text-h2 font-black text-primary mb-1">DIXpertIA</div>
-                      <div className="text-[10px] text-on-surface-variant w-44 font-medium leading-relaxed">
-                        Enterprise IT Solutions & Infrastructure Services
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-sans text-h3 font-black text-on-surface mb-2 tracking-wide uppercase">INVOICE</div>
-                      <div className="font-mono text-caption text-primary font-bold mb-1">{selectedInvoice?.id}</div>
-                      <div className="text-caption text-on-surface-variant font-semibold">Date: {selectedInvoice?.dateIssued}</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/50 pt-4 mb-8 text-caption select-none">
-                    <div>
-                      <span className="block text-outline font-bold uppercase tracking-wider mb-1">Billed To:</span>
-                      <span className="block font-bold text-on-surface">{selectedInvoice?.counterparty}</span>
-                      <span className="block text-on-surface-variant">123 Business Road, Suite 400</span>
-                      <span className="block text-on-surface-variant">San Francisco, CA 94107</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-outline font-bold uppercase tracking-wider mb-1">Due Date:</span>
-                      <span className="block font-bold text-on-surface">{selectedInvoice?.dueDate}</span>
-                      <span className="block text-on-surface-variant">Status: {selectedInvoice?.status}</span>
-                    </div>
-                  </div>
-                  <div className="border-t border-b border-outline-variant py-2">
-                    <div className="flex font-semibold text-caption text-on-surface-variant mb-2 select-none">
-                      <div className="flex-grow">Description</div>
-                      <div className="w-12 text-right">Qty</div>
-                      <div className="w-24 text-right">Price</div>
-                      <div className="w-24 text-right">Total</div>
-                    </div>
-                    {selectedInvoice?.items?.map((item, index) => (
-                      <div key={index} className="flex text-caption text-on-surface py-2.5 border-t border-outline-variant/20">
-                        <div className="flex-grow font-semibold text-on-surface">{item.description}</div>
-                        <div className="w-12 text-right font-mono text-on-surface-variant">{item.qty}</div>
-                        <div className="w-24 text-right font-mono text-on-surface-variant">{formatCurrency(item.price)}</div>
-                        <div className="w-24 text-right font-mono font-bold text-primary">{formatCurrency(item.total)}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 flex justify-end">
-                    <div className="w-48 border-t border-outline-variant pt-3">
-                      <div className="flex justify-between text-caption text-on-surface-variant font-medium py-1">
-                        <span>Subtotal:</span>
-                        <span className="font-mono">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
-                      </div>
-                      <div className="flex justify-between text-caption font-bold text-on-surface py-1.5 border-t border-outline-variant/30 mt-2">
-                        <span>Total Due:</span>
-                        <span className="font-mono text-primary">{formatCurrency(selectedInvoice?.amountTTC || 0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+
+            <div className="lg:col-span-2">
+              <InvoicePdfPreview invoiceId={selectedInvoice.id} label={selectedInvoice.numero} version={pdfVersion} />
             </div>
           </div>
+        )}
       </Dialog>
 
       {isAdmin && (
@@ -728,6 +652,7 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
           onSaved={(updated) => {
             setEditing(null);
             setSelectedInvoice(updated);
+            setPdfVersion((v) => v + 1);
             showToast(`Invoice ${updated.numero} updated.`);
             reload();
           }}
