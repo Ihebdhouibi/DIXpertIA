@@ -121,23 +121,29 @@ export default function Dialog({
     >
       {open && (
         <div className="flex max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-xl animate-scale-up">
-          <header className={`flex items-start justify-between gap-4 px-6 py-4 ${hasBody ? 'border-b border-outline-variant' : ''}`}>
-            <div>
-              <h2 id={titleId} className="text-lg font-bold tracking-[-0.02em]">
-                {title}
-              </h2>
-              {description && (
-                <p id={descriptionId} className="mt-1 text-sm text-on-surface-variant">
-                  {description}
-                </p>
-              )}
+          <header className={`px-6 py-4 ${hasBody ? 'border-b border-outline-variant' : ''}`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 id={titleId} className="text-lg font-bold tracking-[-0.02em]">
+                  {title}
+                </h2>
+                {description && (
+                  <p id={descriptionId} className="mt-1 text-sm text-on-surface-variant">
+                    {description}
+                  </p>
+                )}
+              </div>
+              <div className="-mr-2 flex shrink-0 items-center gap-2">
+                {headerActions && <div className="hidden items-center gap-2 sm:flex">{headerActions}</div>}
+                <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close" className="px-2">
+                  <X className="w-5 h-5" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
-            <div className="-mr-2 flex shrink-0 items-center gap-2">
-              {headerActions}
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close" className="px-2">
-                <X className="w-5 h-5" aria-hidden="true" />
-              </Button>
-            </div>
+            {/* On a phone the actions take their own row under the title instead
+                of squeezing it (#127). Only one of the two copies is displayed,
+                so assistive technology sees the actions once. */}
+            {headerActions && <div className="mt-3 flex flex-wrap items-center gap-2 sm:hidden">{headerActions}</div>}
           </header>
           {hasBody && <div className={`flex-1 min-h-0 ${bodyClassName}`}>{children}</div>}
           {footer && (
