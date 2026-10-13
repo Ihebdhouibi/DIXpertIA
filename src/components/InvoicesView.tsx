@@ -27,6 +27,7 @@ import {
   nextProcessingStatus,
 } from '../invoiceStatus';
 import Dialog from './ui/Dialog';
+import InvoiceCreateDialog from './InvoiceCreateDialog';
 import InvoiceEditDialog from './InvoiceEditDialog';
 import InvoicePdfPreview from './InvoicePdfPreview';
 import Button from './ui/Button';
@@ -38,17 +39,14 @@ interface InvoicesViewProps {
   invoices?: Invoice[];
   /** Clients the invoice may be issued to. The API requires a real one. */
   clients: Client[];
-  onAddInvoice: (invoice: {
-    client_id: number;
-    date_echeance: string;
-    items: { designation: string; quantite: number; prix_unitaire: number; taux_tva: number }[];
-  }) => unknown;
+  /** Tells the app an invoice was created, so data loaded elsewhere (the dashboard) refreshes. */
+  onInvoiceCreated: () => void;
   userRole: UserRole;
 }
 
 const DETAIL_LABEL = 'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant self-center whitespace-nowrap';
 
-export default function InvoicesView({ clients, onAddInvoice, userRole }: InvoicesViewProps) {
+export default function InvoicesView({ clients, onInvoiceCreated, userRole }: InvoicesViewProps) {
   const isAdmin = userRole === 'admin';
   // Who may move an invoice through the books (the API allows admin and
   // accountant, #96); everyone else sees the list read-only.
@@ -59,14 +57,6 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
   const [editing, setEditing] = useState<Invoice | null>(null);
   // Bumped after an edit so the embedded PDF is generated again (#127).
   const [pdfVersion, setPdfVersion] = useState(0);
-
-  // Form states for new invoice creation
-  const [clientId, setClientId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  // The status is not chosen here any more: a new invoice is always a draft
-  // and the server sets it (#87). Letting the form pick meant an invoice
-  // could be created already marked Paid.
 
   const toast = useToast();
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
@@ -89,32 +79,6 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
     }
   };
 
-  const handleNewInvoiceSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clientId || !amount || !dueDate) {
-      showToast('Choose a client, an amount and a due date.', 'error');
-      return;
-    }
-
-    // The number, the issue date and the status all come from the server: the
-    // number belongs to a gapless series (#38), and letting the client pick any
-    // of them is how duplicates and out-of-order invoices happen.
-    Promise.resolve(onAddInvoice({
-      client_id: Number(clientId),
-      date_echeance: dueDate,
-      items: [{
-        designation: 'Consultation & Cloud Integration Services',
-        quantite: 1,
-        prix_unitaire: parseFloat(amount),
-        taux_tva: 19,
-      }],
-    })).then(reload);
-
-    setIsNewInvoiceOpen(false);
-    setClientId('');
-    setAmount('');
-    setDueDate('');
-  };
 
   // --- Server-driven list (#113) -------------------------------------------
   // Filters, sorting and pagination are query parameters of GET /api/invoices,
@@ -659,67 +623,19 @@ export default function InvoicesView({ clients, onAddInvoice, userRole }: Invoic
         />
       )}
 
-      {/* New invoice */}
+      {/* New invoice (#128): real lines, idempotent, errors kept in the form. */}
       {isAdmin && (
-        <Dialog
+        <InvoiceCreateDialog
           open={isNewInvoiceOpen}
+          clients={clients}
           onClose={() => setIsNewInvoiceOpen(false)}
-          title="Create new invoice"
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setIsNewInvoiceOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" form="new-invoice-form">
-                Create invoice
-              </Button>
-            </>
-          }
-        >
-          <form id="new-invoice-form" onSubmit={handleNewInvoiceSubmit} className="flex flex-col gap-4">
-            {/*
-              A chosen client, not a typed name. An invoice references a
-              real client row, so a free-text field could only ever
-              produce an invoice that does not belong to anybody.
-            */}
-            <Field
-              label="Client"
-              hint={clients.length === 0 ? 'No clients yet. Add one before issuing an invoice.' : undefined}
-            >
-              {({ id, describedBy }) => (
-                <Select id={id} aria-describedby={describedBy} required value={clientId} onChange={(e) => setClientId(e.target.value)}>
-                  <option value="">Choose a client</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.nom}</option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            {/*
-              No status field. A new invoice is always a draft and the
-              server sets it (#87); offering the choice here meant an
-              invoice could be created already marked Paid.
-            */}
-            <Field label="Amount (TND, excl. VAT)">
-              {({ id }) => (
-                <Input
-                  id={id}
-                  required
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 12450.000"
-                  className="font-mono"
-                />
-              )}
-            </Field>
-            <Field label="Due date">
-              {({ id }) => <Input id={id} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />}
-            </Field>
-          </form>
-        </Dialog>
+          onCreated={(created) => {
+            setIsNewInvoiceOpen(false);
+            showToast(`Invoice ${created.numero} created as a draft.`);
+            reload();
+            onInvoiceCreated();
+          }}
+        />
       )}
     </div>
   );
