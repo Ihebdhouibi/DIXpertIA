@@ -88,10 +88,21 @@ export interface InvoiceItem {
   vatRate: number;
 }
 
+export interface InvoiceReview {
+  action: 'submitted' | 'approved' | 'rejected';
+  actor: string;
+  comment: string;
+  /** ISO timestamp. */
+  at: string;
+}
+
 export interface Invoice {
   id: string;
   /** Always ours: FA-YYYY-NNNN outgoing, FF-YYYY-NNNN incoming (#38, #40). */
-  numero: string;
+  /** The legal number; null for an outgoing draft until the accountant approves it (#118). */
+  numero: string | null;
+  /** What to show: the number, or BR- and the id while it is a draft (#118). */
+  reference: string;
   direction: 'outgoing' | 'incoming';
   /** The client we billed, or the supplier who billed us. */
   counterparty: string;
@@ -115,5 +126,9 @@ export interface Invoice {
    * nobody has booked it yet.
    */
   processingStatus: 'Pending' | 'Processed' | 'Completed' | 'Archived';
+  /** The accountant's verification before sending (#118) - a third axis. */
+  reviewStatus: 'Not submitted' | 'Submitted' | 'Approved' | 'Rejected';
+  /** Submissions and decisions, oldest first; a rejection carries its comment. */
+  reviews: InvoiceReview[];
   items: InvoiceItem[];
 }

@@ -11,6 +11,29 @@ export type ProcessingStatus = Invoice['processingStatus'];
 export const COMMERCIAL_STATUSES: readonly CommercialStatus[] = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled'];
 export const PROCESSING_STATUSES: readonly ProcessingStatus[] = ['Pending', 'Processed', 'Completed', 'Archived'];
 
+/** The accountant's verification before sending (#118). */
+export type ReviewStatus = Invoice['reviewStatus'];
+export const REVIEW_STATUSES: readonly ReviewStatus[] = ['Not submitted', 'Submitted', 'Approved', 'Rejected'];
+export const REVIEW_TO_API: Record<ReviewStatus, string> = {
+  'Not submitted': 'not_submitted',
+  Submitted: 'submitted',
+  Approved: 'approved',
+  Rejected: 'rejected',
+};
+/** How each review state reads in the UI: "Submitted" is the accountant's "to verify". */
+export const REVIEW_LABEL: Record<ReviewStatus, string> = {
+  'Not submitted': 'Draft',
+  Submitted: 'To verify',
+  Approved: 'Approved',
+  Rejected: 'Rejected',
+};
+
+/**
+ * Whether the books can take an invoice yet. Bookkeeping starts when it is
+ * sent (#118); the server refuses a draft, so the UI does not offer it.
+ */
+export const bookable = (invoice: Invoice) => invoice.status !== 'Draft';
+
 export const COMMERCIAL_TO_API: Record<CommercialStatus, string> = {
   Draft: 'brouillon',
   Sent: 'envoyee',

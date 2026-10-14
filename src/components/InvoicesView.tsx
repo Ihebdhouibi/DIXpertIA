@@ -8,9 +8,9 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, Download, ArrowRight, X, Pencil } from 'lucide-react';
+import { Plus, Download, ArrowRight, X, Pencil, Send, CheckCircle2, XCircle, SearchCheck } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
-import StatusBadge, { ProcessingBadge } from './StatusBadge';
+import StatusBadge, { ProcessingBadge, ReviewBadge } from './StatusBadge';
 import Avatar from './ui/Avatar';
 import { Table, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { FilterPills, Pagination } from './ui/TableControls';
@@ -22,17 +22,23 @@ import {
   PROCESSING_ACTION_SHORT,
   PROCESSING_STATUSES,
   PROCESSING_TO_API,
+  REVIEW_LABEL,
+  REVIEW_STATUSES,
+  REVIEW_TO_API,
   CommercialStatus,
   ProcessingStatus,
+  ReviewStatus,
+  bookable,
   nextProcessingStatus,
 } from '../invoiceStatus';
 import Dialog from './ui/Dialog';
 import InvoiceCreateDialog from './InvoiceCreateDialog';
 import InvoiceEditDialog from './InvoiceEditDialog';
 import InvoicePdfPreview from './InvoicePdfPreview';
+import { InvoiceReviewPanel, RejectInvoiceDialog } from './InvoiceReview';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
-import { useToast, ToastTone } from './ui/feedback';
+import { useConfirm, useToast, ToastTone } from './ui/feedback';
 
 interface InvoicesViewProps {
   /** Kept for the dashboard's sake; this view loads its own pages from the server (#113). */
@@ -51,6 +57,8 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   // Who may move an invoice through the books (the API allows admin and
   // accountant, #96); everyone else sees the list read-only.
   const canProcess = userRole === 'admin' || userRole === 'accountant';
+  // Verification before sending (#118): the accountant approves or rejects.
+  const isAccountant = userRole === 'accountant';
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   // The draft being corrected (#125), opened from the invoice detail.
@@ -59,6 +67,9 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const [pdfVersion, setPdfVersion] = useState(0);
 
   const toast = useToast();
+  const confirm = useConfirm();
+  const [rejecting, setRejecting] = useState<Invoice | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
   // By internal id: the route takes the id, which exists before an invoice has
@@ -68,12 +79,12 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       const url = URL.createObjectURL(await api.invoices.pdf(invoice.id));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Invoice_${invoice.numero}.pdf`;
+      a.download = `Invoice_${invoice.reference}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast(`Invoice ${invoice.numero} downloaded.`);
+      showToast(`Invoice ${invoice.reference} downloaded.`);
     } catch (error) {
       showToast(`Download failed: ${error instanceof Error ? error.message : 'network error'}`, 'error');
     }
@@ -88,6 +99,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const [direction, setDirection] = useState<'' | 'outgoing' | 'incoming'>('');
   const [commercial, setCommercial] = useState<'All' | CommercialStatus>('All');
   const [processing, setProcessing] = useState<'All' | ProcessingStatus>('All');
+  const [review, setReview] = useState<'All' | ReviewStatus>('All');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 });
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -99,13 +111,15 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const [moving, setMoving] = useState(false);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  const filtersActive = !!(month || clientFilter || direction || commercial !== 'All' || processing !== 'All');
+  const filtersActive = !!(
+    month || clientFilter || direction || commercial !== 'All' || processing !== 'All' || review !== 'All'
+  );
 
   // A new filter starts from page one with nothing selected.
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
     setRowSelection({});
-  }, [month, clientFilter, direction, commercial, processing, sorting]);
+  }, [month, clientFilter, direction, commercial, processing, review, sorting]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +135,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         direction: direction || undefined,
         statut: commercial === 'All' ? undefined : COMMERCIAL_TO_API[commercial],
         processing_status: processing === 'All' ? undefined : PROCESSING_TO_API[processing],
+        review_status: review === 'All' ? undefined : REVIEW_TO_API[review],
       })
       .then(({ rows: page, total: count }) => {
         if (cancelled) return;
@@ -137,7 +152,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     return () => {
       cancelled = true;
     };
-  }, [month, clientFilter, direction, commercial, processing, sorting, pagination, reloadKey]);
+  }, [month, clientFilter, direction, commercial, processing, review, sorting, pagination, reloadKey]);
 
   /** Move invoices to `target`, one request each (no bulk endpoint yet - #115). */
   const moveTo = async (targets: Invoice[], target: ProcessingStatus) => {
@@ -196,7 +211,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label={`Select invoice ${row.original.numero}`}
+            aria-label={`Select invoice ${row.original.reference}`}
             className="h-4 w-4 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
@@ -217,7 +232,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             onClick={() => setSelectedInvoice(row.original)}
             className="rounded font-semibold hover:underline cursor-pointer"
           >
-            {row.original.numero}
+            {row.original.reference}
           </button>
         ),
       },
@@ -268,7 +283,13 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         id: 'status',
         header: 'Status',
         enableSorting: false,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+        // A draft is shown by where it stands in verification (#118).
+        cell: ({ row }) =>
+          row.original.status === 'Draft' && row.original.direction === 'outgoing' ? (
+            <ReviewBadge status={row.original.reviewStatus} />
+          ) : (
+            <StatusBadge status={row.original.status} />
+          ),
       },
       {
         id: 'processing',
@@ -282,16 +303,28 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         enableSorting: false,
         meta: { numeric: true },
         cell: ({ row }) => {
-          const next = nextProcessingStatus(row.original.processingStatus);
+          // The books start when the invoice is sent (#118): no step on a draft.
+          const next = bookable(row.original) ? nextProcessingStatus(row.original.processingStatus) : null;
           return (
             <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+              {isAccountant && row.original.reviewStatus === 'Submitted' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSelectedInvoice(row.original)}
+                  aria-label={`Verify invoice ${row.original.reference}`}
+                >
+                  <SearchCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                  Verify
+                </Button>
+              )}
               {canProcess && next && (
                 <Button
                   size="sm"
                   variant="secondary"
                   disabled={moving}
                   onClick={() => moveTo([row.original], next)}
-                  aria-label={`${PROCESSING_ACTION[next]}: invoice ${row.original.numero}`}
+                  aria-label={`${PROCESSING_ACTION[next]}: invoice ${row.original.reference}`}
                   title={PROCESSING_ACTION[next]}
                 >
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -301,7 +334,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               <button
                 type="button"
                 onClick={() => handleDownload(row.original)}
-                aria-label={`Download invoice ${row.original.numero}`}
+                aria-label={`Download invoice ${row.original.reference}`}
                 className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
               >
                 <Download className="w-4 h-4" aria-hidden="true" />
@@ -313,7 +346,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     );
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canProcess, moving]);
+  }, [canProcess, isAccountant, moving]);
 
   const table = useReactTable({
     data: rows,
@@ -327,7 +360,8 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     rowCount: total,
     enableSortingRemoval: false,
     // An invoice can be selected for a bulk move only while it has a next step.
-    enableRowSelection: (row) => canProcess && nextProcessingStatus(row.original.processingStatus) !== null,
+    enableRowSelection: (row) =>
+      canProcess && bookable(row.original) && nextProcessingStatus(row.original.processingStatus) !== null,
     state: { sorting, pagination, rowSelection },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
@@ -344,6 +378,42 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     setDirection('');
     setCommercial('All');
     setProcessing('All');
+    setReview('All');
+  };
+
+  /** Run a verification step (#118), then show the invoice as the server returned it. */
+  const runReview = async (done: string, step: () => Promise<Invoice>) => {
+    setReviewing(true);
+    try {
+      const updated = await step();
+      setSelectedInvoice(updated);
+      setPdfVersion((v) => v + 1);
+      showToast(`Invoice ${updated.reference} ${done}.`);
+      reload();
+      onInvoiceCreated();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Refused by the server', 'error');
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const approve = async (invoice: Invoice) => {
+    const ok = await confirm({
+      title: `Approve ${invoice.reference}?`,
+      message: 'It gets its legal number and today\'s date, and can then be sent. This cannot be undone.',
+      confirmLabel: 'Approve',
+    });
+    if (ok) await runReview('approved', () => api.invoices.approve(invoice.id));
+  };
+
+  const markSent = async (invoice: Invoice) => {
+    const ok = await confirm({
+      title: `Mark ${invoice.reference} as sent?`,
+      message: 'Do it once the PDF has gone to the client. The invoice is then final and the books can take it.',
+      confirmLabel: 'Mark as sent',
+    });
+    if (ok) await runReview('marked as sent', () => api.invoices.send(invoice.id));
   };
 
   return (
@@ -363,7 +433,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
 
       {/* Filters - each one is a query parameter of GET /api/invoices */}
       <div className="flex flex-col gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Month">
             {({ id }) => <Input id={id} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />}
           </Field>
@@ -395,6 +465,18 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 {COMMERCIAL_STATUSES.map((st) => (
                   <option key={st} value={st}>
                     {st}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="Verification">
+            {({ id }) => (
+              <Select id={id} value={review} onChange={(e) => setReview(e.target.value as typeof review)}>
+                <option value="All">Any stage</option>
+                {REVIEW_STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {REVIEW_LABEL[st]}
                   </option>
                 ))}
               </Select>
@@ -528,19 +610,52 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       <Dialog
         open={selectedInvoice !== null}
         onClose={() => setSelectedInvoice(null)}
-        title={`Invoice ${selectedInvoice?.numero ?? ''}`}
+        title={`Invoice ${selectedInvoice?.reference ?? ''}`}
         size="xl"
         bodyClassName="overflow-auto p-6 bg-surface-container-low"
         headerActions={
           <>
-            <StatusBadge status={selectedInvoice?.status || 'Draft'} />
-            {/* Only a draft we issued can be corrected, by the admin, and not
-                once its month is closed; the server refuses anything else. */}
-            {isAdmin && selectedInvoice && selectedInvoice.direction === 'outgoing'
-              && selectedInvoice.status === 'Draft' && selectedInvoice.processingStatus !== 'Archived' && (
-              <Button variant="secondary" size="sm" onClick={() => setEditing(selectedInvoice)}>
-                <Pencil className="w-4 h-4" aria-hidden="true" /> Edit
-              </Button>
+            {selectedInvoice && selectedInvoice.status === 'Draft' && selectedInvoice.direction === 'outgoing' ? (
+              <ReviewBadge status={selectedInvoice.reviewStatus} />
+            ) : (
+              <StatusBadge status={selectedInvoice?.status || 'Draft'} />
+            )}
+            {selectedInvoice && selectedInvoice.direction === 'outgoing' && selectedInvoice.status === 'Draft'
+              && selectedInvoice.processingStatus !== 'Archived' && (
+              <>
+                {/* The admin corrects and submits a draft that is not under review (#125, #118). */}
+                {isAdmin && (selectedInvoice.reviewStatus === 'Not submitted' || selectedInvoice.reviewStatus === 'Rejected') && (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={() => setEditing(selectedInvoice)} disabled={reviewing}>
+                      <Pencil className="w-4 h-4" aria-hidden="true" /> Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      loading={reviewing}
+                      onClick={() => runReview('submitted for verification', () => api.invoices.submit(selectedInvoice.id))}
+                    >
+                      <Send className="w-4 h-4" aria-hidden="true" /> Submit for verification
+                    </Button>
+                  </>
+                )}
+                {/* The accountant decides on a submitted invoice. */}
+                {isAccountant && selectedInvoice.reviewStatus === 'Submitted' && (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={() => setRejecting(selectedInvoice)} disabled={reviewing}>
+                      <XCircle className="w-4 h-4" aria-hidden="true" /> Reject
+                    </Button>
+                    <Button size="sm" loading={reviewing} onClick={() => approve(selectedInvoice)}>
+                      <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Approve
+                    </Button>
+                  </>
+                )}
+                {/* Once approved, the admin marks it sent. */}
+                {isAdmin && selectedInvoice.reviewStatus === 'Approved' && (
+                  <Button size="sm" loading={reviewing} onClick={() => markSent(selectedInvoice)}>
+                    <Send className="w-4 h-4" aria-hidden="true" /> Mark as sent
+                  </Button>
+                )}
+              </>
             )}
             <Button variant="ghost" size="sm" onClick={() => selectedInvoice && handleDownload(selectedInvoice)}>
               <Download className="w-4 h-4" aria-hidden="true" /> Download
@@ -565,9 +680,9 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                     {formatCurrency(selectedInvoice.amountTTC)}
                   </dd>
                   <dt className={DETAIL_LABEL}>Issued</dt>
-                  <dd className="text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>
+                  <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>
                   <dt className={DETAIL_LABEL}>Due</dt>
-                  <dd className={`text-right font-mono tabular-nums ${selectedInvoice.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface'}`}>
+                  <dd className={`whitespace-nowrap text-right font-mono tabular-nums ${selectedInvoice.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface'}`}>
                     {selectedInvoice.dueDate}
                   </dd>
                   <dt className={DETAIL_LABEL}>Books</dt>
@@ -600,14 +715,30 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                   </p>
                 )}
               </section>
+
+              {selectedInvoice.direction === 'outgoing' && <InvoiceReviewPanel invoice={selectedInvoice} />}
             </div>
 
             <div className="lg:col-span-2">
-              <InvoicePdfPreview invoiceId={selectedInvoice.id} label={selectedInvoice.numero} version={pdfVersion} />
+              <InvoicePdfPreview invoiceId={selectedInvoice.id} label={selectedInvoice.reference} version={pdfVersion} />
             </div>
           </div>
         )}
       </Dialog>
+
+      {isAccountant && (
+        <RejectInvoiceDialog
+          invoice={rejecting}
+          onClose={() => setRejecting(null)}
+          onReject={async (invoice, comment) => {
+            const updated = await api.invoices.reject(invoice.id, comment);
+            setRejecting(null);
+            setSelectedInvoice(updated);
+            showToast(`Invoice ${updated.reference} sent back to the admin.`);
+            reload();
+          }}
+        />
+      )}
 
       {isAdmin && (
         <InvoiceEditDialog
@@ -617,7 +748,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             setEditing(null);
             setSelectedInvoice(updated);
             setPdfVersion((v) => v + 1);
-            showToast(`Invoice ${updated.numero} updated.`);
+            showToast(`Invoice ${updated.reference} updated.`);
             reload();
           }}
         />
@@ -631,7 +762,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
           onClose={() => setIsNewInvoiceOpen(false)}
           onCreated={(created) => {
             setIsNewInvoiceOpen(false);
-            showToast(`Invoice ${created.numero} created as a draft.`);
+            showToast(`Invoice ${created.reference} created as a draft.`);
             reload();
             onInvoiceCreated();
           }}

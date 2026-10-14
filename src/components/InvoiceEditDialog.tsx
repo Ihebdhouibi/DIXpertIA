@@ -62,7 +62,7 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
     <Dialog
       open={invoice !== null}
       onClose={onClose}
-      title={`Edit ${invoice?.numero ?? ''}`}
+      title={`Edit ${invoice?.reference ?? ''}`}
       description="Only a draft can be corrected. The number, issue date and client stay as they are."
       size="lg"
       footer={
