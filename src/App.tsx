@@ -7,6 +7,7 @@ import { ThemeScope } from './theme';
 import Sidebar from './components/Sidebar';
 import AppHeader from './components/AppHeader';
 import { DataStatusContext } from './dataStatus';
+import { useToast } from './components/ui/feedback';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
@@ -26,13 +27,6 @@ interface Notification {
   read: boolean;
   timestamp: number;
   link?: string;
-  targetRole?: 'admin' | 'employee';
-  /**
-   * When true the notification is shown for this session only and is never
-   * written to localStorage. Use it for anything containing a secret - a
-   * persisted notification outlives the reason it was shown.
-   */
-  ephemeral?: boolean;
 }
 
 interface AppUser extends User {
@@ -78,35 +72,30 @@ export default function App() {
     }
   }, []);
 
-  // --- Notifications state ---
-  // Session-only. These were persisted to localStorage, which outlived the
-  // reason they were shown and could not be seen by anyone else anyway. Real,
-  // server-side notifications tied to actual events belong with the accountant
-  // workflow (#64).
+  // --- Notifications (#116) ---
+  // Kept by the server, per user, and written on workflow events - an invoice
+  // to verify, a rejection, an approval - so they reach the person concerned
+  // and survive a reload or another device. They used to be made in this
+  // browser and lived only in the session. Reloaded on sign-in, every minute,
+  // and when the window regains focus; every action goes through the API and
+  // reloads, so the bell and the page always show the server's state.
+  const toast = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  useEffect(() => {
-    setNotificationCount(notifications.filter(n => !n.read).length);
-  }, [notifications]);
+  const loadNotifications = useCallback(async () => {
+    try {
+      const page = await api.notifications.list();
+      setNotifications(page.rows.map((n) => ({ ...n, link: n.link ?? undefined })));
+      setNotificationCount(page.unread);
+    } catch {
+      // A failed refresh keeps what the bell already shows; the next one retries.
+    }
+  }, []);
 
-  const addNotification = (
-    message: string,
-    type: Notification['type'] = 'info',
-    link?: string,
-    targetRole?: 'admin' | 'employee',
-    ephemeral = false
-  ) => {
-    const newNotif: Notification = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      message,
-      type,
-      read: false,
-      timestamp: Date.now(),
-      link,
-      targetRole,
-      ephemeral,
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+  const notificationAction = (action: () => Promise<unknown>) => {
+    action()
+      .catch((error) => toast(error instanceof Error ? error.message : 'Could not update notifications', 'error'))
+      .finally(loadNotifications);
   };
 
   // --- Loading everything from the API ---
@@ -178,9 +167,23 @@ export default function App() {
 
   // --- Handlers with real API calls ---
 
+  useEffect(() => {
+    if (!currentUser) return;
+    void loadNotifications();
+    const timer = window.setInterval(loadNotifications, 60_000);
+    window.addEventListener('focus', loadNotifications);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', loadNotifications);
+    };
+  }, [currentUser, loadNotifications]);
+
   // Authentication goes through POST /api/login only. The role, and every other
   // user attribute, comes from the server's response - never from the client.
-  const handleLogin = async (email: string, password: string) => {
+  // Returns the error to show in the form, or null: a failed sign-in used to be
+  // added to the in-app notifications, which are not on the sign-in screen, so
+  // a wrong password showed nothing at all (#116).
+  const handleLogin = async (email: string, password: string): Promise<string | null> => {
     try {
       const data = await api.auth.login(email, password);
       api.setToken(data.access_token);
@@ -189,11 +192,10 @@ export default function App() {
       setActiveTab('dashboard');
       setShowHomepage(false);
       setShowLogin(false);
-      addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
       await refresh(appUser);
+      return null;
     } catch (error) {
-      const message = error instanceof api.ApiError ? error.message : 'Network error during login';
-      addNotification(`Login failed: ${message}`, 'error');
+      return error instanceof api.ApiError ? error.message : 'Network error during sign-in. Please try again.';
     }
   };
 
@@ -209,6 +211,7 @@ export default function App() {
     setUsers([]);
     setClients([]);
     setNotifications([]);
+    setNotificationCount(0);
     setShowHomepage(true);
     setShowLogin(false);
   };
@@ -233,7 +236,7 @@ export default function App() {
       await refresh(currentUser);
     } catch (error) {
       const message = error instanceof api.ApiError ? error.message : failure;
-      addNotification(message, 'error');
+      toast(message, 'error');
     }
   };
 
@@ -290,11 +293,8 @@ export default function App() {
   // has no leave of its own, which is correct.
   const myEmployeeId = employees.find(e => e.userId === currentUser?.id)?.id;
 
-  // --- Notification filter ---
-  const visibleNotifications = notifications.filter(n => {
-    if (!n.targetRole) return true;
-    return n.targetRole === currentUser?.role;
-  });
+  // The server returns only the caller's own notifications (#116).
+  const visibleNotifications = notifications;
 
   const renderTabContent = () => {
     if (!currentUser) return null;
@@ -318,22 +318,14 @@ export default function App() {
         return (
           <NotificationsView
             notifications={visibleNotifications}
-            onMarkRead={(id) => {
-              setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, read: true } : n)
-              );
-            }}
-            onMarkAllRead={() => {
-              setNotifications(prev =>
-                prev.map(n => ({ ...n, read: true }))
-              );
-            }}
+            onMarkRead={(id) => notificationAction(() => api.notifications.read(id))}
+            onMarkAllRead={() => notificationAction(api.notifications.readAll)}
             // The view asks for confirmation (#106); asking here as well
-            // made "Clear all" prompt twice.
-            onClearAll={() => setNotifications([])}
-            onClearSelected={(ids) => {
-              setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
-            }}
+            // made "Clear all" prompt twice. Clearing is a soft dismissal.
+            onClearAll={() => notificationAction(api.notifications.dismissAll)}
+            onClearSelected={(ids) =>
+              notificationAction(() => Promise.all(ids.map((id) => api.notifications.dismiss(id))))
+            }
             onNavigate={(link) => setActiveTab(link)}
             userRole={currentUser.role}
           />
@@ -530,13 +522,9 @@ export default function App() {
           notifications={visibleNotifications}
           unreadCount={notificationCount}
           onOpenNavigation={() => setIsOpenMobile(true)}
-          onMarkAllRead={() => {
-            setNotifications(prev =>
-              prev.map(n => (!n.targetRole || n.targetRole === currentUser.role ? { ...n, read: true } : n))
-            );
-          }}
+          onMarkAllRead={() => notificationAction(api.notifications.readAll)}
           onOpenNotification={(notif) => {
-            setNotifications(prev => prev.map(n => (n.id === notif.id ? { ...n, read: true } : n)));
+            if (!notif.read) notificationAction(() => api.notifications.read(notif.id));
             if (notif.link) setActiveTab(notif.link);
           }}
           onOpenSettings={() => setActiveTab('settings')}

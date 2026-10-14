@@ -61,7 +61,10 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
     },
   });
 
-  if (res.status === 401) {
+  // Only a request that carried a token can have an expired session. A 401
+  // without one is a refusal of its own, e.g. a wrong password at sign-in,
+  // which used to read "Your session has expired" (#116).
+  if (res.status === 401 && token) {
     // The token is gone or expired. Clearing it here stops every subsequent
     // call retrying with a credential the server has already refused.
     setToken(null);
@@ -162,11 +165,20 @@ export interface LoginResult {
 }
 
 export const auth = {
-  login: (email: string, password: string) =>
-    request<LoginResult>('/api/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
+  login: async (email: string, password: string) => {
+    try {
+      return await request<LoginResult>('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+    } catch (error) {
+      // Said the same way whichever of the two was wrong, as the server does.
+      if (error instanceof ApiError && error.status === 401) {
+        throw new ApiError(401, 'Incorrect email or password.');
+      }
+      throw error;
+    }
+  },
 
   /**
    * The signed-in user, resolved from the token.
@@ -263,4 +275,42 @@ export const users = {
   list: () => request<User[]>('/api/users'),
   create: (body: unknown) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+};
+
+/** A notification as the server keeps it (#116); the shape the bell already used. */
+export interface ServerNotification {
+  id: string;
+  kind: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  /** Milliseconds since the epoch. */
+  timestamp: number;
+  link?: string | null;
+  refType?: string | null;
+  refId?: number | null;
+}
+
+/** The caller's notifications and how many are unread, read from the response headers. */
+export interface NotificationPage {
+  rows: ServerNotification[];
+  total: number;
+  unread: number;
+}
+
+export const notifications = {
+  /** The caller's own notifications, unread first (#116). */
+  list: async (limit = 50): Promise<NotificationPage> => {
+    let total = 0;
+    let unread = 0;
+    const rows = await request<ServerNotification[]>(`/api/notifications?limit=${limit}`, {}, (res) => {
+      total = Number(res.headers.get('X-Total-Count') ?? 0);
+      unread = Number(res.headers.get('X-Unread-Count') ?? 0);
+    });
+    return { rows, total, unread };
+  },
+  read: (id: string) => request<ServerNotification>(`/api/notifications/${id}/read`, { method: 'POST' }),
+  readAll: () => request<{ updated: number }>('/api/notifications/read-all', { method: 'POST' }),
+  dismiss: (id: string) => request<void>(`/api/notifications/${id}/dismiss`, { method: 'POST' }),
+  dismissAll: () => request<{ dismissed: number }>('/api/notifications/dismiss-all', { method: 'POST' }),
 };
