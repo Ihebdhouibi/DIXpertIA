@@ -254,8 +254,12 @@ export default function App() {
   const handleRejectLeave = (id: string, comment: string) =>
     withRefresh(() => api.leaveRequests.reject(id, comment), 'Could not reject the request');
 
-  const handleAddInvoice = (newInv: { client_id: number; date_echeance: string; items: unknown[] }) =>
-    withRefresh(() => api.invoices.create(newInv), 'Could not create the invoice');
+  // The invoice view creates the invoice itself, so it can keep the form open
+  // on a refusal and send an Idempotency-Key (#128); the app only reloads what
+  // other screens show, such as the dashboard figures.
+  const handleInvoiceCreated = () => {
+    if (currentUser) refresh(currentUser);
+  };
 
   const handleAddUser = (body: unknown) =>
     withRefresh(() => api.users.create(body), 'Could not create the account');
@@ -339,7 +343,7 @@ export default function App() {
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
       case 'invoices':
-        return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+        return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
 
       case 'leave-requests':
         // Employees only. Hiding the sidebar entry is not enough on its own -
@@ -388,13 +392,13 @@ export default function App() {
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
 
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} clients={clients} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView

@@ -142,6 +142,13 @@ export interface InvoiceLineInput {
   taux_tva: number;
 }
 
+/** Body of POST /api/invoices (#128). */
+export interface InvoiceCreate {
+  client_id: number;
+  date_echeance: string;
+  items: InvoiceLineInput[];
+}
+
 /** Body of PATCH /api/invoices/{id} (#125). */
 export interface InvoiceUpdate {
   date_echeance: string;
@@ -203,8 +210,17 @@ export const invoices = {
   /** Correct a draft: replace its lines and its due date (#125). Admin only. */
   update: (id: string | number, body: InvoiceUpdate) =>
     request<Invoice>(`/api/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  create: (body: unknown) =>
-    request<Invoice>('/api/invoices', { method: 'POST', body: JSON.stringify(body) }),
+  /**
+   * Create a draft invoice (#128). The Idempotency-Key makes a repeated
+   * request - a double click, a retry after a timeout - return the invoice
+   * already created instead of taking a second legal number.
+   */
+  create: (body: InvoiceCreate, idempotencyKey: string) =>
+    request<Invoice>('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
 };
 
 export const clients = {
