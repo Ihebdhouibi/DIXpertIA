@@ -68,6 +68,21 @@ class InvoiceCreate(BaseModel):
         return value
 
 
+class InvoiceRejection(BaseModel):
+    """The accountant's reason for sending an invoice back (#118). Mandatory:
+    it is what the admin corrects from; mirrors ck_invoice_reviews_rejection_has_comment."""
+
+    comment: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("comment")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a rejection needs a comment")
+        return value
+
+
 class InvoiceUpdate(BaseModel):
     """Correction of a draft invoice (#125): the full set of lines and the due date.
 

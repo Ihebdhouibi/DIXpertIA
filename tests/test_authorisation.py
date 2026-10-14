@@ -20,6 +20,9 @@ PUBLIC = "public"
 AUTHENTICATED = "any signed-in user"
 ADMIN_ONLY = "admin"
 BOOKKEEPING = "admin or accountant"
+# The accountant's verification decisions (#118): not even the admin, who
+# creates the invoices and must not approve their own.
+ACCOUNTANT_ONLY = "accountant"
 BILLING = "admin, accountant or rh"
 EMPLOYEE_SELF = "any signed-in user, scoped to their own rows"
 
@@ -67,6 +70,12 @@ ROUTES = [
     # Correcting a draft (#125): admin only, like creation - the accountant
     # reviews invoices and must not edit what she reviews.
     ("PATCH", "/api/invoices/1", ADMIN_ONLY),
+    # Verification before sending (#118): the admin submits and sends, the
+    # accountant approves or rejects.
+    ("POST", "/api/invoices/1/submit", ADMIN_ONLY),
+    ("POST", "/api/invoices/1/approve", ACCOUNTANT_ONLY),
+    ("POST", "/api/invoices/1/reject", ACCOUNTANT_ONLY),
+    ("POST", "/api/invoices/1/send", ADMIN_ONLY),
     ("POST", "/api/supplier-invoices", BOOKKEEPING),
     ("PATCH", "/api/invoices/1/processing-status", BOOKKEEPING),
     ("GET", "/api/periods", BOOKKEEPING),
@@ -91,6 +100,8 @@ def _may_reach(rule: str, role: str) -> bool:
         return role == "admin"
     if rule == BOOKKEEPING:
         return role in ("admin", "accountant")
+    if rule == ACCOUNTANT_ONLY:
+        return role == "accountant"
     if rule == BILLING:
         return role in ("admin", "accountant")  # 'rh' has no fixture account
     raise AssertionError(f"unknown rule {rule!r}")

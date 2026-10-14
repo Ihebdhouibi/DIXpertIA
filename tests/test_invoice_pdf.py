@@ -46,8 +46,8 @@ def test_the_pdf_downloads_by_internal_id(client, admin):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
-    # The file is still named after the legal number.
-    assert invoice["numero"] in response.headers["content-disposition"]
+    # The file is named after the invoice's reference (BR- while a draft).
+    assert invoice["reference"] in response.headers["content-disposition"]
 
 
 def test_an_unknown_id_is_404(client, admin):
@@ -57,7 +57,20 @@ def test_an_unknown_id_is_404(client, admin):
 def test_the_number_is_no_longer_the_path(client, admin):
     """The old URL shape is refused rather than silently matching something."""
     invoice = issue(client, admin, make_client(client, admin))
-    assert client.get(f"/api/invoices/{invoice['numero']}/download", headers=admin).status_code == 422
+    assert client.get(f"/api/invoices/{invoice['reference']}/download", headers=admin).status_code == 422
+
+
+def test_a_draft_pdf_is_watermarked_and_the_final_one_is_not(client, admin, identities):
+    """The accountant reviews the draft's PDF; it must never pass for an invoice (#118)."""
+    from invoice_flow import approve, pdf_text
+
+    invoice = issue(client, admin, make_client(client, admin))
+    draft_pdf = pdf_text(client.get(f"/api/invoices/{invoice['id']}/download", headers=admin).content)
+    assert b"DRAFT" in draft_pdf and invoice["reference"].encode() in draft_pdf
+
+    approved = approve(client, identities, invoice["id"])
+    final_pdf = pdf_text(client.get(f"/api/invoices/{invoice['id']}/download", headers=admin).content)
+    assert b"DRAFT" not in final_pdf and approved["numero"].encode() in final_pdf
 
 
 # --- The data --------------------------------------------------------------

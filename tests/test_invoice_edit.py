@@ -11,6 +11,8 @@ from datetime import date
 import pytest
 from sqlalchemy import text
 
+from invoice_flow import sent, submit
+
 pytestmark = pytest.mark.identity("admin")
 
 LINES = [
@@ -41,6 +43,12 @@ def draft(client, admin, a_client):
     }).json()
 
 
+@pytest.fixture
+def sent_invoice(client, identities, a_client):
+    """Approved and sent through the real flow (#118): no longer a draft."""
+    return sent(client, identities, a_client)
+
+
 def edit(client, headers, invoice_id, items=LINES, due="2028-01-31"):
     return client.patch(f"/api/invoices/{invoice_id}", headers=headers,
                         json={"date_echeance": due, "items": items})
@@ -54,7 +62,7 @@ def test_a_draft_is_corrected_and_its_totals_recomputed(client, admin, draft):
     assert body["amountHT"] == pytest.approx(1100)
     assert body["amountTTC"] == pytest.approx(1290)
     assert [i["description"] for i in body["items"]] == ["Consulting", "Travel"]
-    assert body["numero"] == draft["numero"], "the legal number never changes"
+    assert body["reference"] == draft["reference"], "the reference never changes"
     # What the edit form needs to prefill itself without losing anything.
     assert [i["vatRate"] for i in body["items"]] == [19, 0]
     assert body["dueDateIso"] == "2028-01-31"
@@ -86,18 +94,15 @@ def test_an_unknown_invoice_is_404(client, admin):
     assert edit(client, admin, 999999).status_code == 404
 
 
-def test_a_sent_invoice_is_refused_through_the_api(client, admin, draft, database):
-    with database.begin() as c:
-        c.execute(text("UPDATE invoices SET statut = 'ENVOYEE' WHERE id = :i"), {"i": int(draft["id"])})
-    response = edit(client, admin, draft["id"])
+def test_a_sent_invoice_is_refused_through_the_api(client, admin, sent_invoice):
+    response = edit(client, admin, sent_invoice["id"])
     assert response.status_code == 409
     assert "no longer a draft" in response.json()["detail"]
 
 
-def test_a_sent_invoice_is_refused_through_sql(client, admin, draft, database):
+def test_a_sent_invoice_is_refused_through_sql(sent_invoice, database):
     """The trigger, not the endpoint, is what holds the rule."""
-    with database.begin() as c:
-        c.execute(text("UPDATE invoices SET statut = 'ENVOYEE' WHERE id = :i"), {"i": int(draft["id"])})
+    draft = sent_invoice
     with database.connect() as c:
         with pytest.raises(Exception, match="no longer a draft"):
             c.execute(text("UPDATE invoices SET montant_ttc = montant_ttc + 1 WHERE id = :i"),
@@ -113,18 +118,19 @@ def test_a_sent_invoice_is_refused_through_sql(client, admin, draft, database):
                       {"i": int(draft["id"])})
 
 
-def test_a_sent_invoice_can_still_be_paid(client, admin, draft, database):
+def test_a_sent_invoice_can_still_be_paid(sent_invoice, database):
     """Leaving draft freezes the content, not the commercial state."""
+    draft = sent_invoice
     with database.begin() as c:
-        c.execute(text("UPDATE invoices SET statut = 'ENVOYEE' WHERE id = :i"), {"i": int(draft["id"])})
         c.execute(text("UPDATE invoices SET statut = 'PAYEE' WHERE id = :i"), {"i": int(draft["id"])})
         statut = c.execute(text("SELECT statut FROM invoices WHERE id = :i"),
                            {"i": int(draft["id"])}).scalar()
     assert statut == "PAYEE"
 
 
-def test_the_lines_of_an_archived_invoice_are_sealed(client, admin, draft, database):
+def test_the_lines_of_an_archived_invoice_are_sealed(client, admin, sent_invoice, database):
     """The gap this issue closes: the archived seal used to stop at the invoice row."""
+    draft = sent_invoice
     for state in ("processed", "completed"):
         client.patch(f"/api/invoices/{draft['id']}/processing-status",
                      headers=admin, json={"processing_status": state})
@@ -134,8 +140,32 @@ def test_the_lines_of_an_archived_invoice_are_sealed(client, admin, draft, datab
     with database.connect() as c:
         with pytest.raises(Exception, match="archived and its lines are read-only"):
             c.execute(text("DELETE FROM invoice_items WHERE invoice_id = :i"), {"i": int(draft["id"])})
-    # Still a draft commercially, but archived: the API refuses it as well.
+    # Archived and sent: the API refuses it as well.
     assert edit(client, admin, draft["id"]).status_code == 409
+
+
+# --- #118: frozen while the accountant verifies it ---------------------------
+
+def test_a_submitted_draft_cannot_be_edited(client, admin, identities, draft, database):
+    assert submit(client, identities, draft["id"]).status_code == 200
+    response = edit(client, admin, draft["id"])
+    assert response.status_code == 409
+    assert "under review" in response.json()["detail"]
+    with database.connect() as c:
+        with pytest.raises(Exception, match="under review"):
+            c.execute(text("UPDATE invoices SET montant_ttc = montant_ttc + 1 WHERE id = :i"),
+                      {"i": int(draft["id"])})
+
+
+def test_a_rejected_draft_can_be_corrected_and_resubmitted(client, admin, identities, draft):
+    accountant = identities["accountant"]["headers"]
+    assert submit(client, identities, draft["id"]).status_code == 200
+    rejected = client.post(f"/api/invoices/{draft['id']}/reject", headers=accountant,
+                           json={"comment": "Travel is billed at cost, 0% VAT"})
+    assert rejected.status_code == 200
+    assert edit(client, admin, draft["id"]).status_code == 200, "a rejection reopens the draft"
+    again = submit(client, identities, draft["id"])
+    assert again.status_code == 200 and again.json()["reviewStatus"] == "Submitted"
 
 
 def test_a_supplier_bill_is_still_recorded_with_its_lines(client, admin):

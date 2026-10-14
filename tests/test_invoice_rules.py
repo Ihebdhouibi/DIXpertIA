@@ -13,6 +13,8 @@ A rule that refuses everything passes every refusal test and is still wrong.
 import pytest
 from sqlalchemy import text
 
+from invoice_flow import draft, numbered, sent, submit
+
 pytestmark = pytest.mark.identity("admin")
 
 
@@ -37,29 +39,48 @@ def a_supplier(client, admin):
     }).json()["id"]
 
 
-def issue(client, admin, client_id, amount=1000):
-    return client.post("/api/invoices", headers=admin, json={
-        "client_id": client_id, "date_echeance": "2027-12-31",
-        "items": [{"designation": "Consulting", "quantite": 1,
-                   "prix_unitaire": amount, "taux_tva": 19}],
-    })
+# Since #118 a legal number is given at approval, not at creation: tests that
+# need a numbered invoice go through submit and approve (invoice_flow).
 
 
 # --- #38: the series is gapless -------------------------------------------
 
-def test_numbers_start_at_one_and_increment(client, admin, a_client):
-    numbers = [issue(client, admin, a_client).json()["numero"] for _ in range(3)]
+def test_numbers_start_at_one_and_increment(client, identities, a_client):
+    numbers = [numbered(client, identities, a_client)["numero"] for _ in range(3)]
     year = numbers[0][3:7]
     assert numbers == [f"FA-{year}-0001", f"FA-{year}-0002", f"FA-{year}-0003"]
 
 
-def test_an_invoice_cannot_be_deleted(client, admin, a_client, database):
+def test_an_abandoned_draft_leaves_no_gap(client, admin, identities, a_client, database):
+    """The property #118 exists to protect (asked for on #118).
+
+    A draft that is abandoned - never submitted, or rejected and dropped, or
+    cancelled - never took a number, so the series continues without a hole.
+    """
+    never_submitted = draft(client, admin, a_client).json()
+    rejected = draft(client, admin, a_client).json()
+    assert submit(client, identities, rejected["id"]).status_code == 200
+    assert client.post(f"/api/invoices/{rejected['id']}/reject", headers=identities["accountant"]["headers"],
+                       json={"comment": "wrong client"}).status_code == 200
+    cancelled = draft(client, admin, a_client).json()
+    with database.begin() as c:
+        c.execute(text("UPDATE invoices SET statut = 'ANNULEE' WHERE id = :i"), {"i": int(cancelled["id"])})
+
+    for abandoned in (never_submitted, rejected, cancelled):
+        assert abandoned["numero"] is None, "a draft holds no legal number"
+    first = numbered(client, identities, a_client)["numero"]
+    second = numbered(client, identities, a_client)["numero"]
+    year = first[3:7]
+    assert (first, second) == (f"FA-{year}-0001", f"FA-{year}-0002")
+
+
+def test_an_invoice_cannot_be_deleted(client, identities, a_client, database):
     """Deleting one would leave a hole in the series, so it is refused outright.
 
     An invoice issued in error is cancelled - the row and its number stay, with
     statut ANNULEE - and corrected by a credit note.
     """
-    numero = issue(client, admin, a_client).json()["numero"]
+    numero = numbered(client, identities, a_client)["numero"]
     with database.connect() as c:
         with pytest.raises(Exception, match="gapless series"):
             c.execute(text("DELETE FROM invoices WHERE numero = :n"), {"n": numero})
@@ -67,7 +88,7 @@ def test_an_invoice_cannot_be_deleted(client, admin, a_client, database):
 
 def test_a_hand_written_number_cannot_skip_ahead(client, admin, a_client, database,
                                                  identities):
-    issue(client, admin, a_client)
+    numbered(client, identities, a_client)
     year = __import__("datetime").date.today().year
     with database.connect() as c:
         with pytest.raises(Exception, match="breaks the FA series"):
@@ -80,31 +101,30 @@ def test_a_hand_written_number_cannot_skip_ahead(client, admin, a_client, databa
                  "u": identities["admin"]["user_id"]})
 
 
-def test_concurrent_creates_take_distinct_numbers(client, admin, a_client):
+def test_concurrent_approvals_take_distinct_numbers(client, identities, a_client):
     """The old COUNT(*) + 1 gave two concurrent creates the same number.
 
     Not true concurrency - TestClient is serial - but it does prove the counter
     advances per create rather than being derived from a row count, which is
     the property that made the old code collide.
     """
-    numbers = [issue(client, admin, a_client).json()["numero"] for _ in range(8)]
+    numbers = [numbered(client, identities, a_client)["numero"] for _ in range(8)]
     assert len(set(numbers)) == 8
 
 
 # --- #39: numbers follow issue dates --------------------------------------
 
-def test_two_invoices_may_share_a_date(client, admin, a_client):
+def test_two_invoices_may_share_a_date(client, identities, a_client):
     """Several invoices a day is routine, so the rule is 'not earlier than'."""
-    first = issue(client, admin, a_client)
-    second = issue(client, admin, a_client)
-    assert first.status_code == 200 and second.status_code == 200
-    assert first.json()["dateIssued"] == second.json()["dateIssued"]
+    first = numbered(client, identities, a_client)
+    second = numbered(client, identities, a_client)
+    assert first["dateIssued"] == second["dateIssued"]
 
 
-def test_an_issue_date_cannot_move_before_a_lower_number(client, admin, a_client,
+def test_an_issue_date_cannot_move_before_a_lower_number(client, identities, a_client,
                                                          database):
-    issue(client, admin, a_client)
-    second = issue(client, admin, a_client).json()["numero"]
+    numbered(client, identities, a_client)
+    second = numbered(client, identities, a_client)["numero"]
     with database.connect() as c:
         with pytest.raises(Exception, match="must follow issue dates"):
             c.execute(text(
@@ -114,8 +134,8 @@ def test_an_issue_date_cannot_move_before_a_lower_number(client, admin, a_client
 
 # --- #40: income and expense are separate ----------------------------------
 
-def test_sales_and_purchases_use_separate_series(client, admin, a_client, a_supplier):
-    sale = issue(client, admin, a_client).json()["numero"]
+def test_sales_and_purchases_use_separate_series(client, admin, identities, a_client, a_supplier):
+    sale = numbered(client, identities, a_client)["numero"]
     bill = client.post("/api/supplier-invoices", headers=admin, json={
         "supplier_id": a_supplier, "supplier_reference": "TT-001",
         "date_emission": "2026-10-05", "date_echeance": "2026-11-05",
@@ -166,17 +186,31 @@ def test_a_supplier_bill_may_be_booked_out_of_date_order(client, admin, a_suppli
 
 # --- #41 and #42: the monthly close ----------------------------------------
 
-def test_closing_is_refused_while_an_invoice_is_unfinished(client, admin, a_client):
-    issue(client, admin, a_client)
+def test_closing_is_refused_while_an_invoice_is_unfinished(client, admin, identities, a_client):
+    sent(client, identities, a_client)
     month = __import__("datetime").date.today().strftime("%Y-%m")
     response = client.post(f"/api/periods/{month}/close", headers=admin)
     assert response.status_code == 409
     assert response.json()["blocking"], "the refusal must name what is blocking it"
 
 
-def test_closing_archives_the_month_and_is_final(client, admin, a_client, database):
-    numero = issue(client, admin, a_client).json()["numero"]
-    invoice_id = client.get("/api/invoices", headers=admin).json()[0]["id"]
+def test_a_draft_neither_blocks_nor_joins_the_close(client, admin, identities, a_client, database):
+    """A draft is not a document of the month: it has no number and cannot be
+    booked before it is sent, so it must not stall the close (#118)."""
+    waiting = draft(client, admin, a_client).json()
+    month = __import__("datetime").date.today().strftime("%Y-%m")
+    closed = client.post(f"/api/periods/{month}/close", headers=admin)
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["invoice_count"] == 0
+    with database.connect() as c:
+        state = c.execute(text("SELECT processing_status FROM invoices WHERE id = :i"),
+                          {"i": int(waiting["id"])}).scalar()
+    assert state == "PENDING", "a draft is not archived with the month"
+
+
+def test_closing_archives_the_month_and_is_final(client, admin, identities, a_client, database):
+    invoice = sent(client, identities, a_client)
+    numero, invoice_id = invoice["numero"], invoice["id"]
     for state in ("processed", "completed"):
         client.patch(f"/api/invoices/{invoice_id}/processing-status",
                      headers=admin, json={"processing_status": state})
@@ -203,10 +237,9 @@ def test_closing_archives_the_month_and_is_final(client, admin, a_client, databa
                 " FROM invoices WHERE numero = :n"), {"n": numero})
 
 
-def test_a_client_may_still_pay_an_archived_invoice(client, admin, a_client, database):
+def test_a_client_may_still_pay_an_archived_invoice(client, admin, identities, a_client, database):
     """The two status axes are independent: the commercial state keeps moving."""
-    issue(client, admin, a_client)
-    invoice_id = client.get("/api/invoices", headers=admin).json()[0]["id"]
+    invoice_id = sent(client, identities, a_client)["id"]
     for state in ("processed", "completed"):
         client.patch(f"/api/invoices/{invoice_id}/processing-status",
                      headers=admin, json={"processing_status": state})

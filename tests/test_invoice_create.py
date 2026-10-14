@@ -55,15 +55,23 @@ def test_the_same_key_creates_one_invoice(client, admin, a_client, database):
     first = create(client, admin, a_client, key="form-opening-1")
     again = create(client, admin, a_client, key="form-opening-1")
     assert first.status_code == again.status_code == 200
-    assert again.json()["numero"] == first.json()["numero"]
+    assert again.json()["id"] == first.json()["id"]
     assert count_invoices(database) == 1
 
 
 def test_different_keys_create_different_invoices(client, admin, a_client, database):
-    a = create(client, admin, a_client, key="form-opening-1").json()["numero"]
-    b = create(client, admin, a_client, key="form-opening-2").json()["numero"]
+    a = create(client, admin, a_client, key="form-opening-1").json()["id"]
+    b = create(client, admin, a_client, key="form-opening-2").json()["id"]
     assert a != b
     assert count_invoices(database) == 2
+
+
+def test_a_new_invoice_is_a_draft_without_a_legal_number(client, admin, a_client):
+    """Since #118 the number comes at approval; the draft shows BR- and its id."""
+    body = create(client, admin, a_client).json()
+    assert body["numero"] is None
+    assert body["reference"] == f"BR-{int(body['id']):04d}"
+    assert (body["status"], body["reviewStatus"]) == ("Draft", "Not submitted")
 
 
 def test_a_due_date_in_the_past_is_refused(client, admin, a_client):

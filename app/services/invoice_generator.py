@@ -39,6 +39,22 @@ def _text(value) -> str:
     return escape("" if value is None else str(value))
 
 
+def _draft_watermark(canvas, doc):
+    """A large diagonal DRAFT across every page of a draft's PDF (#118).
+
+    A draft has no legal number yet. Its PDF is what the accountant reviews, and
+    it must never pass for an invoice if it is printed or forwarded by mistake.
+    """
+    canvas.saveState()
+    canvas.setFont("Helvetica-Bold", 110)
+    canvas.setFillColor(colors.Color(0.85, 0.15, 0.15, alpha=0.12))
+    width, height = A4
+    canvas.translate(width / 2, height / 2)
+    canvas.rotate(40)
+    canvas.drawCentredString(0, -35, "DRAFT")
+    canvas.restoreState()
+
+
 def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     """
     Generate a professional invoice PDF that matches the frontend modal.
@@ -107,7 +123,13 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
 
     # --- Invoice title, number, date ---
     inv_title = Paragraph("INVOICE", title_style)
-    inv_number = Paragraph(f"<b>{invoice_id}</b>", header_style)
+    draft = bool(invoice_data.get('draft'))
+    # A draft shows its provisional BR- reference and says the legal number
+    # comes on approval - never a predicted number, which could be wrong (#118).
+    inv_number = Paragraph(
+        f"<b>{invoice_id}</b>" + ("<br/><font size=8>Draft - number assigned on approval</font>" if draft else ""),
+        header_style,
+    )
     inv_date = Paragraph(f"Date: {_text(date_issued)}", header_style)
 
     header_table_data = [
@@ -226,7 +248,10 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
         styles['Normal']
     ))
 
-    doc.build(story)
+    if draft:
+        doc.build(story, onFirstPage=_draft_watermark, onLaterPages=_draft_watermark)
+    else:
+        doc.build(story)
 
     if output_path is None:
         buffer.seek(0)

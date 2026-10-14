@@ -9,7 +9,7 @@ blocking it rather than reporting a count.
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,6 +19,7 @@ from app.models.invoicing import (
     Invoice,
     InvoiceDirection,
     InvoiceProcessingStatus,
+    InvoiceStatus,
 )
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
@@ -39,6 +40,19 @@ def _month_bounds(month: str) -> tuple[date, date]:
     return start, end
 
 
+def _in_the_books():
+    """Every invoice except an outgoing draft, or one never numbered (#118).
+
+    A draft has not been sent and, since #118, has no legal number: it is not a
+    document of the month. It cannot be booked either - bookkeeping starts at
+    sending - so counting it, waiting for it or archiving it would stall the
+    close forever, and an archived draft could never be approved. A draft
+    cancelled before approval (#126) never got a number and is not one either.
+    """
+    return ~and_(Invoice.direction == InvoiceDirection.OUTGOING,
+                 or_(Invoice.statut == InvoiceStatus.BROUILLON, Invoice.numero.is_(None)))
+
+
 def _summarise(db: Session, start: date, end: date) -> dict:
     """Count the month's invoices and total them, income apart from cost.
 
@@ -55,6 +69,7 @@ def _summarise(db: Session, start: date, end: date) -> dict:
             Invoice.date_emission >= start,
             Invoice.date_emission < end,
             Invoice.direction == direction,
+            _in_the_books(),
         ).one()
         return row
 
@@ -82,6 +97,7 @@ def _blocking(db: Session, start: date, end: date) -> list[Invoice]:
             Invoice.date_emission >= start,
             Invoice.date_emission < end,
             Invoice.processing_status != InvoiceProcessingStatus.COMPLETED,
+            _in_the_books(),
         )
         .order_by(Invoice.date_emission, Invoice.id)
         .all()
@@ -163,6 +179,7 @@ def close_period(
     db.query(Invoice).filter(
         Invoice.date_emission >= start,
         Invoice.date_emission < end,
+        _in_the_books(),
     ).update({Invoice.processing_status: InvoiceProcessingStatus.ARCHIVED},
              synchronize_session=False)
 
