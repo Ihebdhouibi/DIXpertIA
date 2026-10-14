@@ -120,7 +120,7 @@ export default function Dialog({
       className={`m-auto w-[calc(100%-2rem)] ${SIZES[size]} max-h-[90vh] p-0 bg-transparent text-on-surface backdrop:bg-ink/60 backdrop:backdrop-blur-sm`}
     >
       {open && (
-        <div className="flex max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-xl animate-scale-up">
+        <div className="flex max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-xl">
           <header className={`px-6 py-4 ${hasBody ? 'border-b border-outline-variant' : ''}`}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
