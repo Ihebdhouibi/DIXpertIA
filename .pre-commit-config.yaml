@@ -79,7 +79,7 @@ repos:
         # other exception needs a `raw-color-ok: <reason>` marker.
 
       - id: check-text-sizes
-        name: no undeclared text-* classes in frontend source
+        name: no undeclared text-* or animate-* classes in frontend source
         entry: python scripts/check_text_sizes.py
         language: system
         files: ^src/.*\.(ts|tsx|css)$
