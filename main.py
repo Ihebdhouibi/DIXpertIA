@@ -33,7 +33,7 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, invoicing
+from app.routers import accounting, invoicing, notifications
 
 load_dotenv()
 
@@ -86,6 +86,7 @@ app = FastAPI(dependencies=[Depends(require_authentication)])
 # not have. Mounting it needs those reconciled first.
 app.include_router(invoicing.router, prefix="/api")
 app.include_router(accounting.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
