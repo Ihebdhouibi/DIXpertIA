@@ -125,6 +125,32 @@
   --text-body-sm--line-height: 1.5;
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.4;
+
+  /* 4. Motion (#141). The screens used `animate-fade-in` (13 times) before it
+     was declared, so it did nothing. Short and subtle: a screen settles in
+     rather than performing. Fill mode `backwards`, not `both`: once it has
+     run, no animated value stays applied. With `both` the root kept an
+     identity transform, which still makes it a containing block for fixed
+     children. Turned off under prefers-reduced-motion below. */
+  --animate-fade-in: fade-in 180ms ease-out backwards;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Respect the system setting: no entrance motion for people who asked for less. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
+  }
 }
 
 /*
