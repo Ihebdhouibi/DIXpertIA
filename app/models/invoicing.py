@@ -4,6 +4,7 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -63,6 +64,35 @@ class InvoiceProcessingStatus(str, enum.Enum):
     PROCESSED = "processed"
     COMPLETED = "completed"
     ARCHIVED = "archived"
+
+
+class InvoiceReviewStatus(str, enum.Enum):
+    """Where an outgoing invoice is in the accountant's verification (#118).
+
+    A third axis, next to the commercial `statut` and the bookkeeping
+    `processing_status`: verification happens before an invoice leaves, the
+    books after.
+
+        NOT_SUBMITTED  a draft the admin is still writing
+        SUBMITTED      waiting for the accountant; frozen
+        APPROVED       verified: it has its legal number and can be sent
+        REJECTED       sent back with a comment; the admin corrects, resubmits
+
+    Supplier bills are recorded as received and are never reviewed.
+    """
+
+    NOT_SUBMITTED = "not_submitted"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class InvoiceReviewAction(str, enum.Enum):
+    """One step in an invoice's review history (#118)."""
+
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class InvoiceDirection(str, enum.Enum):
@@ -147,7 +177,10 @@ class Invoice(Base):
     # legal number the client sees (FA-YYYY-NNNN); for an incoming one it is an
     # internal filing reference (FF-YYYY-NNNN), because a supplier's own number
     # is not ours to assign and two suppliers may well use the same one.
-    numero = Column(String(30), unique=True, nullable=False)
+    # NULL on an outgoing draft: the legal number is given when the accountant
+    # approves it (#118), so an abandoned draft never holds one. UNIQUE allows
+    # several NULLs. Shown as BR- and the id until then (`reference`).
+    numero = Column(String(30), unique=True, nullable=True)
     direction = Column(
         Enum(InvoiceDirection),
         nullable=False,
@@ -193,15 +226,42 @@ class Invoice(Base):
     # create a second invoice: in accounting an issued invoice cannot be
     # deleted, so each duplicate would need a credit note.
     idempotency_key = Column(String(64), unique=True, nullable=True)
+    # The accountant's verification before sending (#118). Stored with the enum
+    # NAME, like the two other states.
+    review_status = Column(
+        Enum(InvoiceReviewStatus),
+        nullable=False,
+        server_default=InvoiceReviewStatus.NOT_SUBMITTED.name,
+    )
 
     client = relationship("Client", back_populates="invoices")
     supplier = relationship("Supplier", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+    reviews = relationship("InvoiceReview", back_populates="invoice",
+                           order_by="InvoiceReview.created_at")
+
+    @property
+    def reference(self) -> str:
+        """The legal number, or BR- and the id while the draft has none (#118).
+
+        Computed, never stored: a provisional reference must not become a second
+        series to keep gapless.
+        """
+        return self.numero or f"BR-{self.id:04d}"
 
     __table_args__ = (
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        # Approved, sent or paid means numbered; a draft, or one cancelled
+        # before approval, may have no number (#118).
+        CheckConstraint(
+            "direction <> 'OUTGOING' OR numero IS NOT NULL "
+            "OR (statut IN ('BROUILLON', 'ANNULEE') AND review_status <> 'APPROVED')",
+            name="ck_invoices_numbered_once_approved",
+        ),
+        # The accountant's "to verify" queue.
+        Index("ix_invoices_review_status", "review_status", "date_emission"),
         # An invoice has exactly one counterparty, and which one follows from
         # the direction. Without this, a row could name both a client and a
         # supplier, or neither, and no report could say what it was.
@@ -258,6 +318,34 @@ class Invoice(Base):
             text("substring(numero from 9)::integer"),
             postgresql_where=text("numero ~ '^(FA|FF)-[0-9]{4}-[0-9]+$'"),
         ),
+    )
+
+
+class InvoiceReview(Base):
+    """One submission or decision in an invoice's verification (#118).
+
+    Append-only, enforced by the invoice_review_is_valid trigger, which also
+    refuses a decision taken by the invoice's creator. A rejection carries the
+    comment that tells the admin what to correct.
+    """
+
+    __tablename__ = "invoice_reviews"
+
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="RESTRICT"), nullable=False)
+    actor_id = Column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    action = Column(Enum(InvoiceReviewAction), nullable=False)
+    comment = Column(Text, nullable=False, default="", server_default=text("''"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    invoice = relationship("Invoice", back_populates="reviews")
+    actor = relationship("User", foreign_keys=[actor_id])
+
+    __table_args__ = (
+        CheckConstraint("action <> 'REJECTED' OR length(btrim(comment)) > 0",
+                        name="ck_invoice_reviews_rejection_has_comment"),
+        Index("ix_invoice_reviews_invoice_id", "invoice_id", "created_at"),
+        Index("ix_invoice_reviews_actor_id", "actor_id"),
     )
 
 

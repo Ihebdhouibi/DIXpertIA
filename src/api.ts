@@ -201,6 +201,12 @@ export const invoices = {
       body: JSON.stringify({ processing_status: processingStatus }),
     }),
   get: (id: number) => request<Invoice>(`/api/invoices/${id}`),
+  /** Verification before sending (#118): the admin submits and sends, the accountant decides. */
+  submit: (id: string | number) => request<Invoice>(`/api/invoices/${id}/submit`, { method: 'POST' }),
+  approve: (id: string | number) => request<Invoice>(`/api/invoices/${id}/approve`, { method: 'POST' }),
+  reject: (id: string | number, comment: string) =>
+    request<Invoice>(`/api/invoices/${id}/reject`, { method: 'POST', body: JSON.stringify({ comment }) }),
+  send: (id: string | number) => request<Invoice>(`/api/invoices/${id}/send`, { method: 'POST' }),
   /**
    * The invoice PDF the server generates (#86), as a Blob. `inline` asks for a
    * copy to display rather than save; the invoice detail embeds it (#127).

@@ -15,6 +15,9 @@ from app.models.invoicing import (
     InvoiceDirection,
     InvoiceItem,
     InvoiceProcessingStatus,
+    InvoiceReview,
+    InvoiceReviewAction,
+    InvoiceReviewStatus,
     InvoiceStatus,
     Supplier,
 )
@@ -28,6 +31,7 @@ from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
     InvoiceCreate,
+    InvoiceRejection,
     InvoiceUpdate,
     ProcessingStatusUpdate,
     SupplierCreate,
@@ -197,6 +201,7 @@ def list_invoices(
     supplier_id: int | None = None,
     statut: InvoiceStatus | None = None,
     processing_status: InvoiceProcessingStatus | None = None,
+    review_status: InvoiceReviewStatus | None = None,
     month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$",
                               description="YYYY-MM: invoices issued in that month"),
     sort: InvoiceSort = Query("-date", description="date | -date | amount | -amount (- = descending)"),
@@ -218,7 +223,8 @@ def list_invoices(
     column, descending = SORT_COLUMNS[sort]
     query = (
         db.query(Invoice)
-        .options(selectinload(Invoice.items))
+        .options(selectinload(Invoice.items),
+                 selectinload(Invoice.reviews).selectinload(InvoiceReview.actor))
         .order_by(column.desc() if descending else column.asc(),
                   Invoice.id.desc() if descending else Invoice.id.asc())
     )
@@ -232,6 +238,8 @@ def list_invoices(
         query = query.filter(Invoice.statut == statut)
     if processing_status is not None:
         query = query.filter(Invoice.processing_status == processing_status)
+    if review_status is not None:
+        query = query.filter(Invoice.review_status == review_status)
     if month is not None:
         start = date(int(month[:4]), int(month[5:]), 1)
         end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
@@ -275,18 +283,16 @@ def create_invoice(
         if existing:
             return InvoiceOut.from_orm_row(existing)
 
-    # One date, used for both the series year and the row, so an invoice
-    # created at midnight on 1 January cannot take a 2026 number while
-    # being dated 2025.
-    issued_on = date.today()
-
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
+    # No legal number yet: a draft gets one when the accountant approves it
+    # (#118), so a draft that is rejected and abandoned never takes a number
+    # out of the series. date_emission is the creation date until then, and
+    # is set again to the approval date with the number.
     invoice = Invoice(
-        numero=_allocate_invoice_number(db, "FA", issued_on.year),
         client_id=payload.client_id,
-        date_emission=issued_on,
+        date_emission=date.today(),
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
@@ -448,13 +454,19 @@ def update_invoice(
     if invoice.direction != InvoiceDirection.OUTGOING:
         raise HTTPException(
             status_code=409,
-            detail=f"invoice {invoice.numero} is a supplier bill; only invoices we issue can be edited",
+            detail=f"invoice {invoice.reference} is a supplier bill; only invoices we issue can be edited",
         )
     if invoice.statut != InvoiceStatus.BROUILLON:
         raise HTTPException(
             status_code=409,
-            detail=f"invoice {invoice.numero} is no longer a draft and cannot be edited; "
+            detail=f"invoice {invoice.reference} is no longer a draft and cannot be edited; "
                    "correct it with a new document",
+        )
+    # Frozen while the accountant verifies it, and once approved (#118).
+    if invoice.review_status in (InvoiceReviewStatus.SUBMITTED, InvoiceReviewStatus.APPROVED):
+        raise HTTPException(
+            status_code=409,
+            detail=f"invoice {invoice.reference} is under review and cannot be edited",
         )
     # Mirrors ck_invoices_dates with a field-level answer instead of a 500.
     if payload.date_echeance < invoice.date_emission:
@@ -483,10 +495,171 @@ def update_invoice(
     return response
 
 
+# ---- Verification before sending (#118) ----
+#
+#   Draft --submit (admin)--> Submitted --approve (accountant)--> Approved --send (admin)--> Sent
+#                                 |
+#                                 +--reject with comment (accountant)--> Rejected --edit, submit-->
+#
+# The checks below answer with a clear status and message before touching
+# anything. The rules themselves live in the database (trg_invoice_review_rules,
+# trg_invoice_review_is_valid, ck_invoices_numbered_once_approved), so a direct
+# SQL write is refused too, and a race between a check and its write is still
+# caught there and reported as a 409.
+
+
+def _outgoing_draft(db: Session, invoice_id: int) -> Invoice:
+    invoice = db.get(Invoice, invoice_id, options=[
+        selectinload(Invoice.items),
+        selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
+    ])
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    if invoice.direction != InvoiceDirection.OUTGOING:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is a supplier bill; only invoices we issue are verified"))
+    return invoice
+
+
+def _commit_review(db: Session, invoice: Invoice) -> InvoiceOut:
+    """Flush, build the response while it can still roll back, then commit."""
+    try:
+        db.flush()
+        db.refresh(invoice)
+        response = InvoiceOut.from_orm_row(invoice)
+        db.commit()
+    except DatabaseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
+    return response
+
+
+@router.post(
+    "/invoices/{invoice_id}/submit",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
+def submit_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Send a draft to the accountant for verification (#118). Admin only.
+
+    A first submission, or a resubmission after a rejection once the admin has
+    corrected the draft (#125). From here the content is frozen.
+    """
+    invoice = _outgoing_draft(db, invoice_id)
+    if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status not in (
+            InvoiceReviewStatus.NOT_SUBMITTED, InvoiceReviewStatus.REJECTED):
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is not a draft waiting to be submitted"))
+    if not invoice.items:
+        raise HTTPException(status_code=422, detail="an invoice needs at least one line before it is submitted")
+    invoice.review_status = InvoiceReviewStatus.SUBMITTED
+    db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
+                         action=InvoiceReviewAction.SUBMITTED, comment=""))
+    return _commit_review(db, invoice)
+
+
+@router.post(
+    "/invoices/{invoice_id}/approve",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("accountant"))],
+)
+def approve_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Approve a submitted invoice: it gets its legal number now (#118).
+
+    Accountant only. The number comes from the gapless series (#38) inside this
+    transaction, with today as the issue date, so numbers keep following issue
+    dates (#39). A draft that was rejected and abandoned never took a number,
+    which is the point of allocating here rather than at creation.
+    """
+    invoice = _outgoing_draft(db, invoice_id)
+    if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status != InvoiceReviewStatus.SUBMITTED:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is not waiting for verification"))
+    if invoice.cree_par_id == current_user.id:
+        raise HTTPException(status_code=403, detail=(
+            "an invoice is never approved by the person who created it"))
+    issued_on = date.today()
+    # ck_invoices_dates would refuse it at the database; say what to do instead.
+    if invoice.date_echeance < issued_on:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is due {invoice.date_echeance.isoformat()}, before today's "
+            "issue date; reject it so the due date can be corrected"))
+    invoice.review_status = InvoiceReviewStatus.APPROVED
+    # A legacy draft may already hold a number from before #118; it keeps it.
+    if invoice.numero is None:
+        invoice.numero = _allocate_invoice_number(db, "FA", issued_on.year)
+        invoice.date_emission = issued_on
+    db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
+                         action=InvoiceReviewAction.APPROVED, comment=""))
+    return _commit_review(db, invoice)
+
+
+@router.post(
+    "/invoices/{invoice_id}/reject",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("accountant"))],
+)
+def reject_invoice(
+    invoice_id: int,
+    payload: InvoiceRejection,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Send a submitted invoice back with what to correct (#118).
+
+    Accountant only, and the comment is mandatory: it is what the admin works
+    from. The draft becomes editable again (#125) and can be resubmitted.
+    """
+    invoice = _outgoing_draft(db, invoice_id)
+    if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status != InvoiceReviewStatus.SUBMITTED:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is not waiting for verification"))
+    if invoice.cree_par_id == current_user.id:
+        raise HTTPException(status_code=403, detail=(
+            "an invoice is never rejected by the person who created it"))
+    invoice.review_status = InvoiceReviewStatus.REJECTED
+    db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
+                         action=InvoiceReviewAction.REJECTED, comment=payload.comment))
+    return _commit_review(db, invoice)
+
+
+@router.post(
+    "/invoices/{invoice_id}/send",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
+def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """Mark an approved invoice as sent to the client (#118). Admin only.
+
+    Refused unless the accountant approved it; the database refuses it too
+    (trg_invoice_review_rules). From here the books can take it (#96).
+    Delivering the PDF by e-mail is not part of this step yet.
+    """
+    invoice = _outgoing_draft(db, invoice_id)
+    if invoice.statut != InvoiceStatus.BROUILLON:
+        raise HTTPException(status_code=409, detail=f"invoice {invoice.reference} has already left draft")
+    if invoice.review_status != InvoiceReviewStatus.APPROVED:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} cannot be sent before the accountant approves it"))
+    invoice.statut = InvoiceStatus.ENVOYEE
+    return _commit_review(db, invoice)
+
+
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     # db.get, not the legacy Query.get, which is deprecated in SQLAlchemy 2.0.
-    invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
+    invoice = db.get(Invoice, invoice_id, options=[
+        selectinload(Invoice.items),
+        selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
+    ])
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     return InvoiceOut.from_orm_row(invoice)
@@ -510,7 +683,10 @@ def _pdf_data(invoice: Invoice) -> dict:
         for item in invoice.items
     ]
     return {
-        "invoice_id": invoice.numero,
+        # A draft has no legal number yet: the PDF shows its BR- reference and
+        # a DRAFT watermark, so it cannot pass for an invoice (#118).
+        "invoice_id": invoice.reference,
+        "draft": invoice.numero is None,
         "client": party.nom if party else "",
         "client_address": party.adresse if party else "",
         "date_issued": invoice.date_emission.strftime("%b %d, %Y"),
@@ -548,7 +724,7 @@ def download_invoice(
         raise HTTPException(status_code=404, detail="Facture introuvable")
 
     pdf_bytes = generate_invoice_pdf(_pdf_data(invoice))
-    filename = f"Invoice_{invoice.numero}.pdf"
+    filename = f"Invoice_{invoice.reference}.pdf"
 
     return Response(
         content=pdf_bytes,

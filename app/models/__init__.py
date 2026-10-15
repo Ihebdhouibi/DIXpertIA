@@ -22,6 +22,9 @@ from app.models.invoicing import (  # noqa: F401
     InvoiceDirection,
     InvoiceItem,
     InvoiceProcessingStatus,
+    InvoiceReview,
+    InvoiceReviewAction,
+    InvoiceReviewStatus,
     InvoiceStatus,
     Supplier,
 )

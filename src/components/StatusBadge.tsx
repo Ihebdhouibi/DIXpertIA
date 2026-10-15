@@ -79,3 +79,19 @@ const PROCESSING_TONES: Record<ProcessingStatus, StatusTone> = {
 export function ProcessingBadge({ status, className = '' }: { status: ProcessingStatus; className?: string }) {
   return <StatusBadge status={status} tone={PROCESSING_TONES[status]} className={className} />;
 }
+
+// Verification before sending (#118), the third axis. A draft is shown by
+// where it stands in review: "To verify" is the accountant's queue.
+export type ReviewStatus = 'Not submitted' | 'Submitted' | 'Approved' | 'Rejected';
+
+const REVIEW_TONES: Record<ReviewStatus, { tone: StatusTone; label: string }> = {
+  'Not submitted': { tone: 'neutral', label: 'Draft' },
+  Submitted: { tone: 'info', label: 'To verify' },
+  Approved: { tone: 'success', label: 'Approved' },
+  Rejected: { tone: 'danger', label: 'Rejected' },
+};
+
+export function ReviewBadge({ status, className = '' }: { status: ReviewStatus; className?: string }) {
+  const { tone, label } = REVIEW_TONES[status];
+  return <StatusBadge status={label} tone={tone} className={className} />;
+}

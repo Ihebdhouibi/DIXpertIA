@@ -173,6 +173,23 @@ INVOICE_PROCESSING_STATUS_TO_API = {
     "archived": "Archived",
 }
 
+# The accountant's verification before sending (#118) - a third axis.
+INVOICE_REVIEW_STATUS_TO_API = {
+    "not_submitted": "Not submitted",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "rejected": "Rejected",
+}
+
+
+class InvoiceReviewOut(BaseModel):
+    """One submission or decision in an invoice's verification (#118)."""
+
+    action: str
+    actor: str
+    comment: str
+    at: str
+
 
 class InvoiceItemOut(BaseModel):
     description: str
@@ -200,7 +217,10 @@ class InvoiceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    numero: str
+    # The legal number; None for an outgoing draft until the accountant
+    # approves it (#118). `reference` is what to show either way.
+    numero: Optional[str] = None
+    reference: str
     direction: str
     # Whoever is on the other side: the client we billed, or the supplier who
     # billed us. Which it is follows from `direction`.
@@ -224,6 +244,10 @@ class InvoiceOut(BaseModel):
     # The accountant's workflow state - a separate axis, not a spelling of the
     # line above. An invoice is routinely "Paid" and "Pending" at once.
     processingStatus: str
+    # The accountant's verification before sending (#118), and its history,
+    # oldest first: the last rejection's comment is what the admin corrects.
+    reviewStatus: str = "Not submitted"
+    reviews: list[InvoiceReviewOut] = Field(default_factory=list)
     items: list[InvoiceItemOut] = Field(default_factory=list)
 
     @classmethod
@@ -234,9 +258,22 @@ class InvoiceOut(BaseModel):
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "?"
         statut = getattr(row.statut, "value", row.statut) or "envoyee"
         processing = getattr(row.processing_status, "value", row.processing_status) or "pending"
+        review = getattr(row.review_status, "value", row.review_status) or "not_submitted"
         return cls(
             id=str(row.id),
             numero=row.numero,
+            reference=row.numero or f"BR-{row.id:04d}",
+            reviewStatus=INVOICE_REVIEW_STATUS_TO_API.get(review, "Not submitted"),
+            reviews=[
+                InvoiceReviewOut(
+                    action=getattr(r.action, "value", r.action),
+                    actor=(f"{r.actor.firstName or ''} {r.actor.lastName or ''}".strip()
+                           if r.actor else "") or (r.actor_id or ""),
+                    comment=r.comment or "",
+                    at=r.created_at.isoformat() if r.created_at else "",
+                )
+                for r in (row.reviews or [])
+            ],
             direction=direction,
             counterparty=name,
             counterpartyInitials=initials,
