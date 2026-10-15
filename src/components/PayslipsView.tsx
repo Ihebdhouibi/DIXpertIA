@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, Download, DollarSign, Wallet, CreditCard } from 'lucide-react';
+import { FileText, Download, Wallet, Banknote } from 'lucide-react';
 import { Payslip, UserRole } from '../types';
 import { useToast, ToastTone } from './ui/feedback';
 import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { Pagination } from './ui/TableControls';
 import { Field, Select } from './ui/Field';
 import { useDataStatus } from '../dataStatus';
+import { formatTND } from '../format';
 
 interface PayslipsViewProps {
   payslips: Payslip[];
@@ -36,12 +37,12 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
       <html>
         <head><title>Payslip ${slip.period}</title></head>
         <body style="font-family: Arial, sans-serif; padding: 40px;">
-          <h1>DIXpertIA Payslip</h1>
+          <h1>DI Xpertia payslip</h1>
           <p><strong>Period:</strong> ${slip.period}</p>
-          <p><strong>Gross Pay:</strong> $${slip.grossPay.toFixed(2)}</p>
-          <p><strong>Net Pay:</strong> $${slip.netPay.toFixed(2)}</p>
-          <p><strong>Issued On:</strong> ${slip.issuedOn}</p>
-          <p><em>Generated from DIXpertIA</em></p>
+          <p><strong>Gross pay:</strong> ${formatTND(slip.grossPay)}</p>
+          <p><strong>Net pay:</strong> ${formatTND(slip.netPay)}</p>
+          <p><strong>Issued on:</strong> ${slip.issuedOn ?? '-'}</p>
+          <p><em>Generated from DI Xpertia</em></p>
         </body>
       </html>
     `;
@@ -71,9 +72,17 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredPayslips.slice(indexOfFirstItem, indexOfLastItem);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  };
+  // Year-to-date figures from the payslips actually loaded for the year (#123).
+  // They replaced "$84,500.00", "$62,180.00" and a "Next Pay Date" of Oct 31,
+  // 2024 that were written in the code, the same for everyone. The server
+  // scopes the list: an employee's own payslips, or the whole payroll for an
+  // admin or accountant, so the totals and their labels follow that scope.
+  const wholePayroll = userRole === 'admin' || userRole === 'accountant';
+  const ytdGross = filteredPayslips.reduce((sum, p) => sum + p.grossPay, 0);
+  const ytdNet = filteredPayslips.reduce((sum, p) => sum + p.netPay, 0);
+  const countLabel = filteredPayslips.length === 0
+    ? 'No payslips yet'
+    : `${filteredPayslips.length} payslip${filteredPayslips.length === 1 ? '' : 's'}${selectedYear ? ` in ${selectedYear}` : ''}`;
 
   // Only employees, accountants and admins can see payslips
   if (userRole !== 'employee' && userRole !== 'accountant' && userRole !== 'admin') {
@@ -119,34 +128,28 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
         )}
       </div>
 
-      {/* Bento Style Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-primary group-hover:scale-110 transition-transform">
-            <Wallet className="w-20 h-20" />
+      {/* Year to date, from the real payslips (#123) */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-6">
+          <div className="absolute right-0 top-0 p-4 text-on-surface opacity-[0.05]" aria-hidden="true">
+            <Wallet className="h-20 w-20" />
           </div>
-          <span className="text-body-sm font-medium text-on-surface-variant">YTD Gross</span>
-          <span className="text-h1 font-bold text-on-surface tracking-tight">$84,500.00</span>
-          <div className="text-xs text-outline mt-1 font-medium">Cumulé brut pour l'année {selectedYear}</div>
+          <span className="text-body-sm font-medium text-on-surface-variant">
+            {wholePayroll ? 'Payroll, gross' : 'Your gross pay'}{selectedYear ? `, ${selectedYear}` : ''}
+          </span>
+          <span className="font-mono text-h2 font-semibold tabular-nums text-on-surface">{formatTND(ytdGross)}</span>
+          <div className="text-xs font-medium text-on-surface-variant">{countLabel}</div>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant shadow-sm flex flex-col gap-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-4 opacity-[0.04] text-secondary group-hover:scale-110 transition-transform">
-            <DollarSign className="w-20 h-20" />
+        <div className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest p-6">
+          <div className="absolute right-0 top-0 p-4 text-on-surface opacity-[0.05]" aria-hidden="true">
+            <Banknote className="h-20 w-20" />
           </div>
-          <span className="text-body-sm font-medium text-on-surface-variant">YTD Net</span>
-          <span className="text-h1 font-bold text-on-surface tracking-tight">$62,180.00</span>
-          <div className="text-xs text-outline mt-1 font-medium">Cumulé net pour l'année {selectedYear}</div>
-        </div>
-
-        <div className="bg-primary text-on-primary rounded-xl p-6 shadow-md flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-15 bg-[radial-gradient(var(--color-on-primary)_1px,transparent_1px)] bg-[size:16px_16px]"></div>
-          <div className="absolute top-0 right-0 p-4 opacity-25">
-            <CreditCard className="w-16 h-16" />
-          </div>
-          <span className="text-body-sm font-medium opacity-85 z-10">Next Pay Date</span>
-          <span className="text-h1 font-black z-10 tracking-tight">Oct 31, 2024</span>
-          <div className="text-xs opacity-75 mt-1 font-medium z-10">Virement automatique programmé</div>
+          <span className="text-body-sm font-medium text-on-surface-variant">
+            {wholePayroll ? 'Payroll, net' : 'Your net pay'}{selectedYear ? `, ${selectedYear}` : ''}
+          </span>
+          <span className="font-mono text-h2 font-semibold tabular-nums text-on-surface">{formatTND(ytdNet)}</span>
+          <div className="text-xs font-medium text-on-surface-variant">{countLabel}</div>
         </div>
       </div>
 
@@ -186,8 +189,8 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
                     <span className="font-semibold">{slip.period}</span>
                   </div>
                 </Td>
-                <Td numeric muted>{formatCurrency(slip.grossPay)}</Td>
-                <Td numeric className="font-semibold">{formatCurrency(slip.netPay)}</Td>
+                <Td numeric muted>{formatTND(slip.grossPay)}</Td>
+                <Td numeric className="font-semibold">{formatTND(slip.netPay)}</Td>
                 <Td numeric muted>{slip.issuedOn ?? '-'}</Td>
                 <Td numeric>
                   <button
