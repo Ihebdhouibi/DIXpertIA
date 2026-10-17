@@ -26,12 +26,17 @@ install -o postgres -g postgres -m 0640 "$HERE/pg_hba.conf" "$ETC/pg_hba.conf"
 
 # pg_file_settings and pg_hba_file_rules read the files as they are on disk
 # now, before any restart: an error here would stop the server from starting.
+# config-errors.sql leaves out settings that are merely waiting for that
+# restart (max_connections, shared_buffers).
 psql_super() { sudo -u postgres psql -X -A -t -v ON_ERROR_STOP=1 "$@"; }
-config_errors=$(psql_super -c "SELECT count(*) FROM pg_file_settings WHERE error IS NOT NULL")
+config_errors=$(psql_super < "$HERE/config-errors.sql")
 hba_errors=$(psql_super -c "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL")
 if [ "$config_errors" != "0" ] || [ "$hba_errors" != "0" ]; then
     echo "Configuration errors - not restarting:" >&2
-    psql_super -c "SELECT sourcefile, sourceline, name, error FROM pg_file_settings WHERE error IS NOT NULL" >&2
+    psql_super -c "SELECT f.sourcefile, f.sourceline, f.name, f.error FROM pg_file_settings f
+        LEFT JOIN pg_settings s ON s.name = f.name
+        WHERE f.error IS NOT NULL
+          AND NOT (s.context = 'postmaster' AND f.error = 'setting could not be applied')" >&2
     psql_super -c "SELECT line_number, error FROM pg_hba_file_rules WHERE error IS NOT NULL" >&2
     exit 1
 fi
