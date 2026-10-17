@@ -11,10 +11,12 @@ interface AuthLayoutProps {
   title: string;
   subtitle?: string;
   footer?: React.ReactNode;
+  /** Shown at the top right, level with the wordmark: the language toggle (#135). */
+  aside?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function AuthLayout({ title, subtitle, footer, children }: AuthLayoutProps) {
+export default function AuthLayout({ title, subtitle, footer, aside, children }: AuthLayoutProps) {
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background text-on-surface">
       <main className="w-full max-w-[440px]">
@@ -25,7 +27,10 @@ export default function AuthLayout({ title, subtitle, footer, children }: AuthLa
         >
           <div className="p-8 flex flex-col gap-6">
             <div className="flex flex-col gap-5">
-              <Wordmark size="sm" />
+              <div className="flex items-center justify-between gap-4">
+                <Wordmark size="sm" />
+                {aside}
+              </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-[-0.02em]">{title}</h1>
                 {subtitle && <p className="mt-1.5 text-sm text-on-surface-variant">{subtitle}</p>}

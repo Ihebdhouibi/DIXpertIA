@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Client, Employee, LeaveRequest, Payslip, User } from './types';
 import * as api from './api';
 import Login from './components/Login';
 import Homepage from './components/Homepage';
 import { ThemeScope } from './theme';
+import { getLocale, hasChosenLocale, setAccountLocale, t as translateNow, useLocale, useT } from './i18n';
 import Sidebar from './components/Sidebar';
 import AppHeader from './components/AppHeader';
 import { DataStatusContext } from './dataStatus';
@@ -46,6 +47,10 @@ export default function App() {
   // accountant sees, and clearing the browser loses nothing.
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+  // Read here so the whole tree re-renders when the language changes (#135):
+  // components that only format numbers or dates have no hook of their own.
+  const locale = useLocale();
+  const t = useT();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -103,7 +108,7 @@ export default function App() {
 
   const notificationAction = (action: () => Promise<unknown>) => {
     action()
-      .catch((error) => toast(error instanceof Error ? error.message : 'Could not update notifications', 'error'))
+      .catch((error) => toast(error instanceof Error ? error.message : t('common.couldNotUpdateNotifications'), 'error'))
       .finally(loadNotifications);
   };
 
@@ -137,7 +142,7 @@ export default function App() {
     // four. The first real failure is surfaced, the rest are left to the next
     // refresh.
     const failed = results.find(r => r.status === 'rejected');
-    setLoadError(failed ? (failed as PromiseRejectedResult).reason?.message ?? 'Could not load data' : null);
+    setLoadError(failed ? (failed as PromiseRejectedResult).reason?.message ?? translateNow('common.couldNotLoad') : null);
     setLoading(false);
   }, []);
 
@@ -153,6 +158,7 @@ export default function App() {
       try {
         const me = await api.auth.me();
         if (cancelled) return;
+        adoptAccountLocale(me);
         setCurrentUser(me);
         setShowHomepage(false);
         await refresh(me);
@@ -173,6 +179,41 @@ export default function App() {
       setShowHomepage(true);
     });
   }, []);
+
+  // --- Language (#135) ---
+  // On sign-in, a language chosen in this browser wins and is saved on the
+  // account; otherwise the account's own language applies.
+  function adoptAccountLocale(user: User) {
+    if (hasChosenLocale() && user.locale !== getLocale()) {
+      api.auth.setLocale(getLocale()).catch(() => {
+        // Not saved: the next toggle or sign-in tries again.
+      });
+    }
+    setAccountLocale(user.locale);
+  }
+
+  // The toggle while signed in: save the choice on the account, so e-mails and
+  // other devices follow, and reload what the server wrote in the old
+  // language - dates, notifications, error messages.
+  const firstLocale = useRef(true);
+  useEffect(() => {
+    if (firstLocale.current) {
+      firstLocale.current = false;
+      return;
+    }
+    if (!currentUser || !hasChosenLocale()) return;
+    if (currentUser.locale !== locale) {
+      api.auth.setLocale(locale)
+        .then((saved) => setCurrentUser((user) => (user ? { ...user, locale: saved.locale } : user)))
+        .catch(() => {
+          // Kept in this browser; saved on the account at the next sign-in.
+        });
+    }
+    void refresh(currentUser);
+    void loadNotifications();
+    // Only a change of language triggers this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   // --- Handlers with real API calls ---
 
@@ -197,6 +238,7 @@ export default function App() {
       const data = await api.auth.login(email, password);
       api.setToken(data.access_token);
       const appUser = data.user as AppUser;
+      adoptAccountLocale(appUser);
       setCurrentUser(appUser);
       setActiveTab('dashboard');
       setShowHomepage(false);
@@ -204,13 +246,14 @@ export default function App() {
       await refresh(appUser);
       return null;
     } catch (error) {
-      return error instanceof api.ApiError ? error.message : 'Network error during sign-in. Please try again.';
+      return error instanceof api.ApiError ? error.message : t('auth.networkError');
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     api.setToken(null);
+    setAccountLocale(null);
     // Business data is dropped with the session rather than left in memory for
     // whoever signs in next on this browser.
     setPayslips([]);
@@ -257,14 +300,14 @@ export default function App() {
         endDate: newReq.endDate,
         reason: newReq.reason ?? '',
       }),
-      'Could not submit the leave request',
+      t('common.couldNotSubmitLeave'),
     );
 
   const handleApproveLeave = (id: string) =>
-    withRefresh(() => api.leaveRequests.approve(id), 'Could not approve the request');
+    withRefresh(() => api.leaveRequests.approve(id), t('common.couldNotApprove'));
 
   const handleRejectLeave = (id: string, comment: string) =>
-    withRefresh(() => api.leaveRequests.reject(id, comment), 'Could not reject the request');
+    withRefresh(() => api.leaveRequests.reject(id, comment), t('common.couldNotReject'));
 
   // The invoice view creates the invoice itself, so it can keep the form open
   // on a refusal and send an Idempotency-Key (#128); the app only reloads what
@@ -353,8 +396,8 @@ export default function App() {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
               <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
+                <h2 className="text-h2 font-black text-on-surface">{t('common.accessDenied')}</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">{t('common.noPermissionLeave')}</p>
               </div>
             </div>
           );
@@ -373,8 +416,8 @@ export default function App() {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
               <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+                <h2 className="text-h2 font-black text-on-surface">{t('common.accessDenied')}</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">{t('common.noPermissionPage')}</p>
               </div>
             </div>
           );
@@ -426,15 +469,13 @@ export default function App() {
               <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                 <HelpCircle className="w-10 h-10" />
               </div>
-              <h2 className="text-h2 font-black text-on-surface">Module "{activeTab.toUpperCase()}" is being deployed</h2>
-              <p className="text-body-sm text-on-surface-variant leading-relaxed">
-                The interactive module <strong className="text-primary">{activeTab}</strong> is currently in secure deployment testing.
-              </p>
+              <h2 className="text-h2 font-black text-on-surface">{t('common.unknownScreen')}</h2>
+              <p className="text-body-sm text-on-surface-variant leading-relaxed">{t('common.unknownScreenHint')}</p>
               <button
                 onClick={() => setActiveTab('dashboard')}
                 className="bg-primary text-on-primary font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
               >
-                Back to Dashboard
+                {t('common.backToDashboard')}
               </button>
             </div>
           </div>
@@ -456,7 +497,7 @@ export default function App() {
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 rounded-full border-2 border-outline-variant border-t-primary animate-spin" />
-            <p className="text-body-sm text-on-surface-variant">Signing you in...</p>
+            <p className="text-body-sm text-on-surface-variant">{t('common.signingIn')}</p>
           </div>
         </div>
       </ThemeScope>
@@ -552,14 +593,14 @@ export default function App() {
             >
               <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-body-sm font-semibold text-danger">Some data could not be loaded</p>
+                <p className="text-body-sm font-semibold text-danger">{t('common.someDataNotLoaded')}</p>
                 <p className="text-caption text-on-surface-variant mt-0.5">{loadError}</p>
               </div>
               <button
                 onClick={() => currentUser && refresh(currentUser)}
                 className="text-caption font-bold text-danger hover:underline cursor-pointer shrink-0"
               >
-                Retry
+                {t('common.retry')}
               </button>
             </div>
           )}

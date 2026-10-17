@@ -4,6 +4,7 @@ import type { Invoice } from '../types';
 import Button from './ui/Button';
 import Dialog from './ui/Dialog';
 import { Field, FormAlert, Input } from './ui/Field';
+import { useT } from '../i18n';
 import {
   InvoiceLinesEditor,
   InvoiceLinesTotals,
@@ -26,6 +27,7 @@ interface InvoiceEditDialogProps {
  * the server - the preview here only mirrors them.
  */
 export default function InvoiceEditDialog({ invoice, onClose, onSaved }: InvoiceEditDialogProps) {
+  const t = useT();
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [dueDate, setDueDate] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invoice) return;
-    const problem = dueDate ? problemWithLines(lines) : 'Choose a due date.';
+    const problem = dueDate ? problemWithLines(lines) : t('invoices.error.chooseDueDate');
     if (problem) {
       setError(problem);
       return;
@@ -52,7 +54,7 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
       onSaved(await api.invoices.update(invoice.id, { date_echeance: dueDate, items: toLineInputs(lines) }));
     } catch (err) {
       // The server's own words: a refusal names the invoice and the reason.
-      setError(err instanceof Error ? err.message : 'Could not save the invoice.');
+      setError(err instanceof Error ? err.message : t('invoices.edit.failed'));
     } finally {
       setSaving(false);
     }
@@ -62,16 +64,16 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
     <Dialog
       open={invoice !== null}
       onClose={onClose}
-      title={`Edit ${invoice?.reference ?? ''}`}
-      description="Only a draft can be corrected. The number, issue date and client stay as they are."
+      title={t('invoices.edit.title', { ref: invoice?.reference ?? '' })}
+      description={t('invoices.edit.description')}
       size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t('invoices.cancel')}
           </Button>
           <Button type="submit" form="edit-invoice-form" loading={saving}>
-            Save changes
+            {t('invoices.edit.save')}
           </Button>
         </>
       }
@@ -79,7 +81,7 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
       <form id="edit-invoice-form" onSubmit={submit} className="flex flex-col gap-5" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
         <InvoiceLinesEditor lines={lines} onChange={setLines} />
-        <Field label="Due date">
+        <Field label={t('invoices.dueDate')}>
           {({ id }) => (
             <Input id={id} type="date" required value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           )}

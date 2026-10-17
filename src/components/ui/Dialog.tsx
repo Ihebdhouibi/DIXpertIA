@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import Button from './Button';
+import { useT } from '../../i18n';
 
 /**
  * Modal dialog (#106), built on the native <dialog> element.
@@ -75,6 +76,7 @@ export default function Dialog({
   bodyClassName = 'px-6 py-5 overflow-y-auto',
   children,
 }: DialogProps) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   // A confirmation has only a title, a message and buttons: no body, and then
   // no rule under the header, or it would sit right on the footer's rule.
@@ -135,7 +137,7 @@ export default function Dialog({
               </div>
               <div className="-mr-2 flex shrink-0 items-center gap-2">
                 {headerActions && <div className="hidden items-center gap-2 sm:flex">{headerActions}</div>}
-                <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close" className="px-2">
+                <Button variant="ghost" size="sm" onClick={onClose} aria-label={t('common.close')} className="px-2">
                   <X className="w-5 h-5" aria-hidden="true" />
                 </Button>
               </div>

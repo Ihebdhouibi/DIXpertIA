@@ -11,7 +11,13 @@ import Avatar from './ui/Avatar';
 import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { SearchField, TableToolbar } from './ui/TableControls';
 import { useDataStatus } from '../dataStatus';
-import { ROLE_LABEL } from '../navigation';
+import { useT, type MessageKey } from '../i18n';
+
+const ROLE_LABEL: Record<UserRole, MessageKey> = {
+  admin: 'common.role.admin',
+  accountant: 'common.role.accountant',
+  employee: 'common.role.employee',
+};
 
 interface UsersViewProps {
   users: User[];
@@ -43,6 +49,7 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
   const [role, setRole] = useState<UserRole>('employee');
   const [searchQuery, setSearchQuery] = useState('');
   const status = useDataStatus();
+  const t = useT();
 
   const toast = useToast();
   const confirm = useConfirm();
@@ -78,20 +85,20 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     e.preventDefault();
     if (!isAdmin || saving) return;
     if (!email || !firstName || !lastName) {
-      showToast('Please fill in all fields.', 'error');
+      showToast(t('people.users.fillAll'), 'error');
       return;
     }
     setSaving(true);
     try {
       if (editingUser) {
         await api.users.update(editingUser.id, { firstName, lastName, role });
-        showToast(`User ${firstName} ${lastName} updated.`, 'success');
+        showToast(t('people.users.updated', { name: `${firstName} ${lastName}` }), 'success');
       } else {
         const created = await api.users.create({ email, firstName, lastName, role });
         showToast(
           created.activationEmailSent
-            ? `Account created. An activation link was e-mailed to ${email}.`
-            : 'Account created, but the activation e-mail could not be sent. Use "Resend activation link".',
+            ? t('people.users.createdSent', { email })
+            : t('people.users.createdNotSent'),
           created.activationEmailSent ? 'success' : 'info',
         );
       }
@@ -100,7 +107,10 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
       onChanged?.();
     } catch (error) {
       // The form stays open with what was typed, so it can be corrected.
-      showToast(failure(error, editingUser ? 'Could not update the account.' : 'Could not create the account.'), 'error');
+      showToast(
+        failure(error, editingUser ? t('people.users.couldNotUpdate') : t('people.users.couldNotCreate')),
+        'error',
+      );
     } finally {
       setSaving(false);
     }
@@ -110,19 +120,18 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     if (!isAdmin) return;
     const name = `${user.firstName} ${user.lastName}`;
     const ok = await confirm({
-      title: `Deactivate ${name}?`,
-      message: 'They are signed out everywhere at once and can no longer sign in. '
-        + 'Their payslips and history are kept, and the account can be reactivated.',
-      confirmLabel: 'Deactivate',
+      title: t('people.users.deactivateTitle', { name }),
+      message: t('people.users.deactivateMessage'),
+      confirmLabel: t('people.users.deactivate'),
       tone: 'danger',
     });
     if (!ok) return;
     try {
       await api.users.deactivate(user.id);
-      showToast(`${name} was deactivated.`, 'success');
+      showToast(t('people.users.deactivated', { name }), 'success');
       onChanged?.();
     } catch (error) {
-      showToast(failure(error, 'Could not deactivate the account.'), 'error');
+      showToast(failure(error, t('people.users.couldNotDeactivate')), 'error');
     }
   };
 
@@ -130,10 +139,10 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     if (!isAdmin) return;
     try {
       await api.users.update(user.id, { isActive: true });
-      showToast(`${user.firstName} ${user.lastName} was reactivated.`, 'success');
+      showToast(t('people.users.reactivated', { name: `${user.firstName} ${user.lastName}` }), 'success');
       onChanged?.();
     } catch (error) {
-      showToast(failure(error, 'Could not reactivate the account.'), 'error');
+      showToast(failure(error, t('people.users.couldNotReactivate')), 'error');
     }
   };
 
@@ -143,12 +152,12 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
       const result = await api.users.resendActivation(user.id);
       showToast(
         result.activationEmailSent
-          ? `A new activation link was e-mailed to ${user.email}. The previous one no longer works.`
-          : 'The activation e-mail could not be sent. Check the e-mail settings and try again.',
+          ? t('people.users.resentSent', { email: user.email })
+          : t('people.users.resentNotSent'),
         result.activationEmailSent ? 'success' : 'error',
       );
     } catch (error) {
-      showToast(failure(error, 'Could not send the activation link.'), 'error');
+      showToast(failure(error, t('people.users.couldNotResend')), 'error');
     }
   };
 
@@ -161,8 +170,8 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
         <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-          <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-          <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+          <h2 className="text-h2 font-black text-on-surface">{t('common.accessDenied')}</h2>
+          <p className="text-body-sm text-on-surface-variant mt-2">{t('common.noPermissionPage')}</p>
         </div>
       </div>
     );
@@ -172,34 +181,34 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Users</h1>
+          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{t('people.users.title')}</h1>
           <p className="text-body-lg text-on-surface-variant mt-1">
-            {isAdmin ? 'Manage employee accounts.' : 'View employee accounts.'}
+            {isAdmin ? t('people.users.subtitleAdmin') : t('people.users.subtitleRead')}
           </p>
         </div>
         {isAdmin && (
           <Button onClick={handleOpenCreate} className="shrink-0">
             <Plus className="w-4 h-4" aria-hidden="true" />
-            Add user
+            {t('people.users.add')}
           </Button>
         )}
       </div>
 
       <TableToolbar>
-        <SearchField label="Search users" value={searchQuery} onChange={setSearchQuery} className="sm:w-96" />
+        <SearchField label={t('people.users.search')} value={searchQuery} onChange={setSearchQuery} className="sm:w-96" />
       </TableToolbar>
 
-      <Table caption="User accounts">
+      <Table caption={t('people.users.caption')}>
         <THead>
-          <Th>User</Th>
-          <Th>Email</Th>
-          <Th>Role</Th>
-          <Th>Status</Th>
+          <Th>{t('people.users.colUser')}</Th>
+          <Th>{t('people.col.email')}</Th>
+          <Th>{t('people.users.colRole')}</Th>
+          <Th>{t('people.col.status')}</Th>
           {/* Only admins get an actions column; it used to render an extra
               body cell for accountants that had no header. */}
           {isAdmin && (
             <Th numeric>
-              <span className="sr-only">Actions</span>
+              <span className="sr-only">{t('people.col.actions')}</span>
             </Th>
           )}
         </THead>
@@ -217,7 +226,7 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
               <Td muted>{u.email}</Td>
               <Td>
                 <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">
-                  {ROLE_LABEL[u.role]}
+                  {ROLE_LABEL[u.role] ? t(ROLE_LABEL[u.role]) : u.role}
                 </span>
               </Td>
               <Td>
@@ -236,7 +245,7 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(u)}
-                      aria-label={`Edit ${u.firstName} ${u.lastName}`}
+                      aria-label={t('people.users.edit', { name: `${u.firstName} ${u.lastName}` })}
                       className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                     >
                       <Edit className="w-4 h-4" aria-hidden="true" />
@@ -245,8 +254,8 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                       <button
                         type="button"
                         onClick={() => handleResendActivation(u)}
-                        aria-label={`Resend activation link to ${u.firstName} ${u.lastName}`}
-                        title="Resend activation link"
+                        aria-label={t('people.users.resendTo', { name: `${u.firstName} ${u.lastName}` })}
+                        title={t('people.users.resend')}
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                       >
                         <Mail className="w-4 h-4" aria-hidden="true" />
@@ -256,8 +265,8 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                       <button
                         type="button"
                         onClick={() => handleDeactivate(u)}
-                        aria-label={`Deactivate ${u.firstName} ${u.lastName}`}
-                        title="Deactivate"
+                        aria-label={t('people.users.deactivateName', { name: `${u.firstName} ${u.lastName}` })}
+                        title={t('people.users.deactivate')}
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-error-container hover:text-error cursor-pointer"
                       >
                         <UserX className="w-4 h-4" aria-hidden="true" />
@@ -267,8 +276,8 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                       <button
                         type="button"
                         onClick={() => handleReactivate(u)}
-                        aria-label={`Reactivate ${u.firstName} ${u.lastName}`}
-                        title="Reactivate"
+                        aria-label={t('people.users.reactivateName', { name: `${u.firstName} ${u.lastName}` })}
+                        title={t('people.users.reactivate')}
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                       >
                         <UserCheck className="w-4 h-4" aria-hidden="true" />
@@ -281,15 +290,15 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
           ))}
           {filteredUsers.length === 0 &&
             (status.loading ? (
-              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title="Loading users..." />
+              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title={t('people.users.loading')} />
             ) : status.error && users.length === 0 ? (
               <TableState kind="error" colSpan={isAdmin ? 5 : 4} message={status.error} />
             ) : (
               <TableState
                 kind="empty"
                 colSpan={isAdmin ? 5 : 4}
-                title={users.length === 0 ? 'No user accounts' : 'No users match'}
-                message={users.length === 0 ? undefined : 'Try another name or e-mail.'}
+                title={users.length === 0 ? t('people.users.emptyNone') : t('people.users.emptyNoMatch')}
+                message={users.length === 0 ? undefined : t('people.users.emptyHint')}
               />
             ))}
         </TBody>
@@ -299,34 +308,44 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
         <Dialog
           open={showModal}
           onClose={() => { setShowModal(false); resetForm(); }}
-          title={editingUser ? 'Edit user' : 'Add new user'}
+          title={editingUser ? t('people.users.editTitle') : t('people.users.addTitle')}
           footer={
             <>
               <Button variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
-                Cancel
+                {t('people.cancel')}
               </Button>
               <Button type="submit" form="user-form" loading={saving}>
-                {editingUser ? 'Update user' : 'Create user'}
+                {editingUser ? t('people.users.save') : t('people.users.create')}
               </Button>
             </>
           }
         >
           <form id="user-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="First name *">
+            <Field label={t('people.users.firstName')}>
               {({ id }) => (
-                <Input id={id} required value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g. Jane" />
+                <Input
+                  id={id}
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder={t('people.users.firstNamePlaceholder')}
+                />
               )}
             </Field>
-            <Field label="Last name *">
+            <Field label={t('people.users.lastName')}>
               {({ id }) => (
-                <Input id={id} required value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g. Doe" />
+                <Input
+                  id={id}
+                  required
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder={t('people.users.lastNamePlaceholder')}
+                />
               )}
             </Field>
             <Field
-              label="Email *"
-              hint={editingUser
-                ? 'The e-mail is the sign-in identity and cannot be changed here.'
-                : 'An activation link is sent here; the person chooses their own password.'}
+              label={t('people.users.email')}
+              hint={editingUser ? t('people.users.emailHintEdit') : t('people.users.emailHintNew')}
             >
               {({ id, describedBy }) => (
                 <Input
@@ -337,13 +356,13 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                   disabled={!!editingUser}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jane.doe@example.com"
+                  placeholder={t('people.users.emailPlaceholder')}
                 />
               )}
             </Field>
             <Field
-              label="Role"
-              hint={editingUser?.id === currentUserId ? 'You cannot change your own role.' : undefined}
+              label={t('people.users.role')}
+              hint={editingUser?.id === currentUserId ? t('people.users.ownRole') : undefined}
             >
               {({ id, describedBy }) => (
                 <Select
@@ -353,9 +372,9 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                   disabled={editingUser?.id === currentUserId}
                   onChange={(e) => setRole(e.target.value as UserRole)}
                 >
-                  <option value="employee">Employee</option>
-                  <option value="admin">Admin</option>
-                  <option value="accountant">Accountant</option>
+                  <option value="employee">{t('common.role.employee')}</option>
+                  <option value="admin">{t('common.role.admin')}</option>
+                  <option value="accountant">{t('common.role.accountant')}</option>
                 </Select>
               )}
             </Field>

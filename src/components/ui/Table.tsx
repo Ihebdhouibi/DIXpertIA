@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Inbox, Loader2 } from 'lucide-react';
+import { useT } from '../../i18n';
 
 /**
  * Data tables (#28). Presentational only: these pieces render the rows they
@@ -156,11 +157,12 @@ export function TableState({
   message?: string;
   action?: React.ReactNode;
 }) {
+  const t = useT();
   const Icon = kind === 'loading' ? Loader2 : kind === 'error' ? AlertCircle : Inbox;
   const defaults = {
-    empty: 'Nothing here yet',
-    loading: 'Loading...',
-    error: 'Could not load this list',
+    empty: t('common.table.empty'),
+    loading: t('common.table.loading'),
+    error: t('common.table.error'),
   };
   return (
     <tr>

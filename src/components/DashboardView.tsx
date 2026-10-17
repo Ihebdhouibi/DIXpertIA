@@ -7,7 +7,8 @@ import type { LucideIcon } from 'lucide-react';
 import { Employee, LeaveRequest, Payslip, User } from '../types';
 import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
-import { formatTND, plural } from '../format';
+import { formatDateTime, formatTND } from '../format';
+import { labelOf, useT, type MessageKey } from '../i18n';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
 import Button from './ui/Button';
 import { FormAlert } from './ui/Field';
@@ -37,10 +38,10 @@ const PROCESSING_STATES = ['Pending', 'Processed', 'Completed', 'Archived'] as c
 const PROCESSING_TONE = { Pending: 'warning', Processed: 'info', Completed: 'success', Archived: 'neutral' } as const;
 const COMMERCIAL_STATES = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled'] as const;
 
-const ROLE_INTRO: Record<User['role'], string> = {
-  admin: 'Invoices waiting on the books, leave to decide and your team at a glance.',
-  accountant: 'Where the invoices stand in the books, and what is waiting for you.',
-  employee: 'Your leave requests, your next time off and your latest payslip.',
+const ROLE_INTRO: Record<User['role'], MessageKey> = {
+  admin: 'dashboard.intro.admin',
+  accountant: 'dashboard.intro.accountant',
+  employee: 'dashboard.intro.employee',
 };
 
 const NOTIFICATION_ICON: Record<Notification['type'], { icon: LucideIcon; className: string }> = {
@@ -64,6 +65,7 @@ interface Metric {
 }
 
 function MetricCard({ metric, loading, onNavigate }: { metric: Metric; loading: boolean; onNavigate: (tab: string) => void }) {
+  const t = useT();
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -78,7 +80,7 @@ function MetricCard({ metric, loading, onNavigate }: { metric: Metric; loading: 
       )}
       {metric.to && (
         <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant group-hover:text-on-surface">
-          Open <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('dashboard.open')} <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
       )}
     </>
@@ -120,6 +122,7 @@ export default function DashboardView({
   onQuickAction,
 }: DashboardViewProps) {
   const { loading, error, retry } = useDataStatus();
+  const t = useT();
   const seesInvoices = user.role === 'admin' || user.role === 'accountant';
 
   // --- Invoices (admin and accountant) ---
@@ -131,8 +134,18 @@ export default function DashboardView({
   const clientTotals = figures?.clients ?? { count: 0, amount: 0 };
   const supplierTotals = figures?.suppliers ?? { count: 0, amount: 0 };
   const directionMetrics: Metric[] = [
-    { label: 'Client invoices', value: clientTotals.count, hint: formatTND(clientTotals.amount), to: 'invoices' },
-    { label: 'Supplier bills', value: supplierTotals.count, hint: formatTND(supplierTotals.amount), to: 'invoices' },
+    {
+      label: t('dashboard.metric.clientInvoices'),
+      value: clientTotals.count,
+      hint: formatTND(clientTotals.amount),
+      to: 'invoices',
+    },
+    {
+      label: t('dashboard.metric.supplierBills'),
+      value: supplierTotals.count,
+      hint: formatTND(supplierTotals.amount),
+      to: 'invoices',
+    },
   ];
   // Where the invoices have got to in the accountant's workflow (#41). A
   // separate axis from the commercial status: an invoice is routinely Paid and
@@ -169,9 +182,9 @@ export default function DashboardView({
   const unread = notifications.filter((n) => !n.read).length;
 
   const awaitingBooking: Metric = {
-    label: 'Awaiting booking',
+    label: t('dashboard.metric.awaitingBooking'),
     value: countOf('Pending'),
-    hint: `${plural(countOf('Pending'), 'invoice')} in Pending`,
+    hint: t('dashboard.metric.awaitingBookingHint', { count: countOf('Pending') }),
     to: 'invoices',
     highlight: true,
   };
@@ -181,11 +194,16 @@ export default function DashboardView({
       ? [
           awaitingBooking,
           ...directionMetrics,
-          { label: 'Leave to decide', value: pendingLeaves, hint: `pending ${plural(pendingLeaves, 'request')}`, to: 'team' },
           {
-            label: 'Active team',
+            label: t('dashboard.metric.leaveToDecide'),
+            value: pendingLeaves,
+            hint: t('dashboard.metric.leaveToDecideHint', { count: pendingLeaves }),
+            to: 'team',
+          },
+          {
+            label: t('dashboard.metric.activeTeam'),
             value: activeTeam,
-            hint: `${teamTotal} ${plural(teamTotal, 'employee')} in total`,
+            hint: t('dashboard.metric.activeTeamHint', { count: teamTotal }),
             to: 'team',
           },
         ]
@@ -193,37 +211,52 @@ export default function DashboardView({
         ? [
             awaitingBooking,
             {
-              label: 'To complete',
+              label: t('dashboard.metric.toComplete'),
               value: countOf('Processed'),
-              hint: `${plural(countOf('Processed'), 'invoice')} in Processed`,
+              hint: t('dashboard.metric.toCompleteHint', { count: countOf('Processed') }),
               to: 'invoices',
             },
-            { label: 'Completed', value: countOf('Completed'), hint: 'ready for the month close', to: 'invoices' },
+            {
+              label: t('dashboard.metric.completed'),
+              value: countOf('Completed'),
+              hint: t('dashboard.metric.completedHint'),
+              to: 'invoices',
+            },
             ...directionMetrics,
           ]
         : [
             {
-              label: 'Pending requests',
+              label: t('dashboard.metric.pendingRequests'),
               value: pendingLeaves,
-              hint: 'waiting for a decision',
+              hint: t('dashboard.metric.pendingRequestsHint'),
               to: 'leave-requests',
               highlight: true,
             },
             {
-              label: 'Next leave',
-              value: upcomingLeave ? upcomingLeave.startDate : 'None',
+              label: t('dashboard.metric.nextLeave'),
+              value: upcomingLeave ? upcomingLeave.startDate : t('dashboard.none'),
               hint: upcomingLeave
-                ? `${upcomingLeave.type} · ${upcomingLeave.duration} ${plural(upcomingLeave.duration, 'day')}`
-                : 'nothing approved ahead',
+                ? t('dashboard.metric.nextLeaveHint', {
+                    type: labelOf(t, 'common.leaveType', upcomingLeave.type),
+                    count: upcomingLeave.duration,
+                  })
+                : t('dashboard.metric.nothingApproved'),
               to: 'leave-requests',
             },
             {
-              label: 'Latest payslip',
-              value: latestPayslip ? latestPayslip.period : 'None',
-              hint: latestPayslip ? `net ${formatTND(latestPayslip.netPay)}` : 'none issued yet',
+              label: t('dashboard.metric.latestPayslip'),
+              value: latestPayslip ? latestPayslip.period : t('dashboard.none'),
+              hint: latestPayslip
+                ? t('dashboard.metric.net', { amount: formatTND(latestPayslip.netPay) })
+                : t('dashboard.metric.noneIssued'),
               to: 'payslips',
             },
-            { label: 'Unread', value: unread, hint: plural(unread, 'notification'), to: 'notifications' },
+            {
+              label: t('dashboard.metric.unread'),
+              value: unread,
+              hint: t('dashboard.metric.unreadHint', { count: unread }),
+              to: 'notifications',
+            },
           ];
 
   const maxProcessing = Math.max(...processingCounts.map((p) => p.count), 1);
@@ -233,18 +266,18 @@ export default function DashboardView({
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
       <div>
         <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">
-          Welcome back, {user.firstName}
+          {t('dashboard.welcome', { name: user.firstName })}
         </h1>
-        <p className="text-body-lg text-on-surface-variant mt-1">{ROLE_INTRO[user.role]}</p>
+        <p className="text-body-lg text-on-surface-variant mt-1">{t(ROLE_INTRO[user.role])}</p>
       </div>
 
       {error && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1">
-            <FormAlert>Some figures could not be loaded: {error}</FormAlert>
+            <FormAlert>{t('dashboard.figuresNotLoaded', { error })}</FormAlert>
           </div>
           <Button variant="secondary" size="sm" onClick={retry}>
-            Retry
+            {t('common.retry')}
           </Button>
         </div>
       )}
@@ -262,19 +295,19 @@ export default function DashboardView({
         <div className="space-y-6 lg:col-span-2">
           {seesInvoices && (
             <Section
-              title="Invoices by processing state"
-              aside={<span className={EYEBROW}>{invoiceCount} {plural(invoiceCount, 'invoice')}</span>}
+              title={t('dashboard.byProcessing')}
+              aside={<span className={EYEBROW}>{t('dashboard.invoiceCount', { count: invoiceCount })}</span>}
             >
               {loading ? (
                 <LoadingRow />
               ) : invoiceCount === 0 ? (
-                <p className="text-sm text-on-surface-variant">No invoices yet.</p>
+                <p className="text-sm text-on-surface-variant">{t('dashboard.noInvoices')}</p>
               ) : (
                 // Each bar carries its label and its count, so no value relies on colour.
                 <ul className="space-y-3">
                   {processingCounts.map(({ state, count }) => (
                     <li key={state} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-3">
-                      <span className="text-sm text-on-surface-variant">{state}</span>
+                      <span className="text-sm text-on-surface-variant">{labelOf(t, 'common.status', state)}</span>
                       <div className="h-2.5 overflow-hidden rounded-full bg-surface-container-high">
                         <div
                           className={`h-full rounded-full ${TONE_CLASSES[PROCESSING_TONE[state]].dot} transition-all duration-500`}
@@ -292,7 +325,7 @@ export default function DashboardView({
           )}
 
           {seesInvoices && (
-            <Section title="Invoices by status">
+            <Section title={t('dashboard.byStatus')}>
               {loading ? (
                 <LoadingRow />
               ) : (
@@ -312,45 +345,45 @@ export default function DashboardView({
           )}
 
           {user.role === 'admin' && (
-            <Section title="Quick actions">
+            <Section title={t('dashboard.quickActions')}>
               <div className="flex flex-wrap gap-3">
                 <Button variant="secondary" size="sm" onClick={() => onQuickAction('approve-leaves')}>
                   <Calendar className="h-4 w-4" aria-hidden="true" />
-                  Review leave requests
+                  {t('dashboard.reviewLeave')}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => onQuickAction('create-invoice')}>
                   <FileText className="h-4 w-4" aria-hidden="true" />
-                  Create an invoice
+                  {t('dashboard.createInvoice')}
                 </Button>
               </div>
             </Section>
           )}
 
           {user.role === 'employee' && (
-            <Section title="Your leave">
+            <Section title={t('dashboard.yourLeave')}>
               <dl className="space-y-4 text-sm">
                 <div>
-                  <dt className={EYEBROW}>Balance</dt>
+                  <dt className={EYEBROW}>{t('dashboard.balance')}</dt>
                   {/* The balance used to be three invented figures. Until the
                       server holds entitlements (#121), say so instead. */}
-                  <dd className="mt-1 text-on-surface-variant">Leave balances are not available yet.</dd>
+                  <dd className="mt-1 text-on-surface-variant">{t('dashboard.balanceUnavailable')}</dd>
                 </div>
                 <div>
-                  <dt className={EYEBROW}>Next approved leave</dt>
+                  <dt className={EYEBROW}>{t('dashboard.nextApprovedLeave')}</dt>
                   <dd className="mt-1 text-on-surface">
                     {upcomingLeave ? (
                       <>
-                        <span className="font-semibold">{upcomingLeave.type}</span>{' '}
+                        <span className="font-semibold">{labelOf(t, 'common.leaveType', upcomingLeave.type)}</span>{' '}
                         <span className="font-mono tabular-nums text-on-surface-variant">{upcomingLeave.dates}</span>
                       </>
                     ) : (
-                      <span className="text-on-surface-variant">None scheduled.</span>
+                      <span className="text-on-surface-variant">{t('dashboard.noneScheduled')}</span>
                     )}
                   </dd>
                 </div>
                 {latestPayslip && (
                   <div>
-                    <dt className={EYEBROW}>Latest payslip</dt>
+                    <dt className={EYEBROW}>{t('dashboard.metric.latestPayslip')}</dt>
                     <dd className="mt-1">
                       <Button variant="ghost" size="sm" onClick={() => onQuickAction('download-payslip')}>
                         <Download className="h-4 w-4" aria-hidden="true" />
@@ -365,19 +398,19 @@ export default function DashboardView({
         </div>
 
         <Section
-          title="Recent activity"
+          title={t('dashboard.recentActivity')}
           aside={
             <button
               type="button"
               onClick={() => onNavigate('notifications')}
               className="inline-flex items-center gap-1 rounded text-xs font-semibold text-on-surface-variant hover:text-on-surface cursor-pointer"
             >
-              View all <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('dashboard.viewAll')} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           }
         >
           {recentNotifications.length === 0 ? (
-            <p className="text-sm text-on-surface-variant">No recent activity.</p>
+            <p className="text-sm text-on-surface-variant">{t('dashboard.noActivity')}</p>
           ) : (
             <ul className="-mx-2 divide-y divide-outline-variant">
               {recentNotifications.map((notif) => {
@@ -387,13 +420,11 @@ export default function DashboardView({
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${className}`} aria-hidden="true" />
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate text-sm ${notif.read ? 'text-on-surface-variant' : 'font-semibold text-on-surface'}`}>
-                        {!notif.read && <span className="sr-only">Unread: </span>}
+                        {!notif.read && <span className="sr-only">{t('dashboard.unreadPrefix')}</span>}
                         {notif.message}
                       </span>
                       <span className="mt-0.5 block font-mono text-[11px] tabular-nums text-on-surface-variant">
-                        {new Date(notif.timestamp).toLocaleString('en-US', {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                        })}
+                        {formatDateTime(notif.timestamp, { year: false })}
                       </span>
                     </span>
                     {!notif.read && <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface" />}
@@ -426,9 +457,10 @@ export default function DashboardView({
 }
 
 function LoadingRow() {
+  const t = useT();
   return (
     <p className="flex items-center gap-2 text-sm text-on-surface-variant" role="status">
-      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('dashboard.loading')}
     </p>
   );
 }

@@ -122,8 +122,9 @@ def main() -> int:
         browser = p.chromium.launch(channel="msedge" if args.browser == "msedge" else None)
         for theme in ("light", "dark"):
             context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme,
-                                          locale="en-US")
-            context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}')")
+                                          locale="en-US")  # the checks find screens by their English names
+            context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}'); "
+                                   "localStorage.setItem('dixpertia_locale', 'en')")
             page = context.new_page()
             page.goto(args.url)
             page.get_by_role("button", name="Go to Dashboard").first.click()
@@ -138,7 +139,8 @@ def main() -> int:
                 email, _, password = account.partition(":")
                 context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme,
                                               locale="en-US")
-                context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}')")
+                context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}'); "
+                                   "localStorage.setItem('dixpertia_locale', 'en')")
                 page = context.new_page()
                 page.goto(args.url)
                 page.get_by_role("button", name="Go to Dashboard").first.click()

@@ -6,6 +6,8 @@ import { FilterPills, Pagination } from './ui/TableControls';
 import Button from './ui/Button';
 import Dialog from './ui/Dialog';
 import { useToast } from './ui/feedback';
+import { formatDateTime } from '../format';
+import { t as translateNow, useT, type MessageKey } from '../i18n';
 
 /**
  * The enquiries sent from the website's contact form (#98), admin only.
@@ -14,23 +16,29 @@ import { useToast } from './ui/feedback';
  * from an anonymous visitor.
  */
 
-export const TOPIC_LABEL: Record<string, string> = {
-  security_audit: 'Security audit / penetration testing',
-  cloud_migration: 'Hybrid cloud migration',
-  custom_development: 'Custom API / CRM development',
-  support_subscription: 'Support subscription',
-  other: 'Other request',
+export const TOPIC_LABEL: Record<string, MessageKey> = {
+  security_audit: 'people.enquiries.topic.security_audit',
+  cloud_migration: 'people.enquiries.topic.cloud_migration',
+  custom_development: 'people.enquiries.topic.custom_development',
+  support_subscription: 'people.enquiries.topic.support_subscription',
+  other: 'people.enquiries.topic.other',
 };
 
 type Filter = 'Open' | 'Handled' | 'All';
 const FILTERS: Filter[] = ['Open', 'Handled', 'All'];
+const FILTER_LABEL: Record<Filter, MessageKey> = {
+  Open: 'people.enquiries.filter.Open',
+  Handled: 'people.enquiries.filter.Handled',
+  All: 'people.enquiries.filter.All',
+};
 const PAGE_SIZE = 20;
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => formatDateTime(iso);
 
 export default function EnquiriesView() {
   const toast = useToast();
+  const t = useT();
+  const topicOf = (topic: string) => (TOPIC_LABEL[topic] ? t(TOPIC_LABEL[topic]) : topic);
   const [filter, setFilter] = useState<Filter>('Open');
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<ContactRequest[] | null>(null);
@@ -49,7 +57,7 @@ export default function EnquiriesView() {
         setRows(result.rows);
         setTotal(result.total);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load the enquiries.'));
+      .catch((err) => setError(err instanceof Error ? err.message : translateNow('people.enquiries.couldNotLoad')));
   }, [filter, page]);
 
   useEffect(load, [load]);
@@ -59,10 +67,10 @@ export default function EnquiriesView() {
     try {
       const updated = await contactRequests.handle(enquiry.id);
       setOpen(updated);
-      toast(`Enquiry from ${enquiry.name} marked as handled.`);
+      toast(t('people.enquiries.markedHandled', { name: enquiry.name }));
       load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not update the enquiry.', 'error');
+      toast(err instanceof Error ? err.message : t('people.enquiries.couldNotUpdate'), 'error');
     } finally {
       setSaving(false);
     }
@@ -71,14 +79,15 @@ export default function EnquiriesView() {
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div>
-        <h1 className="text-h1 font-black tracking-tight text-on-surface md:text-display">Enquiries</h1>
-        <p className="mt-1 text-body-lg text-on-surface-variant">Messages sent from the website's contact form.</p>
+        <h1 className="text-h1 font-black tracking-tight text-on-surface md:text-display">{t('people.enquiries.title')}</h1>
+        <p className="mt-1 text-body-lg text-on-surface-variant">{t('people.enquiries.subtitle')}</p>
       </div>
 
       <FilterPills
-        label="Show"
+        label={t('people.enquiries.show')}
         options={FILTERS}
         value={filter}
+        renderOption={(option) => t(FILTER_LABEL[option])}
         onChange={(next) => {
           setFilter(next);
           setPage(1);
@@ -86,31 +95,31 @@ export default function EnquiriesView() {
       />
 
       <Table
-        caption="Enquiries"
+        caption={t('people.enquiries.caption')}
         footer={
           total > PAGE_SIZE && (
-            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} noun="enquiries" />
+            <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} noun={t('people.enquiries.noun')} />
           )
         }
       >
         <THead>
-          <Th>From</Th>
-          <Th>Topic</Th>
-          <Th>Message</Th>
-          <Th numeric>Received</Th>
-          <Th>Status</Th>
+          <Th>{t('people.enquiries.colFrom')}</Th>
+          <Th>{t('people.enquiries.colTopic')}</Th>
+          <Th>{t('people.enquiries.colMessage')}</Th>
+          <Th numeric>{t('people.enquiries.colReceived')}</Th>
+          <Th>{t('people.col.status')}</Th>
         </THead>
         <TBody>
           {error ? (
             <TableState kind="error" colSpan={5} message={error} />
           ) : rows === null ? (
-            <TableState kind="loading" colSpan={5} title="Loading enquiries..." />
+            <TableState kind="loading" colSpan={5} title={t('people.enquiries.loading')} />
           ) : rows.length === 0 ? (
             <TableState
               kind="empty"
               colSpan={5}
-              title={filter === 'Open' ? 'No open enquiries' : 'No enquiries yet'}
-              message="Messages sent from the website's contact form appear here."
+              title={filter === 'Open' ? t('people.enquiries.emptyOpen') : t('people.enquiries.emptyNone')}
+              message={t('people.enquiries.emptyHint')}
             />
           ) : (
             rows.map((r) => (
@@ -121,16 +130,16 @@ export default function EnquiriesView() {
                   </button>
                   <div className="text-body-sm text-on-surface-variant">{r.email}</div>
                 </Td>
-                <Td muted>{TOPIC_LABEL[r.topic] ?? r.topic}</Td>
+                <Td muted>{topicOf(r.topic)}</Td>
                 <Td muted className="max-w-[28ch] truncate">{r.message}</Td>
                 <Td numeric muted>{when(r.createdAt)}</Td>
                 <Td>
                   {r.handledAt ? (
                     <span className="inline-flex items-center gap-1.5 text-body-sm text-success">
-                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Handled
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {t('people.enquiries.handled')}
                     </span>
                   ) : (
-                    <span className="text-body-sm font-semibold text-on-surface">Open</span>
+                    <span className="text-body-sm font-semibold text-on-surface">{t('people.enquiries.open')}</span>
                   )}
                 </Td>
               </Tr>
@@ -142,17 +151,17 @@ export default function EnquiriesView() {
       <Dialog
         open={open !== null}
         onClose={() => setOpen(null)}
-        title={open ? `Enquiry from ${open.name}` : ''}
-        description={open ? `${TOPIC_LABEL[open.topic] ?? open.topic} · received ${when(open.createdAt)}` : undefined}
+        title={open ? t('people.enquiries.from', { name: open.name }) : ''}
+        description={open ? t('people.enquiries.description', { topic: topicOf(open.topic), when: when(open.createdAt) }) : undefined}
         footer={
           open && (
             <>
               <Button variant="secondary" onClick={() => setOpen(null)}>
-                Close
+                {t('people.enquiries.close')}
               </Button>
               {open.handledAt ? null : (
                 <Button onClick={() => markHandled(open)} loading={saving}>
-                  Mark as handled
+                  {t('people.enquiries.markHandled')}
                 </Button>
               )}
             </>
@@ -162,7 +171,7 @@ export default function EnquiriesView() {
         {open && (
           <div className="flex flex-col gap-4 text-sm">
             <p className="m-0">
-              Reply to{' '}
+              {t('people.enquiries.replyTo')}{' '}
               <a className="font-semibold underline" href={`mailto:${open.email}`}>
                 {open.email}
               </a>
@@ -171,8 +180,9 @@ export default function EnquiriesView() {
             <p className="m-0 whitespace-pre-line rounded-lg bg-surface-container-low p-4 text-on-surface">{open.message}</p>
             {open.handledAt && (
               <p className="m-0 text-on-surface-variant">
-                Handled {when(open.handledAt)}
-                {open.handledBy ? ` by ${open.handledBy}` : ''}.
+                {open.handledBy
+                  ? t('people.enquiries.handledOnBy', { when: when(open.handledAt), who: open.handledBy })
+                  : t('people.enquiries.handledOn', { when: when(open.handledAt) })}
               </p>
             )}
           </div>

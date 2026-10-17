@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 import { ThemeClass } from '../../theme';
 import Button from './Button';
 import Dialog from './Dialog';
+import { useT } from '../../i18n';
 
 /**
  * App-wide feedback (#106): one toast stack and one confirmation dialog,
@@ -63,6 +64,7 @@ export function useConfirm(): ConfirmFn {
 // -------------------------------------------------------------- Provider ---
 
 export function FeedbackProvider({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
 
@@ -105,10 +107,10 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             footer={
               <>
                 <Button variant="secondary" onClick={() => settle(false)}>
-                  {pending?.cancelLabel ?? 'Cancel'}
+                  {pending?.cancelLabel ?? t('common.cancel')}
                 </Button>
                 <Button variant={pending?.tone === 'danger' ? 'danger' : 'primary'} onClick={() => settle(true)}>
-                  {pending?.confirmLabel ?? 'Confirm'}
+                  {pending?.confirmLabel ?? t('common.confirm')}
                 </Button>
               </>
             }
@@ -130,7 +132,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => dismiss(id)}
-                    aria-label="Dismiss notification"
+                    aria-label={t('common.dismissNotification')}
                     className="-m-1 rounded p-1 opacity-70 hover:opacity-100 cursor-pointer"
                   >
                     <X className="w-4 h-4" aria-hidden="true" />

@@ -2,6 +2,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import { AlertCircle, Bell, CheckCircle, Info, LogOut, Menu, Settings, User as UserIcon, XCircle } from 'lucide-react';
 import { User } from '../types';
 import { tabLabel } from '../navigation';
+import { formatDateTime } from '../format';
+import { useT } from '../i18n';
+import LanguageToggle from './LanguageToggle';
 import { useDismiss } from './ui/useDismiss';
 
 /** The fields of App's notifications the header needs. */
@@ -52,6 +55,7 @@ export default function AppHeader({
   onOpenSettings,
   onLogout,
 }: AppHeaderProps) {
+  const t = useT();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -72,23 +76,25 @@ export default function AppHeader({
         <button
           type="button"
           onClick={onOpenNavigation}
-          aria-label="Open navigation"
+          aria-label={t('common.nav.open')}
           className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container md:hidden cursor-pointer"
         >
           <Menu className="h-6 w-6" aria-hidden="true" />
         </button>
-        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-2 sm:flex">
+        <nav aria-label={t('common.nav.breadcrumb')} className="hidden min-w-0 items-center gap-2 sm:flex">
           <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">DI Xpertia</span>
           <span className="text-on-surface-variant" aria-hidden="true">
             /
           </span>
           <span aria-current="page" className="truncate text-sm font-semibold text-on-surface">
-            {tabLabel(activeTab, currentUser.role)}
+            {tabLabel(activeTab, currentUser.role, t)}
           </span>
         </nav>
       </div>
 
       <div className="flex items-center gap-2">
+        <LanguageToggle />
+
         {/* Notifications */}
         <div className="relative" ref={notificationsRef}>
           <button
@@ -98,7 +104,11 @@ export default function AppHeader({
               setNotificationsOpen((v) => !v);
               setUserMenuOpen(false);
             }}
-            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            aria-label={
+              unreadCount > 0
+                ? t('common.header.notificationsUnread', { count: unreadCount })
+                : t('common.notifications.title')
+            }
             aria-haspopup="true"
             aria-expanded={notificationsOpen}
             className="relative rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
@@ -117,20 +127,20 @@ export default function AppHeader({
           {notificationsOpen && (
             <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-lg">
               <div className="flex items-center justify-between border-b border-outline-variant px-4 py-2.5">
-                <span className="text-sm font-semibold text-on-surface">Notifications</span>
+                <span className="text-sm font-semibold text-on-surface">{t('common.notifications.title')}</span>
                 {notifications.some((n) => !n.read) && (
                   <button
                     type="button"
                     onClick={onMarkAllRead}
                     className="rounded text-xs font-semibold text-secondary hover:underline cursor-pointer"
                   >
-                    Mark all read
+                    {t('common.notifications.markAllRead')}
                   </button>
                 )}
               </div>
               <ul className="max-h-72 divide-y divide-outline-variant overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <li className="px-4 py-6 text-center text-sm text-on-surface-variant">No notifications</li>
+                  <li className="px-4 py-6 text-center text-sm text-on-surface-variant">{t('common.notifications.none')}</li>
                 ) : (
                   notifications.slice(0, 10).map((n) => {
                     const { icon: Icon, tone } = TYPE_ICON[n.type];
@@ -152,12 +162,7 @@ export default function AppHeader({
                               {n.message}
                             </span>
                             <span className="mt-1 block font-mono text-[11px] text-on-surface-variant">
-                              {new Date(n.timestamp).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                              {formatDateTime(n.timestamp, { year: false })}
                             </span>
                           </span>
                         </button>
@@ -179,7 +184,7 @@ export default function AppHeader({
               setUserMenuOpen((v) => !v);
               setNotificationsOpen(false);
             }}
-            aria-label="User menu"
+            aria-label={t('common.header.userMenu')}
             aria-haspopup="true"
             aria-expanded={userMenuOpen}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-high font-mono text-xs font-medium text-on-surface transition-colors hover:bg-surface-container-highest cursor-pointer select-none"
@@ -204,7 +209,7 @@ export default function AppHeader({
                 }}
               >
                 <UserIcon className="h-4 w-4" aria-hidden="true" />
-                Profile
+                {t('common.header.profile')}
               </button>
               <button
                 type="button"
@@ -215,7 +220,7 @@ export default function AppHeader({
                 }}
               >
                 <Settings className="h-4 w-4" aria-hidden="true" />
-                Settings
+                {t('common.nav.settings')}
               </button>
               <div className="my-1 border-t border-outline-variant" />
               <button
@@ -227,7 +232,7 @@ export default function AppHeader({
                 }}
               >
                 <LogOut className="h-4 w-4" aria-hidden="true" />
-                Sign out
+                {t('common.signOut')}
               </button>
             </div>
           )}
