@@ -210,10 +210,11 @@ jobs:
         run: |
           nohup uvicorn main:app --port 8000 > api.log 2>&1 &
           npm run build
-          # vite preview serves dist/ and proxies /api to the API, as in dev.
+          # vite preview serves dist/ and proxies /api to the API, as in dev. It
+          # listens on "localhost", which is ::1 on the runner: poll that name.
           nohup npx vite preview --port 3000 --strictPort > web.log 2>&1 &
           for _ in $(seq 60); do
-            curl -sf http://127.0.0.1:8000/openapi.json > /dev/null && curl -sf http://127.0.0.1:3000/ > /dev/null && exit 0
+            curl -sf http://127.0.0.1:8000/openapi.json > /dev/null && curl -sf http://localhost:3000/ > /dev/null && exit 0
             sleep 1
           done
           echo "The app did not start"; cat api.log web.log; exit 1
