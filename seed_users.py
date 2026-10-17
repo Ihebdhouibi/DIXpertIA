@@ -23,7 +23,10 @@ from datetime import datetime
 
 import bcrypt
 
-from app.core.database import SessionLocal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.models.user import User
 
 MIN_PASSWORD_LENGTH = 12
@@ -51,7 +54,10 @@ def main():
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    db = SessionLocal()
+    # As the schema owner, not the application role: there is no signed-in
+    # admin to create the first one, and users is under row-level security
+    # with the password column closed to the application (#76).
+    db = Session(create_engine(settings.SCHEMA_DATABASE_URL))
     try:
         existing = db.query(User).filter(User.email == args.email).first()
         if existing:

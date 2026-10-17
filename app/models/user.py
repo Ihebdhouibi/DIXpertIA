@@ -1,6 +1,6 @@
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, text
 from datetime import datetime
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import deferred, relationship
 
 from app.core.database import Base
 
@@ -15,7 +15,11 @@ class User(Base):
     role = Column(String, nullable=False)  # "admin", "employee", "accountant"
     department = Column(String, nullable=True)
     avatarUrl = Column(String, nullable=True)
-    hashedPassword = Column(String, nullable=False)
+    # Never loaded with the row (#76): the application role holds no SELECT on
+    # this column, and raiseload makes an accidental read fail here, by name,
+    # rather than as a permission error from PostgreSQL. Sign-in reads it
+    # through auth_account_by_email(); writing it (a new account) still works.
+    hashedPassword = deferred(Column(String, nullable=False), raiseload=True)
     isActive = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # False until the owner sets a password through the activation link (#62).
     isVerified = Column(Boolean, nullable=False, default=False, server_default=text("false"))

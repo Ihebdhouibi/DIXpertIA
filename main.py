@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
@@ -22,7 +23,7 @@ from app.schemas.api import (
     UserOut,
 )
 from app.core.database import SessionLocal, get_db
-from app.core.deps import authenticated_user, get_current_user
+from app.core.deps import get_current_user, session_identity
 from app.core.security import (
     burn_password_check,
     create_access_token,
@@ -69,9 +70,9 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     """Reject any request to a non-public route that has no valid access token.
 
     Also publishes the caller's identity for row-level security (#43). The
-    account is looked up in a session that carries no identity yet; `users` is
-    not under row-level security, so the lookup is not circular (#76 will
-    route it through a SECURITY DEFINER function when it is).
+    account's state is read through auth_session(), a SECURITY DEFINER
+    function (#76): users is under row-level security, and no identity is set
+    yet at this point, so a plain query would see no row.
 
     Declared async deliberately. As a sync dependency FastAPI runs this in a
     worker thread, where ContextVar.set() mutates that worker's copy of the
@@ -105,8 +106,7 @@ def _identity_for(token: str) -> Optional[tuple[str, str]]:
     """
     db = SessionLocal()
     try:
-        user = authenticated_user(token, db)
-        return (user.id, user.role) if user else None
+        return session_identity(token, db)
     finally:
         db.close()
 
@@ -226,7 +226,18 @@ def _require_acceptable(password: str) -> None:
         raise HTTPException(status_code=422, detail=problem)
 
 
-def _user_payload(user: User) -> dict:
+def _account_by_email(db: Session, email: str):
+    """The account for an e-mail, hash included, or None (#76).
+
+    Through auth_account_by_email(): sign-in and forgot-password run before
+    anyone is identified, so row-level security would hide every row from a
+    plain query, and the application role cannot read the hash column at all.
+    The row is read-only, not an ORM object.
+    """
+    return db.execute(text("SELECT * FROM auth_account_by_email(:e)"), {"e": email}).first()
+
+
+def _user_payload(user) -> dict:
     return {
         "id": user.id,
         "email": user.email,
@@ -252,7 +263,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     Answering faster, or differently, for those would tell a caller which
     e-mails have accounts and in what state.
     """
-    user = db.query(User).filter(User.email == req.email).first()
+    user = _account_by_email(db, req.email)
     if user is None:
         burn_password_check(req.password)
         ok = False
@@ -313,7 +324,7 @@ def create_user(req: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.flush()
-    token = accounts.issue_token(db, user, accounts.ACTIVATION)
+    token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
     record_event(db, "user.created", "user", user.id, after={"role": user.role, "isActive": True})
     db.commit()
     db.refresh(user)
@@ -331,7 +342,7 @@ def resend_activation(user_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     if user.isVerified:
         raise HTTPException(status_code=409, detail="This account is already activated")
-    token = accounts.issue_token(db, user, accounts.ACTIVATION)
+    token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
     record_event(db, "user.activation_sent", "user", user.id)
     db.commit()
     return {"id": user.id, "activationEmailSent": _send_activation(user, token)}
@@ -341,14 +352,13 @@ def resend_activation(user_id: str, db: Session = Depends(get_db)):
 def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
     """Set the first password through the activation link, and activate."""
     _require_acceptable(req.newPassword)
-    user = accounts.spend_token(db, req.token, accounts.ACTIVATION)
-    if user is None or not user.isActive:
+    # One call spends the link, sets the password, activates the account and
+    # revokes its sessions, inside the database (#76).
+    user_id = accounts.spend_token(db, req.token, accounts.ACTIVATION, hash_password(req.newPassword))
+    if user_id is None:
         db.rollback()
         raise HTTPException(status_code=400, detail=INVALID_LINK)
-    user.hashedPassword = hash_password(req.newPassword)
-    user.isVerified = True
-    user.token_version += 1
-    record_event(db, "user.activated", "user", user.id)
+    record_event(db, "user.activated", "user", user_id)
     db.commit()
     return {"message": "Account activated. You can now sign in."}
 
@@ -419,10 +429,10 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     e-mail has an account, and an inactive or not yet activated account gets
     no link: activation has its own."""
     answer = {"message": "If your email is registered, you will receive a password reset link."}
-    user = db.query(User).filter(User.email == req.email).first()
+    user = _account_by_email(db, req.email)
     if user is None or not user.isActive or not user.isVerified:
         return answer
-    token = accounts.issue_token(db, user, accounts.RESET)
+    token = accounts.issue_token(db, user.id, accounts.RESET)
     # The token itself never goes in the trail.
     record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
@@ -449,13 +459,11 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Set a new password with a reset link. Spends the token, and revokes
     every session the account holds: whoever had the old password is out."""
     _require_acceptable(req.newPassword)
-    user = accounts.spend_token(db, req.token, accounts.RESET)
-    if user is None or not user.isActive:
+    user_id = accounts.spend_token(db, req.token, accounts.RESET, hash_password(req.newPassword))
+    if user_id is None:
         db.rollback()
         raise HTTPException(status_code=400, detail=INVALID_LINK)
-    user.hashedPassword = hash_password(req.newPassword)
-    user.token_version += 1
-    record_event(db, "user.password_reset", "user", user.id)
+    record_event(db, "user.password_reset", "user", user_id)
     db.commit()
     return {"message": "Password updated successfully."}
 

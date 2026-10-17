@@ -120,6 +120,25 @@ BEGIN
 END
 $$;
 
+-- users (#76): the application never reads the password hash, not even on its
+-- own row - sign-in reads it through auth_account_by_email() - and only the
+-- columns an admin edits are updatable; the password changes only through
+-- auth_spend_account_token(). The blanket grant above gave the whole table, so
+-- it is narrowed again here on every run.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
+        REVOKE SELECT, UPDATE ON TABLE public.users FROM dixpertia_app;
+        GRANT SELECT (id, email, "firstName", "lastName", role, department, "avatarUrl",
+                      "isActive", "isVerified", "createdAt", token_version)
+            ON TABLE public.users TO dixpertia_app;
+        GRANT UPDATE ("firstName", "lastName", role, department, "avatarUrl",
+                      "isActive", "isVerified", token_version)
+            ON TABLE public.users TO dixpertia_app;
+    END IF;
+END
+$$;
+
 -- Integer primary keys draw from sequences; UPDATE is required by nextval().
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO dixpertia_app;
 
