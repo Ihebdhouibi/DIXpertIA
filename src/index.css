@@ -164,9 +164,9 @@
   --text-home-section: clamp(2rem, 3.6vw, 3.25rem);
   --text-home-section--line-height: 1.05;
   --text-home-section--letter-spacing: -0.025em;
-  --text-home-cta: clamp(2.125rem, 4.4vw, 4rem);
-  --text-home-cta--line-height: 1.04;
-  --text-home-cta--letter-spacing: -0.03em;
+  --text-home-closing: clamp(2.125rem, 4.4vw, 4rem);
+  --text-home-closing--line-height: 1.04;
+  --text-home-closing--letter-spacing: -0.03em;
   --text-home-title: clamp(1.5rem, 2.6vw, 2.25rem);
   --text-home-title--line-height: 1.1;
   --text-home-title--letter-spacing: -0.02em;

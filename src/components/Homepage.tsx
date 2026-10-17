@@ -5,6 +5,7 @@ import Hero from './home/Hero';
 import HowWeWorkConsole from './home/HowWeWorkConsole';
 import Services from './home/Services';
 import Engagement from './home/Engagement';
+import AboutCta from './home/AboutCta';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -426,21 +427,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       <Services onPick={() => handleNavClick('contact')} />
       <Engagement />
 
-      {/* About / CTA: ink again, so the page closes the way it opens. */}
-      <section id="about" className="bg-ink text-paper py-20 scroll-mt-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className={`${EYEBROW} text-paper/60`}>02 — About</p>
-          <h2 className="mt-4 text-3xl md:text-4xl font-bold tracking-[-0.02em]">
-            Ready to transform your IT infrastructure?
-          </h2>
-          <p className="mt-4 text-base md:text-lg text-paper/70">
-            Partner with DI Xpertia to bring modern, reliable technology to your organization.
-          </p>
-          <button onClick={() => handleNavClick('contact')} className={`${LIME_CTA} mt-10`}>
-            Get Started Today <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </section>
+      <AboutCta onStart={() => handleNavClick('contact')} />
 
       {footer}
     </div>
