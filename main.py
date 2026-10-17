@@ -2,18 +2,14 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
-import os
-import secrets
-import string
-from datetime import date, datetime, timedelta
-from typing import List, Optional
+from datetime import date, datetime
+from typing import List, Literal, Optional
 from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session, joinedload
-from jose import JWTError, jwt
-import bcrypt
+from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
 
 from app.core.config import settings
@@ -25,7 +21,16 @@ from app.schemas.api import (
     PayslipOut,
     UserOut,
 )
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
+from app.core.deps import authenticated_user, get_current_user
+from app.core.security import (
+    burn_password_check,
+    create_access_token,
+    hash_password,
+    password_problem,
+    unusable_password_hash,
+    verify_password,
+)
 # app.models imports every model module, which is what populates SQLAlchemy's
 # registry so relationship("Payslip") and friends can resolve. See its docstring.
 import app.models  # noqa: F401
@@ -34,6 +39,7 @@ from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, invoicing, notifications
+from app.services import accounts
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.reminders import reminder_loop
@@ -54,6 +60,7 @@ PUBLIC_PATHS = frozenset({
     "/api/login",
     "/api/forgot-password",
     "/api/reset-password",
+    "/api/activate",
 })
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
@@ -61,9 +68,10 @@ _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 async def require_authentication(request: Request, token: Optional[str] = Depends(_optional_bearer)) -> None:
     """Reject any request to a non-public route that has no valid access token.
 
-    Also publishes the caller's identity for row-level security (#43). It is
-    taken from the JWT claims, not from a database lookup: the lookup is itself
-    subject to the policies, so deriving identity from it would be circular.
+    Also publishes the caller's identity for row-level security (#43). The
+    account is looked up in a session that carries no identity yet; `users` is
+    not under row-level security, so the lookup is not circular (#76 will
+    route it through a SECURITY DEFINER function when it is).
 
     Declared async deliberately. As a sync dependency FastAPI runs this in a
     worker thread, where ContextVar.set() mutates that worker's copy of the
@@ -75,10 +83,32 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     clear_identity()
     if request.url.path in PUBLIC_PATHS:
         return
-    payload = decode_token(token) if token else None
-    if not token or payload is None:
+    identity = await run_in_threadpool(_identity_for, token) if token else None
+    if identity is None:
         raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
-    set_identity(payload.get("sub"), payload.get("role"))
+    set_identity(*identity)
+
+
+def _identity_for(token: str) -> Optional[tuple[str, str]]:
+    """(user id, role) if the token may still be used, else None (#62).
+
+    The token's signature alone is not enough any more: the account must be
+    active and activated, and the token issued under its current
+    token_version, so deactivation or a role or password change revokes
+    sessions at once. Checked here, before any route, so a route that never
+    loads the current user is covered as well.
+
+    Its own short session, not the request's: that one must not begin a
+    transaction before the identity is set, or the policies would see none.
+    The role published for row-level security is the account's, not the
+    token's claim.
+    """
+    db = SessionLocal()
+    try:
+        user = authenticated_user(token, db)
+        return (user.id, user.role) if user else None
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -111,49 +141,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Password hashing ---
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-
-def get_password_hash(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-# --- JWT ---
-# Single source of truth: app.core.config validates these at import time and
-# refuses to start without them. main.py must not keep its own copy with a
-# fallback - that is what allowed a public signing key into deployments
-# (AUDIT-DB-007).
-SECRET_KEY = settings.SECRET_KEY
-ALGORITHM = settings.ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# --- Email ---
-# send_email lives in app/services/email.py since #134: the reminder job sends
-# mail too, and it reads the settings module instead of os.getenv.
-
-# --- JWT helpers ---
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def decode_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.query(User).filter(User.id == payload.get('sub')).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+# --- Authentication helpers ---
+# Hashing, tokens and the "may this token still be used" check live in
+# app.core.security and app.core.deps (#62). main.py kept its own copies of
+# them, so a rule added in one place was missing from the other.
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != 'admin':
@@ -194,11 +185,21 @@ class InvoiceCreate(BaseModel):
     status: Optional[str] = 'Sent'
     items: Optional[List[InvoiceItem]] = []
 
+Role = Literal["admin", "employee", "accountant"]
+
 class UserCreate(BaseModel):
     email: EmailStr
     firstName: str
     lastName: str
-    role: str   # "admin", "employee", or "accountant"
+    role: Role
+
+class UserUpdate(BaseModel):
+    """What the admin may change on an account (#62). All optional; the e-mail
+    is the login identity and is not changed here."""
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    role: Optional[Role] = None
+    isActive: Optional[bool] = None
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -211,150 +212,249 @@ class ResetPasswordRequest(BaseModel):
     token: str
     newPassword: str
 
+class ActivateRequest(BaseModel):
+    token: str
+    newPassword: str
+
+
+INVALID_LINK = "This link is invalid or has expired. Ask for a new one."
+
+
+def _require_acceptable(password: str) -> None:
+    problem = password_problem(password)
+    if problem:
+        raise HTTPException(status_code=422, detail=problem)
+
+
+def _user_payload(user: User) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "firstName": user.firstName,
+        "lastName": user.lastName,
+        "role": user.role,
+        "department": user.department,
+        "avatarUrl": user.avatarUrl,
+        "isActive": user.isActive,
+        "isVerified": user.isVerified,
+        "createdAt": user.createdAt.isoformat() if user.createdAt else None,
+    }
 
 
 # --- Auth endpoints ---
 @app.post('/api/login')
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    log.info("Login attempt for %s", req.email)
+    """Exchange e-mail and password for an access token.
+
+    Every refusal is the same 401 and costs the same time (#62): an unknown
+    e-mail still runs one bcrypt check against a dummy hash, and an inactive or
+    not yet activated account is refused only after its password is checked.
+    Answering faster, or differently, for those would tell a caller which
+    e-mails have accounts and in what state.
+    """
     user = db.query(User).filter(User.email == req.email).first()
-    if not user:
-        log.info("Login failed: no user for %s", req.email)
+    if user is None:
+        burn_password_check(req.password)
+        ok = False
+    else:
+        ok = verify_password(req.password, user.hashedPassword) and user.isActive and user.isVerified
+    if not ok:
+        log.info("Login refused")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not verify_password(req.password, user.hashedPassword):
-        log.info("Login failed: bad password for %s", req.email)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    log.info("Login OK for %s (role=%s)", req.email, user.role)
-    token = create_access_token(data={"sub": user.id, "role": user.role})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "firstName": user.firstName,
-            "lastName": user.lastName,
-            "role": user.role,
-            "department": user.department,
-            "avatarUrl": user.avatarUrl,
-            "isActive": user.isActive,
-            "isVerified": user.isVerified,
-            "createdAt": user.createdAt.isoformat() if user.createdAt else None
-        }
-    }
+    log.info("Login OK for %s (role=%s)", user.id, user.role)
+    token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
+    return {"access_token": token, "token_type": "bearer", "user": _user_payload(user)}
+
+
+def _send_activation(user: User, token: str) -> bool:
+    body = f"""
+Hello {user.firstName},
+
+An account has been created for you on DIXpertIA.
+
+Choose your password with the link below (valid for 72 hours):
+
+{accounts.link(accounts.ACTIVATION, token)}
+
+If you were not expecting this, you can ignore this e-mail.
+
+Regards,
+DIXpertIA Team
+"""
+    return send_email(user.email, "Activate your DIXpertIA account", body)
+
 
 # require_admin as a dependency rather than a check inside the body: FastAPI
 # validates the request model before the handler runs, so an in-body role check
 # let a non-admin get a 422 describing the schema before being refused.
 # Authorisation should be decided before anything else is (#57).
 @app.post('/api/users', status_code=201, dependencies=[Depends(require_admin)])
-def create_user(req: UserCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can create users")
-    existing = db.query(User).filter(User.email == req.email).first()
-    if existing:
+def create_user(req: UserCreate, db: Session = Depends(get_db)):
+    """Create an account and e-mail its owner an activation link (#62).
+
+    No password is chosen here and none is returned: the temporary password
+    used to travel in this response and in a plain e-mail. The account cannot
+    log in until its owner sets a password through the link. If the e-mail
+    cannot be sent, activationEmailSent says so and the admin can send it
+    again with POST /api/users/{id}/activation.
+    """
+    if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    alphabet = string.ascii_letters + string.digits
-    temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
-    hashed = get_password_hash(temp_password)
     # No id: the database allocates it from users_id_seq (#85).
     user = User(
         email=req.email,
         firstName=req.firstName,
         lastName=req.lastName,
         role=req.role,
-        hashedPassword=hashed,
+        hashedPassword=unusable_password_hash(),
         isActive=True,
         isVerified=False,
         createdAt=datetime.utcnow()
     )
     db.add(user)
     db.flush()
-    # The role only: the account's details live on the account, and the
-    # temporary password must never reach the trail (#63).
+    token = accounts.issue_token(db, user, accounts.ACTIVATION)
     record_event(db, "user.created", "user", user.id, after={"role": user.role, "isActive": True})
     db.commit()
     db.refresh(user)
+    # After the commit: the link must not reach anyone for an account that
+    # was rolled back.
+    sent = _send_activation(user, token)
+    return {"id": user.id, "email": user.email, "activationEmailSent": sent}
 
-    email_body = f"""
-Hello {req.firstName},
 
-Your DIXpertIA employee account has been created.
+@app.post('/api/users/{user_id}/activation', dependencies=[Depends(require_admin)])
+def resend_activation(user_id: str, db: Session = Depends(get_db)):
+    """Send a new activation link; the previous one stops working."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.isVerified:
+        raise HTTPException(status_code=409, detail="This account is already activated")
+    token = accounts.issue_token(db, user, accounts.ACTIVATION)
+    record_event(db, "user.activation_sent", "user", user.id)
+    db.commit()
+    return {"id": user.id, "activationEmailSent": _send_activation(user, token)}
 
-Login email: {req.email}
-Temporary password: {temp_password}
 
-Please log in and change your password immediately.
+@app.post('/api/activate')
+def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
+    """Set the first password through the activation link, and activate."""
+    _require_acceptable(req.newPassword)
+    user = accounts.spend_token(db, req.token, accounts.ACTIVATION)
+    if user is None or not user.isActive:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=INVALID_LINK)
+    user.hashedPassword = hash_password(req.newPassword)
+    user.isVerified = True
+    user.token_version += 1
+    record_event(db, "user.activated", "user", user.id)
+    db.commit()
+    return {"message": "Account activated. You can now sign in."}
 
-Regards,
-DIXpertIA Team
-"""
-    send_email(req.email, "Your DIXpertIA Account Credentials", email_body)
 
-    return {
-        "message": "User created successfully",
-        "id": user.id,
-        "email": user.email,
-        "tempPassword": temp_password
-    }
+def _apply_user_update(db: Session, admin: User, user: User, changes: dict) -> dict:
+    """Apply the admin's changes to an account; returns the fields changed.
+
+    Revokes the account's sessions (token_version) on deactivation and on a
+    role change, so neither waits for the token to expire.
+
+    An admin cannot demote or deactivate themselves. That is also what keeps
+    at least one admin: the caller is an active admin, and only ever changes
+    someone else.
+    """
+    changed = {k: v for k, v in changes.items() if v is not None and getattr(user, k) != v}
+    if not changed:
+        return {}
+    if user.id == admin.id and ('role' in changed or changed.get('isActive') is False):
+        raise HTTPException(status_code=409, detail="You cannot change your own role or deactivate yourself")
+    before = {k: getattr(user, k) for k in changed}
+    for field, value in changed.items():
+        setattr(user, field, value)
+    if 'role' in changed or changed.get('isActive') is False:
+        user.token_version += 1
+    if changed.get('isActive') is False:
+        action = "user.deactivated"
+    elif changed.get('isActive') is True:
+        action = "user.reactivated"
+    elif 'role' in changed:
+        action = "user.role_changed"
+    else:
+        action = "user.updated"
+    record_event(db, action, "user", user.id, before=before, after=changed)
+    return changed
+
+
+@app.patch('/api/users/{user_id}', response_model=UserOut)
+def update_user(user_id: str, req: UserUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Change an account's name, role or status (#62). One audit event."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    _apply_user_update(db, admin, user, req.model_dump())
+    db.commit()
+    db.refresh(user)
+    return UserOut.from_orm_row(user)
+
+
+@app.post('/api/users/{user_id}/deactivate', response_model=UserOut)
+def deactivate_user(user_id: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Block an account at once, including the sessions it already holds.
+
+    There is no delete: payslips and leave requests reference the account and
+    payroll must be kept, so a departure is a deactivation (#62).
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    _apply_user_update(db, admin, user, {"isActive": False})
+    db.commit()
+    db.refresh(user)
+    return UserOut.from_orm_row(user)
+
 
 @app.post('/api/forgot-password')
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """E-mail a single-use reset link. The answer never says whether the
+    e-mail has an account, and an inactive or not yet activated account gets
+    no link: activation has its own."""
+    answer = {"message": "If your email is registered, you will receive a password reset link."}
     user = db.query(User).filter(User.email == req.email).first()
-    if not user:
-        return {"message": "If your email is registered, you will receive a password reset link."}
-
-    expiry = datetime.utcnow() + timedelta(hours=1)
-    token_data = {"sub": user.id, "exp": expiry, "purpose": "reset"}
-    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
-    user.resetToken = token
-    user.resetTokenExpiry = expiry
-    # Only for a known account: an unknown e-mail records nothing, like it
-    # answers nothing different. The token itself never goes in the trail.
+    if user is None or not user.isActive or not user.isVerified:
+        return answer
+    token = accounts.issue_token(db, user, accounts.RESET)
+    # The token itself never goes in the trail.
     record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
-
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    reset_link = f"{frontend_url}/reset-password?token={token}"
-    email_body = f"""
+    body = f"""
 Hello {user.firstName},
 
 You requested a password reset for your DIXpertIA account.
 
-Click the link below to set a new password (valid for 1 hour):
+Click the link below to set a new password (valid for 1 hour, once):
 
-{reset_link}
+{accounts.link(accounts.RESET, token)}
 
 If you did not request this, please ignore this email.
 
 Regards,
 DIXpertIA Team
 """
-    send_email(user.email, "Password Reset Request", email_body)
-    return {"message": "If your email is registered, you will receive a password reset link."}
+    send_email(user.email, "Password Reset Request", body)
+    return answer
+
 
 @app.post('/api/reset-password')
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=400, detail="Reset token has expired.")
-    except jwt.JWTError:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-    user_id = payload.get('sub')
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="User not found.")
-    if user.resetToken != req.token:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-    if user.resetTokenExpiry and datetime.utcnow() > user.resetTokenExpiry:
-        raise HTTPException(status_code=400, detail="Token has expired.")
-    hashed = get_password_hash(req.newPassword)
-    user.hashedPassword = hashed
-    user.resetToken = None
-    user.resetTokenExpiry = None
+    """Set a new password with a reset link. Spends the token, and revokes
+    every session the account holds: whoever had the old password is out."""
+    _require_acceptable(req.newPassword)
+    user = accounts.spend_token(db, req.token, accounts.RESET)
+    if user is None or not user.isActive:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=INVALID_LINK)
+    user.hashedPassword = hash_password(req.newPassword)
+    user.token_version += 1
     record_event(db, "user.password_reset", "user", user.id)
     db.commit()
     return {"message": "Password updated successfully."}

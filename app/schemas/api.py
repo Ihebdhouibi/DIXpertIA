@@ -349,7 +349,8 @@ class EmployeeOut(BaseModel):
 class UserOut(BaseModel):
     """A login account.
 
-    hashedPassword, resetToken and resetTokenExpiry are deliberately absent.
+    hashedPassword and token_version are deliberately absent; reset and
+    activation tokens live in account_tokens, never on the user (#62).
     The audit found the removed GET /api/data returning whole user rows, hashes
     included, to any authenticated caller; an explicit output schema is what
     stops that happening again by accident.

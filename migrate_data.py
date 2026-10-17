@@ -28,8 +28,6 @@ for u in data.get('users', []):
         hashedPassword=u['hashedPassword'],
         isActive=u.get('isActive', True),
         isVerified=u.get('isVerified', False),
-        resetToken=u.get('resetToken'),
-        resetTokenExpiry=u.get('resetTokenExpiry'),
         createdAt=datetime.fromisoformat(u.get('createdAt', datetime.now().isoformat()))
     )
     db.add(user)

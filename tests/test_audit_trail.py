@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
+from account_flow import link_token
 from invoice_flow import draft, sent, submit
 
 pytestmark = pytest.mark.identity("admin")
@@ -167,39 +168,42 @@ def test_leave_decisions_are_recorded(client, admin, identities, database):
     assert events(database, "leave_request", ids[1]) == [("leave_request.rejected", admin_id, "admin")]
 
 
-def test_account_creation_and_password_reset_are_recorded(client, admin, identities, database):
+def test_account_creation_activation_and_password_reset_are_recorded(client, admin, identities, database, mailbox):
+    email = f"new@{DOMAIN}"
     created = client.post("/api/users", headers=admin, json={
-        "email": f"new@{DOMAIN}", "firstName": "New", "lastName": "Hire", "role": "employee"})
+        "email": email, "firstName": "New", "lastName": "Hire", "role": "employee"})
     assert created.status_code == 201, created.text
     user_id = created.json()["id"]
-    temp_password = created.json().get("tempPassword")
+    activation = link_token(mailbox, email)
 
     assert client.post("/api/employees", headers=admin, json={
         "userId": user_id, "jobTitle": "Analyst", "hiredOn": "2026-10-01",
         "annualEntitlementDays": 21}).status_code == 201
 
-    assert client.post("/api/forgot-password", json={"email": f"new@{DOMAIN}"}).status_code == 200
-    with database.connect() as c:
-        token = c.execute(text('SELECT "resetToken" FROM users WHERE id = :u'), {"u": user_id}).scalar_one()
+    assert client.post("/api/activate", json={
+        "token": activation, "newPassword": "a-first-password-long-enough"}).status_code == 200
+    assert client.post("/api/forgot-password", json={"email": email}).status_code == 200
+    reset = link_token(mailbox, email)
     assert client.post("/api/reset-password", json={
-        "token": token, "newPassword": "a-new-password-long-enough"}).status_code == 200
+        "token": reset, "newPassword": "a-new-password-long-enough"}).status_code == 200
 
     admin_id = identities["admin"]["user_id"]
     assert events(database, "user", user_id) == [
         ("user.created", admin_id, "admin"),
         # Anonymous steps: nobody is signed in, and the trail says so.
+        ("user.activated", None, None),
         ("user.password_reset_requested", None, None),
         ("user.password_reset", None, None),
     ]
     assert [e[0] for e in events(database, "employee", _employee_id(database, user_id))] == [
         "employee.created"]
 
-    # No secret reaches the trail: not the temporary password, the hash or the token.
+    # No secret reaches the trail: not the links' tokens, nor the password hash.
     with database.connect() as c:
         trail = c.execute(text("SELECT string_agg(coalesce(before::text, '') || coalesce(after::text, ''), '')"
                                " FROM audit_events")).scalar_one() or ""
         hashed = c.execute(text('SELECT "hashedPassword" FROM users WHERE id = :u'), {"u": user_id}).scalar_one()
-    for secret in filter(None, (temp_password, hashed, token)):
+    for secret in (activation, reset, hashed):
         assert secret not in trail
 
 

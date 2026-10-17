@@ -271,10 +271,30 @@ export const employees = {
   list: () => request<Employee[]>('/api/employees'),
 };
 
+/**
+ * What POST /api/users answers (#62). No password: the owner chooses one
+ * through the activation link, and `activationEmailSent` says whether it left.
+ */
+export interface UserCreated {
+  id: string;
+  email: string;
+  activationEmailSent: boolean;
+}
+
+export type UserUpdate = Partial<Pick<User, 'firstName' | 'lastName' | 'role' | 'isActive'>>;
+
+const userPath = (id: string) => `/api/users/${encodeURIComponent(id)}`;
+
 export const users = {
   list: () => request<User[]>('/api/users'),
-  create: (body: unknown) =>
-    request<User>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: { email: string; firstName: string; lastName: string; role: User['role'] }) =>
+    request<UserCreated>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: UserUpdate) =>
+    request<User>(userPath(id), { method: 'PATCH', body: JSON.stringify(body) }),
+  /** Blocks the account and every session it holds. There is no delete. */
+  deactivate: (id: string) => request<User>(`${userPath(id)}/deactivate`, { method: 'POST' }),
+  resendActivation: (id: string) =>
+    request<{ id: string; activationEmailSent: boolean }>(`${userPath(id)}/activation`, { method: 'POST' }),
 };
 
 /** A notification as the server keeps it (#116); the shape the bell already used. */

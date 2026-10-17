@@ -60,13 +60,18 @@ export default function App() {
   const [showHomepage, setShowHomepage] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
-  const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  // A reset link carries ?token=, an activation link ?activate= (#62). Both
+  // open the same "choose a password" page, against different endpoints.
+  const [linkMode, setLinkMode] = useState<'reset' | 'activate'>('reset');
 
-  // --- Detect reset token from URL ---
+  // --- Detect a reset or activation link in the URL ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const activation = params.get('activate');
+    const token = activation ?? params.get('token');
     if (token) {
+      setLinkMode(activation ? 'activate' : 'reset');
       setResetToken(token);
       setShowForgotPassword(false);
     }
@@ -264,9 +269,6 @@ export default function App() {
     if (currentUser) refresh(currentUser);
   };
 
-  const handleAddUser = (body: unknown) =>
-    withRefresh(() => api.users.create(body), 'Could not create the account');
-
   // --- Quick actions ---
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -370,15 +372,14 @@ export default function App() {
             </div>
           );
         }
-        const isAdmin = currentUser.role === 'admin';
-        // onEditUser and onDeleteUser are deliberately not passed: the API has
-        // no endpoint for either, and the buttons previously only changed the
-        // browser. Server-side account lifecycle is #62.
+        // The view creates, edits and deactivates accounts through the API
+        // itself (#62) and asks for a reload once the server has accepted.
         return (
           <UsersView
             users={users}
-            onAddUser={isAdmin ? handleAddUser : undefined}
             userRole={currentUser.role}
+            currentUserId={currentUser.id}
+            onChanged={currentUser.role === 'admin' ? () => refresh(currentUser) : undefined}
           />
         );
 
@@ -461,6 +462,7 @@ export default function App() {
       <ThemeScope>
       <ResetPassword
         token={resetToken}
+        mode={linkMode}
         onComplete={() => {
           setResetToken(null);
           window.history.replaceState({}, document.title, window.location.pathname);

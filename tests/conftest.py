@@ -204,6 +204,25 @@ def client(app):
 
 
 @pytest.fixture
+def mailbox(app, monkeypatch):
+    """The e-mails the API sends, captured instead of sent: dicts of to, subject, body.
+
+    Activation and reset links travel only by e-mail, and only their hash is
+    stored (#62), so a test that follows a link has to read it from here.
+    """
+    import main
+
+    sent = []
+
+    def capture(to_email, subject, body):
+        sent.append({"to": to_email, "subject": subject, "body": body})
+        return True
+
+    monkeypatch.setattr(main, "send_email", capture)
+    return sent
+
+
+@pytest.fixture
 def identities(database):
     """Per-role bearer tokens, plus the employee id each account resolves to."""
     from app.core.security import create_access_token

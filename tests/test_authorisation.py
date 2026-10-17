@@ -36,6 +36,7 @@ ROUTES = [
     ("POST", "/api/login", PUBLIC),
     ("POST", "/api/forgot-password", PUBLIC),
     ("POST", "/api/reset-password", PUBLIC),
+    ("POST", "/api/activate", PUBLIC),
 
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
@@ -63,6 +64,10 @@ ROUTES = [
     # --- accounts ----------------------------------------------------------
     ("GET", "/api/users", ADMIN_ONLY),
     ("POST", "/api/users", ADMIN_ONLY),
+    # Account lifecycle (#62): edit, deactivate, resend the activation link.
+    ("PATCH", "/api/users/USR-999", ADMIN_ONLY),
+    ("POST", "/api/users/USR-999/deactivate", ADMIN_ONLY),
+    ("POST", "/api/users/USR-999/activation", ADMIN_ONLY),
     ("POST", "/api/employees", ADMIN_ONLY),
 
     # --- billing -----------------------------------------------------------
@@ -164,7 +169,8 @@ def test_every_route_is_covered(app):
                                "/api/invoices/{invoice_id}/processing-status")
                       .replace("/api/invoices/1", "/api/invoices/{invoice_id}")
                       .replace("/api/periods/2026-01/close", "/api/periods/{month}/close")
-                      .replace("/api/periods/2026-01", "/api/periods/{month}"))
+                      .replace("/api/periods/2026-01", "/api/periods/{month}")
+                      .replace("/api/users/USR-999", "/api/users/{user_id}"))
         declared.add((method, normalised))
 
     actual = set()

@@ -58,6 +58,9 @@ def main():
             existing.hashedPassword = hashed
             existing.role = args.role
             existing.isActive = True
+            existing.isVerified = True
+            # A new password revokes the sessions issued under the old one (#62).
+            existing.token_version += 1
             user_id, action = existing.id, "updated (password reset)"
         else:
             # No id: the database allocates it from users_id_seq (#85). An id
