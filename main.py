@@ -1,10 +1,10 @@
+import asyncio
+import contextlib
 import logging
+from contextlib import asynccontextmanager
 import os
 import secrets
 import string
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Depends, Query, Request
@@ -34,6 +34,8 @@ from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, invoicing, notifications
+from app.services.email import send_email
+from app.services.reminders import reminder_loop
 
 load_dotenv()
 
@@ -78,7 +80,18 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     set_identity(payload.get("sub"), payload.get("role"))
 
 
-app = FastAPI(dependencies=[Depends(require_authentication)])
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Start the reminder job with the API (#134), and stop it with it."""
+    task = asyncio.create_task(reminder_loop()) if settings.REMINDERS_ENABLED else None
+    yield
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(dependencies=[Depends(require_authentication)], lifespan=lifespan)
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
 # registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a
@@ -114,34 +127,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # --- Email ---
-def send_email(to_email: str, subject: str, body: str):
-    try:
-        smtp_host = os.getenv("SMTP_HOST")
-        smtp_port = int(os.getenv("SMTP_PORT", 587))
-        smtp_user = os.getenv("SMTP_USER")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        from_email = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
-
-        if not smtp_host or not smtp_user or not smtp_password:
-            log.warning("SMTP credentials missing. Email not sent.")
-            return False
-
-        msg = MIMEMultipart()
-        msg['From'] = from_email
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.send_message(msg)
-
-        log.info("Email sent to %s", to_email)
-        return True
-    except Exception as e:
-        log.error("Email error: %s", e)
-        return False
+# send_email lives in app/services/email.py since #134: the reminder job sends
+# mail too, and it reads the settings module instead of os.getenv.
 
 # --- JWT helpers ---
 def create_access_token(data: dict):

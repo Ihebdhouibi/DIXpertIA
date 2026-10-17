@@ -43,6 +43,24 @@ def _required_secret(name: str) -> str:
     return value
 
 
+def _positive_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    try:
+        value = int(raw) if raw not in (None, "") else default
+    except ValueError:
+        raise ConfigurationError(f"{name} must be a whole number (got {raw!r}).") from None
+    if value < 1:
+        raise ConfigurationError(f"{name} must be at least 1 (got {value}).")
+    return value
+
+
+def _flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw in (None, ""):
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 class Settings:
     # No fallbacks. Both of these are required and the process will not start
     # without them.
@@ -66,6 +84,16 @@ class Settings:
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    # Reminders for invoices stuck in the verification flow (#134). Delays are
+    # calendar days at a step before its person is reminded, and again every
+    # such period while the invoice stays there.
+    REMINDERS_ENABLED: bool = _flag("REMINDERS_ENABLED", True)
+    REMINDER_INTERVAL_MINUTES: int = _positive_int("REMINDER_INTERVAL_MINUTES", 60)
+    REMINDER_DRAFT_DAYS: int = _positive_int("REMINDER_DRAFT_DAYS", 3)
+    REMINDER_REVIEW_DAYS: int = _positive_int("REMINDER_REVIEW_DAYS", 2)
+    REMINDER_REJECTED_DAYS: int = _positive_int("REMINDER_REJECTED_DAYS", 2)
+    REMINDER_APPROVED_DAYS: int = _positive_int("REMINDER_APPROVED_DAYS", 1)
 
 
 settings = Settings()
