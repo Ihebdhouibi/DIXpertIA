@@ -6,7 +6,9 @@ from app.core.database import Base
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True)
+    # The database allocates USR-NNN from users_id_seq (#85). Leave id unset on
+    # insert; a row count collided with live ids once they were sparse.
+    id = Column(String, primary_key=True, server_default=text("next_user_id()"))
     email = Column(String, unique=True, index=True, nullable=False)
     firstName = Column(String)
     lastName = Column(String)
