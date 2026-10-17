@@ -2,6 +2,35 @@
 @import "tailwindcss";
 
 /*
+ * Arial, resized to take the same room as Space Grotesk until it arrives
+ * (#165). Without it, the hero headline set in the fallback font wrapped on
+ * four lines, then three once Space Grotesk loaded, and the whole page below
+ * jumped up: a layout shift of 0.17 on every first visit. Measured in the
+ * browser against the loaded font (canvas measureText): the width ratio over
+ * running text at 400 and over the headline itself at 700, and Space Grotesk's ascent and descent (0.98 and
+ * 0.29 em) divided by it. Arial has no 500 or 600 face, so those weights take
+ * the nearest one.
+ */
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial");
+  font-weight: 100 549;
+  size-adjust: 109.59%;
+  ascent-override: 89.43%;
+  descent-override: 26.46%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT");
+  font-weight: 550 900;
+  size-adjust: 103.08%;
+  ascent-override: 95.07%;
+  descent-override: 28.13%;
+  line-gap-override: 0%;
+}
+
+/*
  * Ink & Signal Lime - design tokens.
  * Source: design/DI Xpertia Logo Concepts/exports/palette/ (--dix-* values).
  *
@@ -129,7 +158,7 @@
   --color-home-tab-number: var(--color-lime);
   --color-lime-hover: #D4F76E;
 
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", "Space Grotesk Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* 3. Type scale (#122). The views used these names long before they were

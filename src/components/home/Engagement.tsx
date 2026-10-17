@@ -162,7 +162,7 @@ export default function Engagement() {
         >
           <div className="flex flex-col gap-[22px]">
             <h3 className="m-0 text-home-subhead font-semibold text-balance">{model.headline}</h3>
-            <p className="m-0 max-w-[52ch] text-[17px] leading-[1.6] text-pretty text-home-fg/72">{model.desc}</p>
+            <p className="m-0 max-w-[33.33em] text-[17px] leading-[1.6] text-pretty text-home-fg/72">{model.desc}</p>
             <ul className="m-0 flex list-none flex-col border-t border-home-fg/14 p-0">
               {model.items.map((item) => (
                 <li key={item} className="flex items-baseline gap-3.5 border-b border-home-fg/10 py-3.5 text-[15px] leading-[1.5]">

@@ -44,10 +44,10 @@ export default function AboutCta({ onStart }: { onStart: () => void }) {
           <Reveal as="p" className="m-0 font-mono text-caption leading-none font-semibold tracking-[0.18em] text-lime uppercase">
             03 — About
           </Reveal>
-          <Reveal as="h2" index={1} id="cta-title" className="m-0 max-w-[16ch] text-home-closing font-bold text-balance">
+          <Reveal as="h2" index={1} id="cta-title" className="m-0 max-w-[10.37em] text-home-closing font-bold text-balance">
             Ready to transform your IT infrastructure?
           </Reveal>
-          <Reveal as="p" index={2} className="m-0 max-w-[46ch] text-home-lead text-paper/74">
+          <Reveal as="p" index={2} className="m-0 max-w-[29.49em] text-home-lead text-paper/74">
             Partner with DI Xpertia to bring modern, reliable technology to your organisation.
           </Reveal>
         </div>

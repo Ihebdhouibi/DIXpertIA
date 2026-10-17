@@ -30,7 +30,7 @@ export function SectionHeading({ eyebrow, title, id, note }: { eyebrow: string; 
         <p className="m-0 font-mono text-caption leading-none font-semibold tracking-[0.18em] text-home-accent-text uppercase">{eyebrow}</p>
         <h2 id={id} className="m-0 text-home-section font-bold">{title}</h2>
       </div>
-      <p className="m-0 max-w-[38ch] text-[15px] leading-[1.6] text-home-fg/68">{note}</p>
+      <p className="m-0 max-w-[24.36em] text-[15px] leading-[1.6] text-home-fg/68">{note}</p>
     </Reveal>
   );
 }

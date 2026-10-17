@@ -352,16 +352,18 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
       {header}
 
-      <Hero
-        onContact={() => handleNavClick('contact')}
-        onServices={() => handleNavClick('services')}
-        console={<HowWeWorkConsole />}
-      />
+      <main>
+        <Hero
+          onContact={() => handleNavClick('contact')}
+          onServices={() => handleNavClick('services')}
+          console={<HowWeWorkConsole />}
+        />
 
-      <Services onPick={() => handleNavClick('contact')} />
-      <Engagement />
+        <Services onPick={() => handleNavClick('contact')} />
+        <Engagement />
 
-      <AboutCta onStart={() => handleNavClick('contact')} />
+        <AboutCta onStart={() => handleNavClick('contact')} />
+      </main>
 
       {footer}
     </div>

@@ -6,50 +6,88 @@ const TYPE_START_MS = 900;
 const TYPE_STEP_MS = 44;
 
 /**
- * The headline types itself behind a lime block cursor (HP-05). The whole
- * sentence is laid out from the start, its untyped part transparent, so the
- * line breaks never move while it types. Screen readers get the sentence once,
- * from aria-label; the visual spans are hidden from them. Under reduced
- * motion the sentence is complete at once.
+ * The headline types itself behind a lime block cursor (HP-05). Three details
+ * keep the layout still while it types (HP-11 measured shifts up to 0.79
+ * before them):
+ * - Every letter is its own element, present from the start and transparent
+ *   until typed. Typing only changes a colour; no text moves. A single
+ *   "untyped rest" text node did move: its start shifted one letter per tick,
+ *   which the browser counts as layout shift even when transparent.
+ * - The cursor takes no width and is glued to the letters on either side
+ *   (white-space: nowrap). A block is a line-break opportunity: left loose
+ *   inside a word, it let "intelligence" break where it stood. A space next
+ *   to it stays outside the glue, so the real break points do not change.
+ * - Typing waits for the fonts, so it never runs during the font swap.
+ * Screen readers get the sentence once, from aria-label; the letters are
+ * hidden from them. Under reduced motion the sentence is complete at once.
  */
+const LETTERS = [...HEADLINE];
+
 function TypedHeadline() {
   const reduced = useReducedMotion();
-  const [typed, setTyped] = useState(reduced ? HEADLINE.length : 0);
+  const [typed, setTyped] = useState(reduced ? LETTERS.length : 0);
 
   useEffect(() => {
     if (reduced) {
-      setTyped(HEADLINE.length);
+      setTyped(LETTERS.length);
       return;
     }
     setTyped(0);
+    let cancelled = false;
+    let start: number | undefined;
     let step: number | undefined;
-    const start = window.setTimeout(() => {
-      step = window.setInterval(() => {
-        setTyped((n) => {
-          if (n + 1 >= HEADLINE.length) window.clearInterval(step);
-          return Math.min(n + 1, HEADLINE.length);
-        });
-      }, TYPE_STEP_MS);
-    }, TYPE_START_MS);
+    const fonts = document.fonts ? document.fonts.ready : Promise.resolve();
+    fonts.then(() => {
+      if (cancelled) return;
+      start = window.setTimeout(() => {
+        step = window.setInterval(() => {
+          setTyped((n) => {
+            if (n + 1 >= LETTERS.length) window.clearInterval(step);
+            return Math.min(n + 1, LETTERS.length);
+          });
+        }, TYPE_STEP_MS);
+      }, TYPE_START_MS);
+    });
     return () => {
+      cancelled = true;
       window.clearTimeout(start);
       window.clearInterval(step);
     };
   }, [reduced]);
 
-  const typing = typed > 0 && typed < HEADLINE.length;
+  const typing = typed > 0 && typed < LETTERS.length;
+  const letter = (i: number) => (
+    <span key={i} className={i < typed ? undefined : 'text-transparent'}>
+      {LETTERS[i]}
+    </span>
+  );
+  // The letters glued to the cursor: the one before and the one after it,
+  // unless either is a space.
+  const glueFrom = typed > 0 && LETTERS[typed - 1] !== ' ' ? typed - 1 : typed;
+  const glueTo = typed < LETTERS.length && LETTERS[typed] !== ' ' ? typed + 1 : typed;
+  const range = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, k) => letter(from + k));
+
   return (
-    <h1 id="hero-title" aria-label={HEADLINE} className="m-0 max-w-[14ch] text-home-hero font-bold text-balance">
+    <h1 id="hero-title" aria-label={HEADLINE} className="m-0 max-w-[9.07em] text-home-hero font-bold text-balance">
       <span aria-hidden="true">
-        {HEADLINE.slice(0, typed)}
-        <span
-          className={`mr-[-0.38em] ml-[0.08em] inline-block h-[0.68em] w-[0.38em] rounded-[0.05em] bg-home-accent-text align-[-0.02em] ${typing ? '' : 'animate-home-blink'}`}
-        />
-        <span className="text-transparent">{HEADLINE.slice(typed)}</span>
+        {range(0, glueFrom)}
+        <span className="whitespace-nowrap">
+          {range(glueFrom, typed)}
+          <span
+            className={`mr-[-0.46em] ml-[0.08em] inline-block h-[0.68em] w-[0.38em] rounded-[0.05em] bg-home-accent-text align-[-0.02em] ${typing ? '' : 'animate-home-blink'}`}
+          />
+          {range(typed, glueTo)}
+        </span>
+        {range(glueTo, LETTERS.length)}
       </span>
     </h1>
   );
 }
+
+// Widths in em, not the handoff's ch: ch is the width of "0" in the font being
+// shown, so the fallback font narrowed the headline and wrapped it on one more
+// line until Space Grotesk arrived. The em values equal the ch ones in Space
+// Grotesk (its "0" is 0.648em at 700, 0.641em at 400): 14ch = 9.07em.
 
 /** The engineering grid: 48px squares of hairline, faded out by a vignette. */
 const GRID: React.CSSProperties = {
@@ -83,7 +121,7 @@ export default function Hero({ onContact, onServices, console: panel }: {
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] items-start gap-[clamp(32px,5vw,72px)]">
           <Reveal index={1} className="flex flex-col gap-7">
-            <p className="m-0 max-w-[48ch] text-home-lead text-pretty text-home-fg/72">
+            <p className="m-0 max-w-[30.77em] text-home-lead text-pretty text-home-fg/72">
               We design, build and run the systems your organisation depends on — cloud infrastructure, security and
               software, engineered for reliability from the first line.
             </p>
