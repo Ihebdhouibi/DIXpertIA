@@ -4,7 +4,8 @@ import {
   Download, FileText, Info, Loader2, XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Employee, Invoice, LeaveRequest, Payslip, User } from '../types';
+import { Employee, LeaveRequest, Payslip, User } from '../types';
+import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
 import { formatTND } from '../format';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
@@ -22,7 +23,8 @@ interface Notification {
 
 interface DashboardViewProps {
   user: User;
-  invoices: Invoice[];
+  /** The figures, computed by the server over every row (#120). */
+  summary: DashboardSummary | null;
   payslips: Payslip[];
   leaveRequests: LeaveRequest[];
   employees: Employee[];
@@ -30,11 +32,6 @@ interface DashboardViewProps {
   onNavigate: (tab: string) => void;
   onQuickAction: (action: string) => void;
 }
-
-// App loads at most this many invoices (the API's page cap). The figures below
-// are computed from that list, so past the cap they cover only part of the
-// invoices - said on screen until the server computes them (#120).
-const INVOICE_LOAD_CAP = 200;
 
 const PROCESSING_STATES = ['Pending', 'Processed', 'Completed', 'Archived'] as const;
 const PROCESSING_TONE = { Pending: 'warning', Processed: 'info', Completed: 'success', Archived: 'neutral' } as const;
@@ -114,7 +111,7 @@ function Section({ title, aside, children }: { title: string; aside?: React.Reac
 
 export default function DashboardView({
   user,
-  invoices,
+  summary,
   payslips,
   leaveRequests,
   employees,
@@ -126,25 +123,37 @@ export default function DashboardView({
   const seesInvoices = user.role === 'admin' || user.role === 'accountant';
 
   // --- Invoices (admin and accountant) ---
-  const totalAmount = invoices.reduce((sum, inv) => sum + inv.amountTTC, 0);
+  // Counted and summed by the server over every invoice (#120): the browser no
+  // longer adds up a list capped at the API's page size.
+  const figures = summary?.invoices;
+  const invoiceCount = figures?.count ?? 0;
+  // One total per direction (#40): what clients owe us, what we owe suppliers.
+  const clientTotals = figures?.clients ?? { count: 0, amount: 0 };
+  const supplierTotals = figures?.suppliers ?? { count: 0, amount: 0 };
+  const directionMetrics: Metric[] = [
+    { label: 'Client invoices', value: clientTotals.count, hint: formatTND(clientTotals.amount), to: 'invoices' },
+    { label: 'Supplier bills', value: supplierTotals.count, hint: formatTND(supplierTotals.amount), to: 'invoices' },
+  ];
   // Where the invoices have got to in the accountant's workflow (#41). A
   // separate axis from the commercial status: an invoice is routinely Paid and
   // still Pending here, because the client has paid and nobody has booked it yet.
   const processingCounts = PROCESSING_STATES.map((state) => ({
     state,
-    count: invoices.filter((i) => i.processingStatus === state).length,
+    count: figures?.byProcessing.find((p) => p.status === state)?.count ?? 0,
   }));
   const countOf = (state: (typeof PROCESSING_STATES)[number]) =>
     processingCounts.find((p) => p.state === state)?.count ?? 0;
   const commercialStats = COMMERCIAL_STATES.map((status) => {
-    const items = invoices.filter((i) => i.status === status);
-    return { status, count: items.length, amount: items.reduce((sum, i) => sum + i.amountTTC, 0) };
+    const figure = figures?.byStatus.find((s) => s.status === status);
+    return { status, count: figure?.count ?? 0, amount: figure?.amount ?? 0 };
   });
-  const capped = invoices.length >= INVOICE_LOAD_CAP;
 
   // --- Leave and team ---
-  const pendingLeaves = leaveRequests.filter((r) => r.status === 'Pending').length;
-  const activeTeam = employees.filter((e) => e.employmentStatus === 'active').length;
+  // The caller's own pending requests, or everyone's for the admin: the
+  // server's row-level security decides, as for the leave list.
+  const pendingLeaves = summary?.leave.pending ?? 0;
+  const activeTeam = summary?.team?.active ?? 0;
+  const teamTotal = summary?.team?.total ?? 0;
 
   // --- Employee: their own records ---
   // Resolved through the employee record: leave belongs to the employee, not
@@ -163,21 +172,21 @@ export default function DashboardView({
     user.role === 'admin'
       ? [
           { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
-          { label: 'Invoices', value: invoices.length, hint: formatTND(totalAmount), to: 'invoices' },
+          ...directionMetrics,
           { label: 'Leave to decide', value: pendingLeaves, hint: 'pending requests', to: 'team' },
-          { label: 'Active team', value: activeTeam, hint: `${employees.length} employees in total`, to: 'team' },
+          { label: 'Active team', value: activeTeam, hint: `${teamTotal} employees in total`, to: 'team' },
         ]
       : user.role === 'accountant'
         ? [
             { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
             { label: 'To complete', value: countOf('Processed'), hint: 'invoices in Processed', to: 'invoices' },
             { label: 'Completed', value: countOf('Completed'), hint: 'ready for the month close', to: 'invoices' },
-            { label: 'Invoiced', value: invoices.length, hint: formatTND(totalAmount), to: 'invoices' },
+            ...directionMetrics,
           ]
         : [
             {
               label: 'Pending requests',
-              value: myLeave.filter((r) => r.status === 'Pending').length,
+              value: pendingLeaves,
               hint: 'waiting for a decision',
               to: 'leave-requests',
               highlight: true,
@@ -220,28 +229,25 @@ export default function DashboardView({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-busy={loading || undefined}>
+      <div
+        className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${metrics.length > 4 ? 'lg:grid-cols-3 xl:grid-cols-5' : 'lg:grid-cols-4'}`}
+        aria-busy={loading || undefined}
+      >
         {metrics.map((m) => (
           <MetricCard key={m.label} metric={m} loading={loading} onNavigate={onNavigate} />
         ))}
       </div>
-
-      {seesInvoices && capped && !loading && (
-        <p className="text-xs text-on-surface-variant">
-          Invoice figures cover the {INVOICE_LOAD_CAP} most recent invoices.
-        </p>
-      )}
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {seesInvoices && (
             <Section
               title="Invoices by processing state"
-              aside={<span className={EYEBROW}>{invoices.length} invoices</span>}
+              aside={<span className={EYEBROW}>{invoiceCount} invoices</span>}
             >
               {loading ? (
                 <LoadingRow />
-              ) : invoices.length === 0 ? (
+              ) : invoiceCount === 0 ? (
                 <p className="text-sm text-on-surface-variant">No invoices yet.</p>
               ) : (
                 // Each bar carries its label and its count, so no value relies on colour.
