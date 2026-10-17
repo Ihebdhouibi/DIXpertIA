@@ -23,7 +23,8 @@ type Page = HomeTarget;
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
-// FAQ data (same as in ContactView, but translated to English)
+// FAQ data. Worded without guarantees the company has not committed to: no
+// response times, no 24/7 line, no certification (#98).
 const faqData = [
   {
     question: 'What types of cloud services do you offer?',
@@ -31,15 +32,15 @@ const faqData = [
   },
   {
     question: 'How do you ensure the security of our data?',
-    answer: 'We apply ISO 27001 standards, regular audits, and advanced encryption protocols to protect your data.'
+    answer: 'We follow recognised security practices, such as those of ISO 27001, with regular reviews and encryption of your data.'
   },
   {
     question: 'What is your average support response time?',
-    answer: 'Our technical support responds within 4 hours for standard requests, and immediately for critical incidents (24/7 SLA).'
+    answer: 'We aim to reply quickly, usually within one business day, and we prioritise critical incidents.'
   },
   {
     question: 'Can we migrate an existing infrastructure without service interruption?',
-    answer: 'Yes, we plan phased migrations with failover testing to ensure business continuity.'
+    answer: 'In most cases, yes: we plan phased migrations with failover testing to keep your services running.'
   },
   {
     question: 'How does your service pricing estimation work?',
@@ -160,15 +161,15 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     const contactItems = [
       {
         icon: Phone,
-        title: 'Emergency Assistance (SLA)',
+        title: 'Phone',
         value: '+216 28 814 729',
-        note: '24/7 emergency line for subscribed clients'
+        note: 'For urgent requests, during office hours'
       },
       {
         icon: Mail,
-        title: 'Business Integration Inquiries',
+        title: 'Business Inquiries',
         value: 'contact@dixpertia.com',
-        note: 'Guaranteed response within 4 business hours'
+        note: 'We usually reply within one business day'
       },
       {
         icon: MapPin,
@@ -177,9 +178,8 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       },
       {
         icon: Clock,
-        title: 'On-Call Office Uptime',
-        value: 'Monday – Friday: 8:00 AM – 7:00 PM',
-        note: 'Active network crisis team 24/7/365'
+        title: 'Office Hours',
+        value: 'Monday – Friday: 8:00 AM – 7:00 PM'
       }
     ];
 
@@ -199,8 +199,8 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
             <p className={`${EYEBROW} text-home-accent-text`}>Contact</p>
             <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-[-0.02em]">Contact our experts</h1>
             <p className="mt-4 text-base text-home-fg/62 leading-relaxed">
-              Whether you want a full system audit or to initiate a migration, our on-call architects
-              are ready to respond within 4 hours.
+              Whether you want a full system audit or to start a migration, tell us about your project and
+              our team will get back to you quickly.
             </p>
           </div>
 
@@ -326,7 +326,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-home-fg/62" />
                 <input
                   type="text"
-                  placeholder="Search (e.g. SLA, security)..."
+                  placeholder="Search (e.g. security, migration)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`${FIELD} pl-9`}
