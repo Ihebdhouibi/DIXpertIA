@@ -120,6 +120,18 @@ BEGIN
 END
 $$;
 
+-- The sign-in and public-route counters (#175) are reached only through the
+-- auth_throttle_*() functions: the blanket grant above gave the table, which
+-- would let an application flaw read or wipe the counters. Withdrawn on every
+-- run; row-level security already shows the app role no row.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'auth_attempts') THEN
+        REVOKE ALL ON TABLE public.auth_attempts FROM dixpertia_app;
+    END IF;
+END
+$$;
+
 -- users (#76): the application never reads the password hash, not even on its
 -- own row - sign-in reads it through auth_account_by_email() - and only the
 -- columns an admin edits are updatable; the password changes only through

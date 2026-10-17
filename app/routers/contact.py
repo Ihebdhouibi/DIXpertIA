@@ -18,7 +18,7 @@ from app.models.contact import ContactRequest
 from app.models.user import User
 from app.schemas.api import MessageOut
 from app.schemas.contact import ContactIn, ContactRequestOut
-from app.services import contact
+from app.services import contact, throttle
 from app.services.audit import record_event
 
 public = APIRouter()
@@ -29,7 +29,7 @@ MAX_PAGE_SIZE = 200
 RETRY_AFTER_SECONDS = 3600
 
 
-@public.post("/contact", response_model=MessageOut)
+@public.post("/contact", response_model=MessageOut, dependencies=[Depends(throttle.limit_public_requests)])
 def send_enquiry(payload: ContactIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
     """Receive an enquiry: store it, notify the admins, e-mail the inbox.
 

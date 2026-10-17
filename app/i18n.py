@@ -59,6 +59,9 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.forbidden": {"en": "Access denied", "fr": "Accès refusé"},
     "auth.admin_required": {"en": "Administrator role required", "fr": "Rôle administrateur requis"},
     "auth.invalid_credentials": {"en": "Invalid credentials", "fr": "Identifiants incorrects"},
+    "auth.too_many_requests": {
+        "en": "Too many attempts. Please wait a few minutes and try again.",
+        "fr": "Trop de tentatives. Patientez quelques minutes, puis réessayez."},
     "auth.invalid_link": {
         "en": "This link is invalid or has expired. Ask for a new one.",
         "fr": "Ce lien est invalide ou a expiré. Demandez-en un nouveau."},
