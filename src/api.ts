@@ -298,9 +298,22 @@ export interface StatusFigure {
  * A null block is not zero: the caller has no access to it - `invoices` for an
  * employee, `team` for anyone but the admin.
  */
+/** Invoices one way (#40), and their total TTC. */
+export interface DirectionTotal {
+  count: number;
+  amount: number;
+}
+
 export interface DashboardSummary {
   month: string | null;
-  invoices: { count: number; amount: number; byStatus: StatusFigure[]; byProcessing: StatusFigure[] } | null;
+  invoices: {
+    count: number;
+    /** Never added together: one is income, the other expenses. */
+    clients: DirectionTotal;
+    suppliers: DirectionTotal;
+    byStatus: StatusFigure[];
+    byProcessing: StatusFigure[];
+  } | null;
   leave: { pending: number };
   team: { active: number; total: number } | null;
 }

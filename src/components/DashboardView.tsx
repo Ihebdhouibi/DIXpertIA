@@ -127,7 +127,13 @@ export default function DashboardView({
   // longer adds up a list capped at the API's page size.
   const figures = summary?.invoices;
   const invoiceCount = figures?.count ?? 0;
-  const totalAmount = figures?.amount ?? 0;
+  // One total per direction (#40): what clients owe us, what we owe suppliers.
+  const clientTotals = figures?.clients ?? { count: 0, amount: 0 };
+  const supplierTotals = figures?.suppliers ?? { count: 0, amount: 0 };
+  const directionMetrics: Metric[] = [
+    { label: 'Client invoices', value: clientTotals.count, hint: formatTND(clientTotals.amount), to: 'invoices' },
+    { label: 'Supplier bills', value: supplierTotals.count, hint: formatTND(supplierTotals.amount), to: 'invoices' },
+  ];
   // Where the invoices have got to in the accountant's workflow (#41). A
   // separate axis from the commercial status: an invoice is routinely Paid and
   // still Pending here, because the client has paid and nobody has booked it yet.
@@ -166,7 +172,7 @@ export default function DashboardView({
     user.role === 'admin'
       ? [
           { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
-          { label: 'Invoices', value: invoiceCount, hint: formatTND(totalAmount), to: 'invoices' },
+          ...directionMetrics,
           { label: 'Leave to decide', value: pendingLeaves, hint: 'pending requests', to: 'team' },
           { label: 'Active team', value: activeTeam, hint: `${teamTotal} employees in total`, to: 'team' },
         ]
@@ -175,7 +181,7 @@ export default function DashboardView({
             { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
             { label: 'To complete', value: countOf('Processed'), hint: 'invoices in Processed', to: 'invoices' },
             { label: 'Completed', value: countOf('Completed'), hint: 'ready for the month close', to: 'invoices' },
-            { label: 'Invoiced', value: invoiceCount, hint: formatTND(totalAmount), to: 'invoices' },
+            ...directionMetrics,
           ]
         : [
             {
@@ -223,7 +229,10 @@ export default function DashboardView({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-busy={loading || undefined}>
+      <div
+        className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${metrics.length > 4 ? 'lg:grid-cols-3 xl:grid-cols-5' : 'lg:grid-cols-4'}`}
+        aria-busy={loading || undefined}
+      >
         {metrics.map((m) => (
           <MetricCard key={m.label} metric={m} loading={loading} onNavigate={onNavigate} />
         ))}

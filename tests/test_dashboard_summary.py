@@ -15,6 +15,8 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import text
 
+from invoice_flow import draft
+
 pytestmark = pytest.mark.identity("admin")
 
 TODAY = date.today()
@@ -62,7 +64,7 @@ def test_exact_past_the_old_200_invoice_cap(client, admin, bill):
         bill(ttc=10)
     invoices = summary(client, admin)["invoices"]
     assert invoices["count"] == 205
-    assert invoices["amount"] == pytest.approx(2050)
+    assert invoices["suppliers"] == {"count": 205, "amount": pytest.approx(2050)}
 
 
 def test_counts_and_amounts_come_from_the_same_rows(client, admin, bill):
@@ -70,16 +72,17 @@ def test_counts_and_amounts_come_from_the_same_rows(client, admin, bill):
         bill(ttc=ttc)
     invoices = summary(client, admin)["invoices"]
     assert invoices["count"] == sum(s["count"] for s in invoices["byStatus"])
-    assert invoices["amount"] == pytest.approx(sum(s["amount"] for s in invoices["byStatus"]))
+    assert invoices["suppliers"]["amount"] == pytest.approx(sum(s["amount"] for s in invoices["byStatus"]))
     assert invoices["count"] == sum(p["count"] for p in invoices["byProcessing"])
-    assert invoices["amount"] == pytest.approx(1350.5)
+    assert invoices["suppliers"]["amount"] == pytest.approx(1350.5)
 
 
 def test_every_status_is_listed_in_order_zeros_included(client, admin):
     invoices = summary(client, admin)["invoices"]
     assert [s["status"] for s in invoices["byStatus"]] == ["Draft", "Sent", "Paid", "Overdue", "Cancelled"]
     assert [p["status"] for p in invoices["byProcessing"]] == ["Pending", "Processed", "Completed", "Archived"]
-    assert invoices["count"] == 0 and invoices["amount"] == 0
+    assert invoices["count"] == 0
+    assert invoices["clients"] == invoices["suppliers"] == {"count": 0, "amount": 0}
 
 
 def test_overdue_is_derived_as_in_the_invoice_list(client, admin, bill, database):
@@ -100,9 +103,24 @@ def test_month_filter_counts_that_month_only(client, admin, bill):
     march = summary(client, admin, month="2026-03")
     assert march["month"] == "2026-03"
     assert march["invoices"]["count"] == 2
-    assert march["invoices"]["amount"] == pytest.approx(300)
+    assert march["invoices"]["suppliers"]["amount"] == pytest.approx(300)
     assert summary(client, admin, month="2026-12")["invoices"]["count"] == 0
     assert summary(client, admin)["invoices"]["count"] == 3
+
+
+def test_client_and_supplier_totals_are_kept_apart(client, admin, bill):
+    """Income and expenses: two totals, never one sum (#40)."""
+    customer = client.post("/api/clients", headers=admin, json={
+        "nom": "Acme Corporation", "email": "a@acme.tn",
+        "telephone": "+216 70 000 000", "adresse": "1 rue de Tunis",
+    }).json()["id"]
+    for amount in (1000, 500):
+        assert draft(client, admin, customer, amount).status_code == 200
+    bill(ttc=119)
+    invoices = summary(client, admin)["invoices"]
+    assert invoices["clients"] == {"count": 2, "amount": pytest.approx(1785)}, "1500 HT at 19% VAT"
+    assert invoices["suppliers"] == {"count": 1, "amount": pytest.approx(119)}
+    assert invoices["count"] == 3
 
 
 @pytest.mark.parametrize("month", ["2026-13", "2026-1", "march", "2026-00"])
@@ -133,16 +151,23 @@ def test_the_admin_sees_the_whole_team(client, admin, database):
 
 
 @pytest.fixture
-def pending_for_everyone(database):
-    """Two pending requests and one approved for each fixture employee."""
+def pending_for_everyone(database, identities):
+    """Two pending requests and one approved for each fixture employee.
+
+    A decision names who made it, and nobody decides their own: the admin
+    approves everyone's, the accountant the admin's.
+    """
+    admin, accountant = identities["admin"]["user_id"], identities["accountant"]["user_id"]
     with database.connect() as c:
-        ids = c.execute(text("SELECT id FROM employees")).scalars().all()
-        for employee_id in ids:
+        rows = c.execute(text("SELECT id, user_id FROM employees")).all()
+        for employee_id, user_id in rows:
+            decider = accountant if user_id == admin else admin
             for statut in ("EN_ATTENTE", "EN_ATTENTE", "APPROUVE"):
                 c.execute(text(
-                    "INSERT INTO leave_requests (employee_id, date_debut, date_fin, type_conge, statut)"
-                    " VALUES (:e, '2026-03-10', '2026-03-12', 'PAYE', :s)"), {"e": employee_id, "s": statut})
-    return len(ids)
+                    "INSERT INTO leave_requests (employee_id, date_debut, date_fin, type_conge, statut, valide_par_id)"
+                    " VALUES (:e, '2026-03-10', '2026-03-12', 'PAYE', :s, :v)"),
+                    {"e": employee_id, "s": statut, "v": None if statut == "EN_ATTENTE" else decider})
+    return len(rows)
 
 
 def test_the_admin_counts_everyone_s_pending_leave(client, admin, pending_for_everyone):

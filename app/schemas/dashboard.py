@@ -10,9 +10,19 @@ class StatusFigure(BaseModel):
     amount: float = 0.0
 
 
-class InvoiceFigures(BaseModel):
+class DirectionTotal(BaseModel):
+    """How many invoices one way, and for how much (TTC)."""
     count: int
     amount: float
+
+
+class InvoiceFigures(BaseModel):
+    # Every invoice, both directions: what the status breakdowns below count.
+    count: int
+    # The money, one total per direction (#40): what clients owe us and what
+    # we owe suppliers. Never one sum - income plus expenses means nothing.
+    clients: DirectionTotal
+    suppliers: DirectionTotal
     # Every commercial status, zeros included, Overdue derived (#117).
     byStatus: list[StatusFigure]
     # Every processing state (#41), zeros included. Counts only.

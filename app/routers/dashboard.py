@@ -24,11 +24,13 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.employee import Employee, EmploymentStatus
-from app.models.invoicing import Invoice, InvoiceProcessingStatus, InvoiceStatus
+from app.models.invoicing import Invoice, InvoiceDirection, InvoiceProcessingStatus, InvoiceStatus
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.user import User
 from app.schemas.api import INVOICE_PROCESSING_STATUS_TO_API, INVOICE_STATUS_TO_API
-from app.schemas.dashboard import DashboardSummary, InvoiceFigures, LeaveFigures, StatusFigure, TeamFigures
+from app.schemas.dashboard import (
+    DashboardSummary, DirectionTotal, InvoiceFigures, LeaveFigures, StatusFigure, TeamFigures,
+)
 
 router = APIRouter()
 
@@ -66,6 +68,12 @@ def _invoice_figures(db: Session, month: Optional[str]) -> InvoiceFigures:
     }
     processing = cast(rows.c.processing_status, Text)
     by_processing = dict(db.query(processing, func.count()).group_by(first).all())
+    direction = cast(rows.c.direction, Text)
+    by_direction = {
+        name: DirectionTotal(count=count, amount=round(float(amount or 0), 3))
+        for name, count, amount in db.query(direction, func.count(), func.sum(rows.c.montant_ttc)).group_by(first).all()
+    }
+    none = DirectionTotal(count=0, amount=0.0)
 
     statuses = [
         StatusFigure(status=INVOICE_STATUS_TO_API[s.value],
@@ -78,7 +86,8 @@ def _invoice_figures(db: Session, month: Optional[str]) -> InvoiceFigures:
     ]
     return InvoiceFigures(
         count=sum(s.count for s in statuses),
-        amount=round(sum(s.amount for s in statuses), 3),
+        clients=by_direction.get(InvoiceDirection.OUTGOING.name, none),
+        suppliers=by_direction.get(InvoiceDirection.INCOMING.name, none),
         byStatus=statuses,
         byProcessing=states,
     )
