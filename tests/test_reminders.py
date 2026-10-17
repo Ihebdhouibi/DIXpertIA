@@ -155,7 +155,8 @@ def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identitie
     new_draft()
     run(draft_since() + timedelta(days=3))
     assert [to for to, _ in sent] == [identities["admin"]["email"]]
-    assert "has been a draft" in sent[0][1]
+    # In the recipient's language (#135): the test accounts are French, the default.
+    assert "est un brouillon depuis" in sent[0][1]
 
 
 def test_without_smtp_reminders_are_in_app_only(run, new_draft, monkeypatch):
