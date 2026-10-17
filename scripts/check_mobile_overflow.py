@@ -26,7 +26,7 @@ Usage
 Each --account is EMAIL:PASSWORD; pass one per role to cover its screens.
 Options: --url (default http://localhost:3000/), --width (default 390),
 --browser (msedge, the default, or chromium), --screenshots DIR (a PNG of each
-failing screen). Requires Playwright (pip install playwright).
+failing screen), --locale (en, the default, or fr: French is longer). Requires Playwright (pip install playwright).
 
 Exit status 1 if any screen is wider than the viewport.
 """
@@ -38,18 +38,25 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-# Sidebar entries that are not app screens: the public homepage has no
-# sidebar to come back from, and the others are actions.
-SKIP = {"Home", "Sign out", "Close navigation", "Close"}
+# The few controls found by name, per UI language (#135): French is longer
+# than English, so both are checked. "skip" lists the sidebar entries that are
+# not app screens: the public homepage has no sidebar to come back from, and
+# the others are actions.
+NAMES = {
+    "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
+           "skip": {"Home", "Sign out", "Close navigation", "Close"}},
+    "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
+           "skip": {"Accueil", "Se déconnecter", "Fermer la navigation", "Fermer"}},
+}
 
 
-def screens_of(page) -> list[str]:
-    page.get_by_role("button", name="Open navigation").click()
+def screens_of(page, names: dict) -> list[str]:
+    page.get_by_role("button", name=names["open"]).click()
     page.wait_for_timeout(400)
     labels = [t.strip() for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    return [label for label in labels if label and label not in SKIP]
+    return [label for label in labels if label and label not in names["skip"]]
 
 
 def main() -> int:
@@ -57,10 +64,12 @@ def main() -> int:
     parser.add_argument("--account", action="append", required=True, metavar="EMAIL:PASSWORD")
     parser.add_argument("--url", default="http://localhost:3000/")
     parser.add_argument("--width", type=int, default=390)
+    parser.add_argument("--locale", choices=tuple(NAMES), default="en", help="the UI language to check")
     parser.add_argument("--browser", choices=("msedge", "chromium"), default="msedge",
                         help="msedge locally; chromium in CI, where Edge is not installed")
     parser.add_argument("--screenshots", type=Path, help="save a PNG of each failing screen here")
     args = parser.parse_args()
+    names = NAMES[args.locale]
     if args.screenshots:
         args.screenshots.mkdir(parents=True, exist_ok=True)
 
@@ -71,18 +80,18 @@ def main() -> int:
             email, _, password = account.partition(":")
             for theme in ("light", "dark"):
                 context = browser.new_context(viewport={"width": args.width, "height": 844}, color_scheme=theme,
-                                              locale="en-US")  # the checks find screens by their English names
+                                              locale="en-US" if args.locale == "en" else "fr-FR")
                 context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}'); "
-                                   "localStorage.setItem('dixpertia_locale', 'en')")
+                                   f"localStorage.setItem('dixpertia_locale', '{args.locale}')")
                 page = context.new_page()
                 page.goto(args.url)
-                page.get_by_role("button", name="Go to Dashboard").first.click()
+                page.get_by_role("button", name=names["dashboard"]).first.click()
                 page.locator('input[type="email"]').fill(email)
                 page.locator('input[type="password"]').fill(password)
                 page.keyboard.press("Enter")
-                page.get_by_role("button", name="Open navigation").wait_for(timeout=15000)
-                for label in screens_of(page):
-                    page.get_by_role("button", name="Open navigation").click()
+                page.get_by_role("button", name=names["open"]).wait_for(timeout=15000)
+                for label in screens_of(page, names):
+                    page.get_by_role("button", name=names["open"]).click()
                     page.wait_for_timeout(400)
                     page.get_by_role("dialog").get_by_role("button", name=label, exact=True).first.click()
                     page.wait_for_timeout(1800)

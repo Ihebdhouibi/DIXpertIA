@@ -239,6 +239,13 @@ jobs:
             --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD" \
             --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
 
+      - name: Mobile overflow in French (390px, light and dark)
+        # French runs longer than English: a label that fits in one can
+        # overflow in the other (#135).
+        if: success() || failure()
+        run: |
+          python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures --locale fr             --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
       - name: Keep the screenshots and logs of a failure
         if: failure()
         uses: actions/upload-artifact@v4
