@@ -33,7 +33,8 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, invoicing, notifications
+from app.routers import accounting, audit, invoicing, notifications
+from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.reminders import reminder_loop
 
@@ -100,6 +101,7 @@ app = FastAPI(dependencies=[Depends(require_authentication)], lifespan=lifespan)
 app.include_router(invoicing.router, prefix="/api")
 app.include_router(accounting.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
@@ -267,6 +269,10 @@ def create_user(req: UserCreate, current_user: User = Depends(get_current_user),
         createdAt=datetime.utcnow()
     )
     db.add(user)
+    db.flush()
+    # The role only: the account's details live on the account, and the
+    # temporary password must never reach the trail (#63).
+    record_event(db, "user.created", "user", user.id, after={"role": user.role, "isActive": True})
     db.commit()
     db.refresh(user)
 
@@ -303,6 +309,9 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
     user.resetToken = token
     user.resetTokenExpiry = expiry
+    # Only for a known account: an unknown e-mail records nothing, like it
+    # answers nothing different. The token itself never goes in the trail.
+    record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
 
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -346,6 +355,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     user.hashedPassword = hashed
     user.resetToken = None
     user.resetTokenExpiry = None
+    record_event(db, "user.password_reset", "user", user.id)
     db.commit()
     return {"message": "Password updated successfully."}
 
@@ -523,6 +533,8 @@ def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db:
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
+    record_event(db, "leave_request.approved", "leave_request", leave.id,
+                 before={"statut": leave.statut}, after={"statut": LeaveStatus.APPROUVE})
     leave.statut = LeaveStatus.APPROUVE
     leave.valide_par_id = admin.id
     db.commit()
@@ -542,6 +554,9 @@ def reject_leave_request(
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
+    record_event(db, "leave_request.rejected", "leave_request", leave.id,
+                 before={"statut": leave.statut},
+                 after={"statut": LeaveStatus.REFUSE, "comment": body.comment or ''})
     leave.statut = LeaveStatus.REFUSE
     leave.commentaire_validation = body.comment or ''
     leave.valide_par_id = admin.id
@@ -566,6 +581,11 @@ def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), 
         annual_entitlement_days=req.annualEntitlementDays,
     )
     db.add(employee)
+    db.flush()
+    record_event(db, "employee.created", "employee", employee.id, after={
+        "user_id": employee.user_id, "job_title": employee.job_title,
+        "hired_on": employee.hired_on, "annual_entitlement_days": employee.annual_entitlement_days,
+    })
     db.commit()
     db.refresh(employee)
     return {

@@ -15,6 +15,7 @@ relationships happen to mention.
 """
 
 from app.models.accounting import AccountingPeriod, PeriodState  # noqa: F401
+from app.models.audit import AuditEvent  # noqa: F401
 from app.models.employee import Employee, EmploymentStatus  # noqa: F401
 from app.models.invoicing import (  # noqa: F401
     Client,

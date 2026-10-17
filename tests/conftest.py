@@ -56,6 +56,8 @@ def _role_url(role: str, password: str) -> str:
 # Business data only. `users` and `employees` hold the fixture accounts every
 # test signs in as, and alembic_version must survive or the schema is rebuilt.
 TRUNCATED_BETWEEN_TESTS = (
+    # TRUNCATE, not DELETE, which the append-only trigger refuses (#63).
+    "audit_events",
     "notifications",
     "invoice_reviews",
     "invoice_items",

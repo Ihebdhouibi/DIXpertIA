@@ -297,6 +297,7 @@ harness made that mistake and a policy test caught it.
 | `test_authorisation.py` | every route x {anonymous, employee, accountant, admin}, and a check that no route escapes the matrix |
 | `test_invoice_rules.py` | gapless numbering, chronological order, the two series, per-supplier references, the monthly close |
 | `test_row_level_security.py` | an employee cannot read another's payroll; no response carries a password hash |
+| `test_audit_trail.py` | one audit event per sensitive action, by the right actor; append-only; admin-only reads; no secret in the trail |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
@@ -707,3 +708,78 @@ that share a sort value have no defined order between queries, and a client
 paging through the list sees some rows twice and never sees others. Walking 40
 pages of the seeded invoices ordered by `date_emission` alone returned 123
 duplicated rows out of 1000; adding `id` returned zero.
+
+## Audit trail
+
+`audit_events` records who did what (#63, AUDIT-DB-017). One row per sensitive
+action, written by `app.services.audit.record_event()` inside the action's own
+transaction: an action that fails or rolls back records nothing, and one that
+commits is always recorded. An idempotent replay of an invoice creation creates
+nothing, so it records nothing.
+
+| Column | Meaning |
+|---|---|
+| `actor_id`, `actor_role` | the signed-in identity of the request, and its role at the time. NULL for an anonymous step (the two password-reset steps) |
+| `action` | `entity.verb`, e.g. `invoice.approved` |
+| `entity`, `entity_id` | the record acted on |
+| `before`, `after` | the fields the action changed. Amounts are strings, so they stay exact |
+
+### What is recorded
+
+| Action | Where |
+|---|---|
+| `invoice.created` (both directions), `invoice.updated` | `app/routers/invoicing.py` |
+| `invoice.submitted`, `.approved`, `.rejected`, `.sent` | the verification flow (#118) |
+| `invoice.processing_status_changed` | the accountant's workflow |
+| `accounting_period.closed` | `app/routers/accounting.py`; one event for the close, with the number of invoices archived |
+| `leave_request.approved`, `.rejected` | `main.py` |
+| `user.created`, `employee.created` | `main.py`; the role only, never the temporary password |
+| `user.password_reset_requested`, `user.password_reset` | `main.py`; an unknown e-mail records nothing |
+
+Not recorded yet, because the endpoints do not exist: user update,
+deactivation and role change (#62), and invoice cancellation (#126). Those
+issues add the endpoints and must call `record_event()`.
+
+**Never put a secret in `before`/`after`**: no password, hash, token or
+temporary password. The trail is kept for years and read by people who must not
+see them. `test_audit_trail.py` checks the account and reset flows for this.
+
+### Append-only
+
+- The application role holds `INSERT` and `SELECT` only. `UPDATE` and `DELETE`
+  are revoked in the migration and again in `db/sql/001-roles-and-grants.sql`,
+  whose blanket grant would otherwise restore `UPDATE` on every re-run.
+  `setup_roles.py` fails its verification if they come back.
+- `trg_audit_events_are_append_only` refuses `UPDATE` and `DELETE` from anyone,
+  the owner included.
+- `TRUNCATE` is never granted to the application role. The test suite empties
+  the table with it between tests, as the owner.
+
+### Who reads it, and who writes it
+
+Row-level security: only the `admin` role reads the trail, through
+`GET /api/audit-events` (filters `actorId`, `entity`, `entityId`, `action`,
+`since`, `until`; `X-Total-Count`). Any request may write, but only in its own
+name: the INSERT policy requires `actor_id` and `actor_role` to equal the
+request's identity, or both NULL when nobody is signed in.
+
+An actor is a foreign key with `ON DELETE RESTRICT`: an account that acted
+cannot be deleted from under its trail. Accounts are deactivated, not deleted
+(#62).
+
+### Retention
+
+**Proposed: 10 years, then purged**, aligned with the retention of the
+accounting records the events describe. This is a proposal, not a confirmed
+legal requirement: confirm the period with the business (and its accountant or
+legal adviser) before deployment. Until then nothing is purged. A purge, when it
+comes, runs as the owner with the append-only trigger disabled for that
+statement only, and is itself recorded.
+
+### Deferred from #63
+
+- `created_by` / `updated_by` columns on business tables: the trail already
+  answers "who" for every recorded action, and the invoice review history
+  (`invoice_reviews`) keeps its own actors.
+- `log_connections` and statement logging on the server: server configuration,
+  part of the deployment milestone with the rest of #77.

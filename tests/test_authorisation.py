@@ -47,6 +47,9 @@ ROUTES = [
     ("POST", "/api/notifications/1/dismiss", EMPLOYEE_SELF),
     ("POST", "/api/notifications/dismiss-all", EMPLOYEE_SELF),
 
+    # --- audit trail (#63): read by the admin only, written by the server ---
+    ("GET", "/api/audit-events", ADMIN_ONLY),
+
     # --- payroll and leave: scoped by row-level security, not by role -------
     ("GET", "/api/payslips", EMPLOYEE_SELF),
     ("GET", "/api/leave-requests", EMPLOYEE_SELF),

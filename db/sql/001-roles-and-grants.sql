@@ -108,6 +108,18 @@ BEGIN
 END
 $$;
 
+-- The audit trail is append-only (#63): the blanket grant above gave it UPDATE,
+-- which re-running this script must not restore. Its trigger refuses UPDATE and
+-- DELETE anyway; the privilege is withdrawn as well so the app role cannot even
+-- attempt it. Guarded like the DELETE grants: the table arrives with migrations.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'audit_events') THEN
+        REVOKE UPDATE, DELETE ON TABLE public.audit_events FROM dixpertia_app;
+    END IF;
+END
+$$;
+
 -- Integer primary keys draw from sequences; UPDATE is required by nextval().
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO dixpertia_app;
 
