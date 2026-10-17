@@ -26,8 +26,7 @@ from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
 from app.services.audit import record_event
 
 # Keeping the books is the accountant's job, and the admin's by virtue of
-# running the company. `rh` is excluded, as it is for an invoice's processing
-# status: this is bookkeeping, not a commercial act.
+# running the company: this is bookkeeping, not a commercial act.
 router = APIRouter(dependencies=[Depends(require_roles("admin", "accountant"))])
 
 MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
