@@ -101,12 +101,44 @@ migrations and maintenance scripts keep working under `FORCE ROW LEVEL
 SECURITY`. It is scoped to that role by name rather than to a settable flag: a
 GUC-based escape hatch could be flipped by `dixpertia_app` itself.
 
-### `users` is not covered
+### `users` (#76)
 
-Login, forgot-password and reset-password all read `users` with no authenticated
-identity, so a policy there would break authentication outright. Covering it
-needs `SECURITY DEFINER` lookup functions owned by a `BYPASSRLS` role, exposing
-only the columns the auth path needs. Tracked separately.
+Rows: admin, accountant and the reminder job read every account, since payslips,
+the invoice review history and the reminder e-mails need other people's names
+and addresses; the rule matches `employees`. Everyone else reads only their own
+row. Only the admin creates or edits accounts.
+
+Columns: the application role cannot read `hashedPassword` at all, not even on
+its own row, and can update only the columns an admin edits. The ORM model
+defers the column with `raiseload`, so an accidental read fails in Python, by
+name. `db/sql/001-roles-and-grants.sql` narrows the blanket grant again on every
+run, and `setup_roles.py` fails its verification if the column is readable.
+
+Sign-in, forgot-password, the reset and activation links, and the per-request
+session check all read `users` before anyone is identified. They go through
+`SECURITY DEFINER` functions owned by the schema owner, with `search_path`
+pinned and `EXECUTE` granted to the application role only:
+
+| Function | Used by | Returns |
+|---|---|---|
+| `auth_account_by_email(email)` | sign-in, forgot-password | the account, with the hash for the one bcrypt comparison |
+| `auth_session(user_id)` | every request (#62) | role, `isActive`, `isVerified`, `token_version`; no hash |
+| `auth_spend_account_token(token, purpose, hash)` | reset and activation links | the account id, or NULL |
+
+`auth_spend_account_token` takes the token itself and hashes it inside, so
+reading `account_tokens` (which holds only hashes) is no way to set a password.
+In one statement it checks the link is live, spends it, sets the password,
+activates the account for an activation link and bumps `token_version`.
+
+The issue proposed a separate `BYPASSRLS` role to own the functions. The schema
+owner already passes the policies through `users_owner_all`, and a new role
+would need another superuser provisioning step for no narrower access to these
+two tables. If migrations ever run as a superuser instead of
+`dixpertia_owner`, the functions would be owned by that superuser: run them as
+the owner.
+
+`seed_users.py` connects as the owner too: there is no signed-in admin to
+create the first one.
 
 ## Business integrity constraints
 
@@ -299,6 +331,7 @@ harness made that mistake and a policy test caught it.
 | `test_row_level_security.py` | an employee cannot read another's payroll; no response carries a password hash |
 | `test_audit_trail.py` | one audit event per sensitive action, by the right actor; append-only; admin-only reads; no secret in the trail |
 | `test_account_lifecycle.py` | inactive accounts refused; deactivation, role and password changes revoke sessions; reset and activation links hashed, single use, never a session; login timing |
+| `test_users_rls.py` | who reads which accounts; the password hash unreadable and unwritable by the application role; the auth functions pin search_path and are not PUBLIC |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by

@@ -11,11 +11,16 @@ active and activated, and the token was issued under the account's current
 token_version. Deactivating an account, changing its role or changing its
 password bumps the version, so every session issued before is refused on its
 next request instead of living out its 60 minutes.
+
+The account's state is read through auth_session() (#76): users is under
+row-level security, and require_authentication runs before any identity is
+set, so a plain query would see no row at all.
 """
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -33,8 +38,8 @@ def _unauthorised() -> HTTPException:
     )
 
 
-def authenticated_user(token: str, db: Session) -> User | None:
-    """The account a token speaks for, or None if it must be refused."""
+def session_identity(token: str, db: Session) -> tuple[str, str] | None:
+    """(user id, role) if the token may still be used, else None."""
     try:
         payload = decode_access_token(token)
     except JWTError:
@@ -42,17 +47,21 @@ def authenticated_user(token: str, db: Session) -> User | None:
     user_id = payload.get("sub")
     if not user_id:
         return None
-    # User.id is a String column ("USR-001"), so it must not be coerced to int.
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None or not user.isActive or not user.isVerified:
+    state = db.execute(text("SELECT * FROM auth_session(:u)"), {"u": user_id}).mappings().first()
+    if state is None or not state["isActive"] or not state["isVerified"]:
         return None
-    if payload.get("ver") != user.token_version:
+    if payload.get("ver") != state["token_version"]:
         return None
-    return user
+    return user_id, state["role"]
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    user = authenticated_user(token, db)
+    identity = session_identity(token, db)
+    if identity is None:
+        raise _unauthorised()
+    # By now the request's identity is set, and an account always reads its
+    # own row. User.id is a String column ("USR-001"), never coerced to int.
+    user = db.query(User).filter(User.id == identity[0]).first()
     if user is None:
         raise _unauthorised()
     return user

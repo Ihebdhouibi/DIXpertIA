@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.exc import ProgrammingError  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
@@ -88,6 +89,52 @@ def visible(user_id, role, ids):
         db.close()
 
 
+def visible_users(user_id, role):
+    """The fixture accounts this identity can read in users (#76)."""
+    set_identity(user_id, role)
+    db = SessionLocal()
+    try:
+        rows = db.execute(text("SELECT id FROM users WHERE id = ANY(:ids)"),
+                          {"ids": list(EMPLOYEES)}).all()
+        return sorted(r[0] for r in rows)
+    finally:
+        db.close()
+
+
+def hash_readable(user_id, role):
+    """Whether this identity can read its own password hash. It must not (#76)."""
+    set_identity(user_id, role)
+    db = SessionLocal()
+    try:
+        db.execute(text('SELECT "hashedPassword" FROM users WHERE id = :u'), {"u": user_id}).all()
+        return True
+    except ProgrammingError:
+        return False
+    finally:
+        db.close()
+
+
+def check_users(failures):
+    a, b = EMPLOYEES
+    cases = [
+        ("users: an employee reads only their own account", (a, "employee"), [a]),
+        ("users: admin reads every account", ("USR-001", "admin"), [a, b]),
+        ("users: accountant reads every account", ("USR-001", "accountant"), [a, b]),
+        ("users: an unidentified session reads none", (None, None), []),
+    ]
+    for label, (uid, role), expected in cases:
+        got = visible_users(uid, role)
+        ok = got == expected
+        print(f"  {'ok ' if ok else 'FAIL'}  {label}: {got}")
+        if not ok:
+            failures.append(f"{label}: expected {expected}, got {got}")
+
+    readable = hash_readable(a, "employee")
+    print(f"  {'ok ' if not readable else 'FAIL'}  users: the password hash is unreadable, even one's own")
+    if readable:
+        failures.append("the application role can read users.hashedPassword")
+
+
 def main():
     owner = create_engine(settings.SCHEMA_DATABASE_URL)
     ids = setup(owner)
@@ -133,6 +180,9 @@ def main():
     print(f"  {'ok ' if ok else 'FAIL'}  {a} asking directly for {b}'s payslip: {n} rows")
     if not ok:
         failures.append(f"cross-tenant read returned {n} rows")
+
+    check_users(failures)
+    clear_identity()
 
     with owner.begin() as c:
         teardown_sql(c)
