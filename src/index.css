@@ -1,5 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Space Grotesk and JetBrains Mono are loaded by index.html (#165). */
 @import "tailwindcss";
+
+/*
+ * Arial, resized to take the same room as Space Grotesk until it arrives
+ * (#165). Without it, the hero headline set in the fallback font wrapped on
+ * four lines, then three once Space Grotesk loaded, and the whole page below
+ * jumped up: a layout shift of 0.17 on every first visit. Measured in the
+ * browser against the loaded font (canvas measureText): the width ratio over
+ * running text at 400 and over the headline itself at 700, and Space Grotesk's ascent and descent (0.98 and
+ * 0.29 em) divided by it. Arial has no 500 or 600 face, so those weights take
+ * the nearest one.
+ */
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial");
+  font-weight: 100 549;
+  size-adjust: 109.59%;
+  ascent-override: 89.43%;
+  descent-override: 26.46%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT");
+  font-weight: 550 900;
+  size-adjust: 103.08%;
+  ascent-override: 95.07%;
+  descent-override: 28.13%;
+  line-gap-override: 0%;
+}
 
 /*
  * Ink & Signal Lime - design tokens.
@@ -99,7 +128,37 @@
   --color-on-tertiary-fixed-variant: var(--color-ink);
   --color-surface-variant: var(--color-surface-container-high);
 
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  /* Public homepage (#165, design/homepage-v2/tokens.css). Its own roles,
+     because the page has surfaces the app has not: an engineering grid, an
+     always-dark console and CTA, a blurred header, a cursor spotlight. Light
+     values here, dark ones in .dark below. Two deviations from the handoff:
+     accented text is Lime Deep, not its #5C7A0A (4.42:1, fails AA), and the
+     muted shades come from opacity modifiers (text-home-fg/70) rather than
+     an "r,g,b" variable. */
+  --color-home-bg: var(--color-paper);
+  --color-home-fg: var(--color-ink);
+  --color-home-surface: #FBFAF7;
+  --color-home-accent-text: var(--color-lime-deep);
+  --color-home-grid-line: rgba(16, 19, 20, 0.055);
+  --color-home-header: rgba(243, 242, 238, 0.88);
+  --color-home-spotlight: rgba(198, 242, 78, 0.4);
+  /* Always dark, in both themes: the console, the phase diagram, the CTA. */
+  --color-home-panel: var(--color-ink);
+  --color-home-panel-border: transparent;
+  --color-home-panel-shadow: rgba(16, 19, 20, 0.5);
+  --color-home-cta: var(--color-ink);
+  --color-home-cta-grid-line: rgba(243, 242, 238, 0.045);
+  /* The header's "Go to Dashboard". */
+  --color-home-strong: var(--color-ink);
+  --color-home-on-strong: var(--color-paper);
+  --color-home-strong-hover: #2A2F31;
+  /* The active engagement tab: an ink pill here, a lime one in dark. */
+  --color-home-tab: var(--color-ink);
+  --color-home-on-tab: var(--color-paper);
+  --color-home-tab-number: var(--color-lime);
+  --color-lime-hover: #D4F76E;
+
+  --font-sans: "Space Grotesk", "Space Grotesk Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* 3. Type scale (#122). The views used these names long before they were
@@ -126,6 +185,29 @@
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.4;
 
+  /* The public homepage's display sizes (#165, design/homepage-v2/README.md
+     "Type scale"). Fluid, so one class serves 390px and 1440px. */
+  --text-home-hero: clamp(3rem, 8.6vw, 8.5rem);
+  --text-home-hero--line-height: 0.95;
+  --text-home-hero--letter-spacing: -0.045em;
+  --text-home-section: clamp(2rem, 3.6vw, 3.25rem);
+  --text-home-section--line-height: 1.05;
+  --text-home-section--letter-spacing: -0.025em;
+  --text-home-closing: clamp(2.125rem, 4.4vw, 4rem);
+  --text-home-closing--line-height: 1.04;
+  --text-home-closing--letter-spacing: -0.03em;
+  --text-home-title: clamp(1.5rem, 2.6vw, 2.25rem);
+  --text-home-title--line-height: 1.1;
+  --text-home-title--letter-spacing: -0.02em;
+  --text-home-subhead: clamp(1.625rem, 2.6vw, 2.25rem);
+  --text-home-subhead--line-height: 1.15;
+  --text-home-subhead--letter-spacing: -0.02em;
+  --text-home-lead: clamp(1rem, 1.4vw, 1.1875rem);
+  --text-home-lead--line-height: 1.6;
+  /* Mono micro-copy: eyebrows at 12px, meta and tags at 11px. */
+  --text-home-meta: 0.6875rem;
+  --text-home-meta--line-height: 1.4;
+
   /* 4. Motion (#141). The screens used `animate-fade-in` (13 times) before it
      was declared, so it did nothing. Short and subtle: a screen settles in
      rather than performing. Fill mode `backwards`, not `both`: once it has
@@ -133,6 +215,34 @@
      identity transform, which still makes it a containing block for fixed
      children. Turned off under prefers-reduced-motion below. */
   --animate-fade-in: fade-in 180ms ease-out backwards;
+
+  /* The public homepage (#165, design/homepage-v2/README.md "Interactions").
+     Transform and opacity only. All of it stops under prefers-reduced-motion
+     (see .home-page below). */
+  --ease-home-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-home-draw: cubic-bezier(0.6, 0, 0.2, 1);
+  --ease-home-magnet: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-home-blink: home-blink 1050ms steps(1, end) infinite;
+  --animate-home-draw: home-draw 1400ms var(--ease-home-draw) 300ms backwards;
+  --animate-home-glow: home-glow 2800ms ease-in-out infinite alternate;
+  --animate-home-panel: home-panel 450ms var(--ease-home-out) backwards;
+
+  @keyframes home-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes home-draw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes home-glow {
+    from { opacity: 0.2; transform: scale(0.92); }
+    to { opacity: 0.36; transform: scale(1.08); }
+  }
+  @keyframes home-panel {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
 
   @keyframes fade-in {
     from {
@@ -214,6 +324,26 @@
   --color-on-error-container: var(--color-danger);
   --color-on-error: var(--color-ink);
 
+  /* Public homepage (#165). Lime replaces Lime Deep for accented text, as for
+     the app's roles: 14.41:1 on ink. The active tab turns lime. */
+  --color-home-bg: var(--color-ink);
+  --color-home-fg: var(--color-paper);
+  --color-home-surface: #171B1C;
+  --color-home-accent-text: var(--color-lime);
+  --color-home-grid-line: rgba(243, 242, 238, 0.055);
+  --color-home-header: rgba(16, 19, 20, 0.88);
+  --color-home-spotlight: rgba(198, 242, 78, 0.14);
+  --color-home-panel: #1A1F21;
+  --color-home-panel-border: rgba(243, 242, 238, 0.08);
+  --color-home-panel-shadow: rgba(0, 0, 0, 0.7);
+  --color-home-cta: #171B1C;
+  --color-home-strong: var(--color-paper);
+  --color-home-on-strong: var(--color-ink);
+  --color-home-strong-hover: #FFFFFF;
+  --color-home-tab: var(--color-lime);
+  --color-home-on-tab: var(--color-ink);
+  --color-home-tab-number: var(--color-ink);
+
   /* Deprecated M3 aliases, mirrored from the light theme. */
   --color-primary-container: var(--color-surface-container-high);
   --color-on-primary-container: var(--color-paper);
@@ -239,6 +369,52 @@
   :focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * The public homepage (#165). Scroll reveal: <Reveal> sets data-shown once the
+ * element is 12% visible, staggered by --reveal-index. The page's focus ring
+ * is the handoff's: an outline in the text colour plus a lime halo.
+ */
+.home-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+}
+.home-reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 800ms var(--ease-home-out),
+    transform 800ms var(--ease-home-out);
+  transition-delay: calc(var(--reveal-index, 0) * 90ms);
+}
+/* The services rows' cursor spotlight: a lime disc at the pointer, set by
+   pointermove. Off by default (no --mx), and never under reduced motion. */
+.home-spotlight {
+  background-image: radial-gradient(420px circle at var(--mx, -999px) var(--my, -999px), var(--color-home-spotlight), transparent 65%);
+}
+.home-page :focus-visible {
+  outline: 2px solid var(--color-home-fg);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--color-lime);
+  border-radius: 8px;
+}
+/* Every animation and transition off, content shown at once. */
+@media (prefers-reduced-motion: reduce) {
+  .home-page *,
+  .home-page *::before,
+  .home-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .home-reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .home-spotlight {
+    background-image: none;
   }
 }
 

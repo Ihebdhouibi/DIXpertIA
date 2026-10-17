@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>DI Xpertia — Digital intelligence, expertly engineered</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#F3F2EE;color:#101314;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid #101314;outline-offset:3px;box-shadow:0 0 0 6px #C6F24E;border-radius:8px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</helmet>
+
+<div id="top" style="min-height:100vh;display:flex;flex-direction:column">
+
+<header style="position:sticky;top:0;z-index:30;background:rgba(243,242,238,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(16,19,20,.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:0 clamp(20px,5vw,48px);height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+    <a href="#top" aria-label="DI Xpertia — home" style="display:flex;align-items:center;gap:10px">
+      <svg width="30" height="22" viewBox="12 18 38 28" aria-hidden="true"><path d="M17 23 L27 32 L17 41" fill="none" stroke="#101314" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="#5C7A0A"></rect></svg>
+      <span style="font:700 19px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;white-space:nowrap">DI <span style="font:500 18px/1 'JetBrains Mono',monospace;letter-spacing:-.03em;color:#5C7A0A">Xpertia</span></span>
+    </a>
+    <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <nav aria-label="Primary" style="display:flex;gap:32px;font:500 14px/1 'Space Grotesk',sans-serif">
+        <a href="#top" aria-current="page" style="color:#101314">Home</a>
+        <a href="#services" style="color:rgba(16,19,20,.66);transition:color .2s" style-hover="color:#101314">Services</a>
+        <a href="#about" style="color:rgba(16,19,20,.66);transition:color .2s" style-hover="color:#101314">About</a>
+        <a href="#contact" style="color:rgba(16,19,20,.66);transition:color .2s" style-hover="color:#101314">Contact</a>
+      </nav>
+    </sc-if>
+    <a href="#dashboard" style="display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:8px;background:#101314;color:#F3F2EE;font:600 14px/1 'Space Grotesk',sans-serif;white-space:nowrap;transition:background .2s" style-hover="background:#2A2F31;color:#F3F2EE">Go to Dashboard</a>
+  </div>
+</header>
+
+<main style="flex:1">
+
+<section aria-labelledby="hero-title" style="position:relative;overflow:hidden;background-color:#F3F2EE;background-image:linear-gradient(rgba(16,19,20,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(16,19,20,.055) 1px,transparent 1px);background-size:48px 48px;background-position:-1px -1px">
+  <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 70% at 30% 40%,transparent 40%,#F3F2EE 100%);pointer-events:none"></div>
+  <div style="position:relative;max-width:1312px;margin:0 auto;padding:clamp(56px,8vw,112px) clamp(20px,5vw,48px) clamp(56px,7vw,96px);display:flex;flex-direction:column;gap:clamp(32px,4vw,56px)">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(16,19,20,.62)">
+      <span>Cloud · Cybersecurity · Custom software</span>
+      <span>36.45° N  10.73° E — Nabeul</span>
+    </div>
+    <h1 id="hero-title" aria-label="Digital intelligence, expertly engineered." style="margin:0;max-width:14ch;font:700 clamp(48px,8.6vw,136px)/.95 'Space Grotesk',sans-serif;letter-spacing:-.045em;text-wrap:balance"><span aria-hidden="true">{{ typed }}<span data-cursor="1" style="display:inline-block;width:.38em;height:.68em;margin:0 -.38em 0 .08em;vertical-align:-.02em;border-radius:.05em;background:#5C7A0A"></span><span style="color:transparent">{{ rest }}</span></span></h1>
+    <div aria-hidden="true" data-loop="drawX" style="height:1px;background:#101314;transform-origin:left center"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(32px,5vw,72px);align-items:start">
+      <div data-reveal="1" style="display:flex;flex-direction:column;gap:28px">
+        <p style="margin:0;max-width:48ch;font:400 clamp(16px,1.4vw,19px)/1.6 'Space Grotesk',sans-serif;color:rgba(16,19,20,.72);text-wrap:pretty">We design, build and run the systems your organisation depends on — cloud infrastructure, security and software, engineered for reliability from the first line.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px">
+          <a href="#contact" style="display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 24px;border-radius:10px;background:#C6F24E;color:#101314;font:600 15px/1 'Space Grotesk',sans-serif;box-shadow:inset 0 0 0 1px rgba(16,19,20,.14);transition:transform .2s,background .2s" style-hover="background:#D4F76E;color:#101314;transform:translateY(-1px)">Contact us <span aria-hidden="true">→</span></a>
+          <a href="#services" style="display:inline-flex;align-items:center;height:52px;padding:0 24px;border-radius:10px;border:1px solid rgba(16,19,20,.3);color:#101314;font:600 15px/1 'Space Grotesk',sans-serif;background:#F3F2EE;transition:border-color .2s" style-hover="border-color:#101314;color:#101314">Our services</a>
+        </div>
+      </div>
+      <div data-reveal="2" aria-label="Illustrative operations console" role="img" style="background:#101314;color:#F3F2EE;border-radius:16px;padding:20px 22px 22px;display:flex;flex-direction:column;gap:18px;box-shadow:0 30px 60px -30px rgba(16,19,20,.5)">
+        <div style="display:flex;justify-content:space-between;align-items:center;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(243,242,238,.6)">
+          <span style="display:flex;align-items:center;gap:8px"><svg width="18" height="13" viewBox="12 18 38 28"><path d="M17 23 L27 32 L17 41" fill="none" stroke="#F3F2EE" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="#C6F24E"></rect></svg>ops / live</span>
+          <span>{{ clock }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:92px minmax(0,1fr) 96px;align-items:center;gap:14px;font:500 12px/1 'JetBrains Mono',monospace">
+              <span style="letter-spacing:.12em;color:#F3F2EE">{{ r.label }}</span>
+              <span style="height:4px;border-radius:2px;background:rgba(243,242,238,.12);overflow:hidden"><span style="display:block;height:100%;background:#C6F24E;transform-origin:left;transition:transform .9s cubic-bezier(.2,.7,.2,1);transform:scaleX({{ r.p }})"></span></span>
+              <span style="text-align:right;color:{{ r.c }}">{{ r.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-top:1px solid rgba(243,242,238,.1);padding-top:14px;display:flex;flex-direction:column;gap:8px;min-height:104px;font:400 12px/1.4 'JetBrains Mono',monospace;color:rgba(243,242,238,.7)">
+          <sc-for list="{{ log }}" as="l" hint-placeholder-count="4"><span>{{ l }}</span></sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="services" aria-labelledby="svc-title" style="background:#F3F2EE;border-top:1px solid rgba(16,19,20,.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:clamp(72px,9vw,128px) clamp(20px,5vw,48px);display:flex;flex-direction:column;gap:clamp(32px,4vw,48px)">
+    <div data-reveal="0" style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <p style="margin:0;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:#5C7A0A">01 — Services</p>
+        <h2 id="svc-title" style="margin:0;font:700 clamp(32px,3.6vw,52px)/1.05 'Space Grotesk',sans-serif;letter-spacing:-.025em">What we do</h2>
+      </div>
+      <p style="margin:0;max-width:38ch;font:400 15px/1.6 'Space Grotesk',sans-serif;color:rgba(16,19,20,.68)">Three disciplines, one team — so the cloud, the security and the code are designed together.</p>
+    </div>
+    <div style="border-top:1px solid #101314">
+      <sc-for list="{{ services }}" as="s" hint-placeholder-count="3">
+        <a href="#contact" data-reveal="{{ s.d }}" onPointerMove="{{ spot }}" onPointerLeave="{{ spotOff }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:16px clamp(20px,3vw,48px);padding:clamp(24px,3vw,36px) clamp(4px,1.5vw,20px);border-bottom:1px solid rgba(16,19,20,.16);background:radial-gradient(420px circle at var(--mx,-999px) var(--my,-999px),rgba(198,242,78,.4),transparent 65%);transition:background-color .3s" style-hover="background-color:#FBFAF7;color:#101314">
+          <span style="flex:0 0 56px;font:500 14px/1 'JetBrains Mono',monospace;color:#5C7A0A">{{ s.n }}</span>
+          <span style="flex:1 1 280px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 clamp(24px,2.6vw,36px)/1.1 'Space Grotesk',sans-serif;letter-spacing:-.02em">{{ s.title }}</span>
+            <span style="font:500 11px/1.4 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(16,19,20,.6)">{{ s.tags }}</span>
+          </span>
+          <span style="flex:1.3 1 300px;font:400 16px/1.6 'Space Grotesk',sans-serif;color:rgba(16,19,20,.72);text-wrap:pretty">{{ s.desc }}</span>
+          <span aria-hidden="true" style="flex:0 0 48px;height:48px;border-radius:50%;border:1px solid rgba(16,19,20,.25);display:flex;align-items:center;justify-content:center;font:500 18px/1 'Space Grotesk',sans-serif">→</span>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section id="engage" aria-labelledby="engage-title" style="background:#FBFAF7;border-top:1px solid rgba(16,19,20,.1);border-bottom:1px solid rgba(16,19,20,.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:clamp(72px,9vw,120px) clamp(20px,5vw,48px);display:flex;flex-direction:column;gap:clamp(32px,4vw,48px)">
+    <div data-reveal="0" style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <p style="margin:0;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:#5C7A0A">02 — Engagement</p>
+        <h2 id="engage-title" style="margin:0;font:700 clamp(32px,3.6vw,52px)/1.05 'Space Grotesk',sans-serif;letter-spacing:-.025em">Ways to work with us</h2>
+      </div>
+      <p style="margin:0;max-width:38ch;font:400 15px/1.6 'Space Grotesk',sans-serif;color:rgba(16,19,20,.68)">Choose how involved you want to be. We adapt the model, not the standard.</p>
+    </div>
+
+    <div data-reveal="1" role="tablist" aria-label="Engagement models" onKeyDown="{{ tabKey }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;padding:6px;border-radius:14px;background:#F3F2EE;border:1px solid rgba(16,19,20,.1)">
+      <sc-for list="{{ models }}" as="m" hint-placeholder-count="3">
+        <button type="button" role="tab" id="{{ m.tabId }}" aria-selected="{{ m.sel }}" aria-controls="engage-panel" tabIndex="{{ m.ti }}" onClick="{{ m.pick }}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 18px;border:0;border-radius:10px;cursor:pointer;text-align:left;font:600 16px/1.2 'Space Grotesk',sans-serif;background:{{ m.bg }};color:{{ m.fg }};transition:background .25s,color .25s">
+          <span style="font:500 12px/1 'JetBrains Mono',monospace;color:{{ m.numC }}">{{ m.n }}</span>{{ m.name }}
+        </button>
+      </sc-for>
+    </div>
+
+    <div id="engage-panel" role="tabpanel" aria-labelledby="{{ cur.tabId }}" data-panel="1" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:clamp(28px,4vw,64px);align-items:start">
+      <div style="display:flex;flex-direction:column;gap:22px">
+        <h3 style="margin:0;font:600 clamp(26px,2.6vw,36px)/1.15 'Space Grotesk',sans-serif;letter-spacing:-.02em;text-wrap:balance">{{ cur.headline }}</h3>
+        <p style="margin:0;max-width:52ch;font:400 17px/1.6 'Space Grotesk',sans-serif;color:rgba(16,19,20,.72);text-wrap:pretty">{{ cur.desc }}</p>
+        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px solid rgba(16,19,20,.14)">
+          <sc-for list="{{ cur.items }}" as="it" hint-placeholder-count="4">
+            <li style="display:flex;gap:14px;align-items:baseline;padding:14px 0;border-bottom:1px solid rgba(16,19,20,.1);font:400 15px/1.5 'Space Grotesk',sans-serif"><span aria-hidden="true" style="flex:0 0 auto;width:6px;height:10px;border-radius:1px;background:#5C7A0A;transform:translateY(-1px)"></span>{{ it }}</li>
+          </sc-for>
+        </ul>
+        <p style="margin:0;font:500 12px/1.6 'JetBrains Mono',monospace;letter-spacing:.06em;color:rgba(16,19,20,.7)"><span style="color:#5C7A0A;letter-spacing:.16em">BEST FOR → </span>{{ cur.fit }}</p>
+      </div>
+
+      <div role="img" aria-label="{{ cur.diagramLabel }}" style="background:#101314;color:#F3F2EE;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:20px">
+        <div style="display:flex;justify-content:space-between;gap:12px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(243,242,238,.6)">
+          <span>Who leads each phase</span>
+          <span style="display:flex;gap:14px"><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#C6F24E"></span>DI Xpertia</span><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;border:1px solid rgba(243,242,238,.6)"></span>Your team</span></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <sc-for list="{{ cur.phases }}" as="ph" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:14px;font:500 12px/1 'JetBrains Mono',monospace">
+              <span style="letter-spacing:.12em">{{ ph.label }}</span>
+              <span style="position:relative;height:28px;border-radius:6px;border:1px solid rgba(243,242,238,.22);overflow:hidden">
+                <span style="position:absolute;inset:0;background:#C6F24E;transform-origin:left center;transition:transform .7s cubic-bezier(.2,.7,.2,1);transform:scaleX({{ ph.us }})"></span>
+                <span style="position:absolute;inset:0;display:flex;align-items:center;padding:0 10px;font:500 11px/1 'JetBrains Mono',monospace;color:{{ ph.tc }};mix-blend-mode:normal">{{ ph.note }}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:0;padding-top:14px;border-top:1px solid rgba(243,242,238,.1);font:400 13px/1.5 'Space Grotesk',sans-serif;color:rgba(243,242,238,.72)">{{ cur.footnote }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="about" aria-labelledby="cta-title" style="position:relative;overflow:hidden;background-color:#101314;color:#F3F2EE;background-image:linear-gradient(rgba(243,242,238,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.045) 1px,transparent 1px);background-size:48px 48px">
+  <div id="contact" style="position:relative;max-width:1312px;margin:0 auto;padding:clamp(80px,10vw,136px) clamp(20px,5vw,48px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:40px;align-items:center">
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <p data-reveal="0" style="margin:0;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:#C6F24E">03 — About</p>
+      <h2 id="cta-title" data-reveal="1" style="margin:0;max-width:16ch;font:700 clamp(34px,4.4vw,64px)/1.04 'Space Grotesk',sans-serif;letter-spacing:-.03em;text-wrap:balance">Ready to transform your IT infrastructure?</h2>
+      <p data-reveal="2" style="margin:0;max-width:46ch;font:400 clamp(16px,1.4vw,19px)/1.6 'Space Grotesk',sans-serif;color:rgba(243,242,238,.74)">Partner with DI Xpertia to bring modern, reliable technology to your organisation.</p>
+    </div>
+    <div data-reveal="3" onPointerMove="{{ mag }}" onPointerLeave="{{ magOff }}" style="position:relative;justify-self:center;padding:56px 72px">
+      <div aria-hidden="true" data-loop="glow" style="position:absolute;left:50%;top:50%;width:280px;height:100px;margin:-50px 0 0 -140px;border-radius:50%;background:#C6F24E;filter:blur(42px);opacity:.28;pointer-events:none"></div>
+      <a href="#contact" data-mag="1" style="position:relative;display:inline-flex;align-items:center;gap:10px;height:60px;padding:0 32px;border-radius:12px;background:#C6F24E;color:#101314;font:600 17px/1 'Space Grotesk',sans-serif;transition:transform .45s cubic-bezier(.2,.8,.2,1),background .2s" style-hover="background:#D4F76E;color:#101314">Get started today <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer style="background:#F3F2EE">
+  <div style="max-width:1312px;margin:0 auto;padding:56px clamp(20px,5vw,48px) 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:40px 32px">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="30" height="22" viewBox="12 18 38 28" aria-hidden="true"><path d="M17 23 L27 32 L17 41" fill="none" stroke="#101314" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="#5C7A0A"></rect></svg>
+        <span style="font:700 19px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em">DI <span style="font:500 18px/1 'JetBrains Mono',monospace;letter-spacing:-.03em;color:#5C7A0A">Xpertia</span></span>
+      </div>
+      <p style="margin:0;font:500 11px/1.6 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(16,19,20,.66)">Digital intelligence,<br>expertly engineered</p>
+    </div>
+    <nav aria-label="Company" style="display:flex;flex-direction:column;gap:12px;font:400 14px/1.4 'Space Grotesk',sans-serif">
+      <span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px">Company</span>
+      <a href="#about" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">About us</a>
+      <a href="#about" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Leadership</a>
+      <a href="#about" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Careers</a>
+    </nav>
+    <nav aria-label="Links" style="display:flex;flex-direction:column;gap:12px;font:400 14px/1.4 'Space Grotesk',sans-serif">
+      <span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px">Links</span>
+      <a href="#services" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Services</a>
+      <a href="#services" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Case studies</a>
+      <a href="#dashboard" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Go to Dashboard</a>
+    </nav>
+    <div style="display:flex;flex-direction:column;gap:12px;font:400 14px/1.5 'Space Grotesk',sans-serif">
+      <span style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px">Contact</span>
+      <a href="#contact" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Support</a>
+      <a href="#contact" style="color:rgba(16,19,20,.7)" style-hover="color:#101314">Sales</a>
+      <span style="color:rgba(16,19,20,.7)">Rue de Pasteur, Dar Chaabane El Fehri<br>8011 Nabeul, Tunisia</span>
+    </div>
+  </div>
+  <div style="max-width:1312px;margin:0 auto;padding:20px clamp(20px,5vw,48px) 32px;border-top:1px solid rgba(16,19,20,.08);font:400 13px/1.4 'Space Grotesk',sans-serif;color:rgba(16,19,20,.62)">© 2026 DI Xpertia SUARL. All rights reserved.</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  headline = 'Digital intelligence, expertly engineered.';
+  state = { w: typeof window !== 'undefined' ? window.innerWidth : 1440, tick: 7, now: new Date(), n: 42 };
+  logLines = ['› plan infrastructure', '› provision network … ok', '› harden access policies … ok', '› run test suite … ok', '› deploy release … ok', '› monitor · all systems nominal'];
+  componentDidMount() {
+    this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.onR = () => this.setState({ w: innerWidth });
+    addEventListener('resize', this.onR);
+    this.clk = setInterval(() => this.setState({ now: new Date() }), 1000);
+    if (this.reduced) return;
+    this.setState({ tick: 0, n: 0 });
+    const cur = document.querySelector('[data-cursor]');
+    const blink = () => cur && cur.animate([{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0, offset: .5 }, { opacity: 0 }], { duration: 1050, iterations: Infinity });
+    let b = blink();
+    this.t1 = setTimeout(() => {
+      b && b.cancel();
+      this.ty = setInterval(() => {
+        const n = this.state.n + 1;
+        this.setState({ n });
+        if (n >= this.headline.length) { clearInterval(this.ty); blink(); }
+      }, 44);
+    }, 900);
+    this.iv = setInterval(() => this.setState(s => ({ tick: (s.tick + 1) % 10 })), 1100);
+    const inf = { iterations: Infinity };
+    const P = {
+      blink: [[{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0, offset: .5 }, { opacity: 0 }], { duration: 1050, ...inf }],
+      drawX: [[{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 1400, delay: 300, easing: 'cubic-bezier(.6,0,.2,1)', fill: 'backwards' }],
+      glow: [[{ opacity: .2, transform: 'scale(.92)' }, { opacity: .36, transform: 'scale(1.08)' }], { duration: 2800, direction: 'alternate', easing: 'ease-in-out', ...inf }],
+    };
+    document.querySelectorAll('[data-loop]').forEach(el => { const p = P[el.dataset.loop]; p && el.animate(p[0], p[1]); });
+    const els = [...document.querySelectorAll('[data-reveal]')];
+    this.io = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target; this.io.unobserve(el);
+      el.animate([{ opacity: 0, transform: 'translateY(22px)' }, { opacity: 1, transform: 'none' }], { duration: 800, delay: (+el.dataset.reveal || 0) * 90, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' });
+      el.style.opacity = '';
+    }), { threshold: .12 });
+    els.forEach(el => { el.style.opacity = '0'; this.io.observe(el); });
+  }
+  componentWillUnmount() { removeEventListener('resize', this.onR); clearInterval(this.iv); clearTimeout(this.t1); clearInterval(this.ty); clearInterval(this.clk); this.io && this.io.disconnect(); }
+  engage() {
+    const M = [
+      { n: '01', name: 'Project delivery', headline: 'You define the outcome. We deliver it, end to end.', desc: 'A fixed scope, a dedicated team and a clear timeline. We handle architecture, build, security and launch, then hand over a documented system you fully own.', items: ['Scoping workshop and written specification', 'Dedicated team with a single technical lead', 'Security reviewed before every release', 'Full documentation and handover — the code is yours'], fit: 'A new platform, a migration or a well-defined product.', footnote: 'We lead delivery; you validate at each milestone.', ph: [['SCOPE', 'joint', .5], ['BUILD', 'DI Xpertia', 1], ['LAUNCH', 'DI Xpertia', 1], ['RUN', 'your team', 0]] },
+      { n: '02', name: 'Team extension', headline: 'Senior engineers, embedded in your team.', desc: 'Your roadmap, your rituals, your tools. Our engineers join your team to add capacity or expertise you don’t have in-house — cloud, security or software.', items: ['Engineers matched to your stack and seniority needs', 'Work inside your tools, sprints and code review', 'Knowledge transfer built into the engagement', 'Scale up or down as your roadmap changes'], fit: 'Teams that need to move faster without hiring.', footnote: 'You lead the roadmap; we strengthen execution.', ph: [['SCOPE', 'your team', 0], ['BUILD', 'joint', .5], ['LAUNCH', 'joint', .5], ['RUN', 'your team', 0]] },
+      { n: '03', name: 'Managed operations', headline: 'We run it, so your team can build.', desc: 'Ongoing operation of your cloud and applications: monitoring, updates, security patches and incident response, with regular reporting on what we did and why.', items: ['Monitoring and alerting across your systems', 'Security patching and access reviews', 'Incident response and post-incident reports', 'Regular reviews of cost, risk and performance'], fit: 'Systems that must stay up, secure and up to date.', footnote: 'We run day to day; you keep full visibility and control.', ph: [['SCOPE', 'joint', .5], ['BUILD', 'joint', .5], ['LAUNCH', 'DI Xpertia', 1], ['RUN', 'DI Xpertia', 1]] },
+    ];
+    const a = this.state.tab || 0;
+    const pick = i => () => this.setTab(i);
+    const models = M.map((m, i) => ({ n: m.n, name: m.name, tabId: 'engage-tab-' + i, sel: i === a ? 'true' : 'false', ti: i === a ? 0 : -1, pick: pick(i), bg: i === a ? '#101314' : 'transparent', fg: i === a ? '#F3F2EE' : '#101314', numC: i === a ? '#C6F24E' : '#5C7A0A' }));
+    const c = M[a];
+    return {
+      models,
+      cur: { ...c, tabId: 'engage-tab-' + a, diagramLabel: `${c.name}: ${c.footnote}`, phases: c.ph.map(p => ({ label: p[0], note: p[1], us: p[2], tc: p[2] > 0 ? '#101314' : '#F3F2EE' })) },
+      tabKey: e => {
+        const k = e.key; let i = a;
+        if (k === 'ArrowRight' || k === 'ArrowDown') i = (a + 1) % 3; else if (k === 'ArrowLeft' || k === 'ArrowUp') i = (a + 2) % 3; else if (k === 'Home') i = 0; else if (k === 'End') i = 2; else return;
+        e.preventDefault(); this.setTab(i); setTimeout(() => { const b = document.getElementById('engage-tab-' + i); b && b.focus(); }, 0);
+      },
+    };
+  }
+  setTab(i) {
+    if (i === (this.state.tab || 0)) return;
+    this.setState({ tab: i });
+    if (this.reduced) return;
+    const p = document.querySelector('[data-panel]');
+    p && p.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.2,.7,.2,1)' });
+  }
+  renderVals() {
+    const t = this.state.tick;
+    const defs = [['CLOUD', 'provisioning', 'healthy'], ['SECURITY', 'scanning', 'protected'], ['SOFTWARE', 'building', 'shipped']];
+    const rows = defs.map((d, i) => {
+      const p = Math.max(0, Math.min(1, (t - i * 2) / 2));
+      return { label: d[0], p: p.toFixed(2), status: p >= 1 ? '● ' + d[2] : (p > 0 ? '○ ' + d[1] : '○ queued'), c: p >= 1 ? '#C6F24E' : 'rgba(243,242,238,.6)' };
+    });
+    const k = Math.min(this.logLines.length, t);
+    const log = this.logLines.slice(0, Math.max(1, k)).slice(-4);
+    const pad = v => String(v).padStart(2, '0'), d = this.state.now;
+    const tech = ['AWS', 'Microsoft Azure', 'Google Cloud', 'Kubernetes', 'Docker', 'Terraform', 'Linux', 'PostgreSQL', 'Python', 'TypeScript', 'React', 'Node.js'].map((name, i) => ({ name, d: 1 + (i % 6) }));
+    return {
+      wide: this.state.w >= 860,
+      typed: this.headline.slice(0, this.state.n), rest: this.headline.slice(this.state.n),
+      rows, log, tech, ...this.engage(),
+      clock: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+      services: [
+        { n: '01', d: 1, title: 'Cloud Infrastructure', tags: 'Architecture · Migration · Operations', desc: 'Scalable, secure cloud architecture designed for high availability and enterprise performance.' },
+        { n: '02', d: 2, title: 'Cybersecurity', tags: 'Audit · Hardening · Compliance', desc: 'Threat protection and compliance management that keeps your critical data assets safe.' },
+        { n: '03', d: 3, title: 'Custom Software', tags: 'Web · Mobile · Integrations', desc: 'Bespoke applications built around your operational workflows — not the other way round.' },
+      ],
+      spot: e => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', (e.clientX - r.left) + 'px'); e.currentTarget.style.setProperty('--my', (e.clientY - r.top) + 'px'); },
+      spotOff: e => e.currentTarget.style.setProperty('--mx', '-999px'),
+      mag: e => { if (this.reduced) return; const z = e.currentTarget, b = z.querySelector('[data-mag]'), r = z.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; b.style.transform = `translate(${x * 30}px,${y * 22}px)`; },
+      magOff: e => { e.currentTarget.querySelector('[data-mag]').style.transform = ''; },
+    };
+  }
+}
+</script>
+</body>
+</html>

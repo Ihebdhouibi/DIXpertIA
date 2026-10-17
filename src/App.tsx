@@ -500,7 +500,10 @@ export default function App() {
   // in and the login form otherwise.
   if (!currentUser || showHomepage) {
     return (
-      <Homepage onDashboardClick={currentUser ? handleGoToDashboard : () => setShowLogin(true)} />
+      // Themed since #165: the homepage follows the light/dark preference like the app.
+      <ThemeScope>
+        <Homepage onDashboardClick={currentUser ? handleGoToDashboard : () => setShowLogin(true)} />
+      </ThemeScope>
     );
   }
 
