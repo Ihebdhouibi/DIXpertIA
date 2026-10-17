@@ -15,6 +15,7 @@ import InvoicesView from './components/InvoicesView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
 import EnquiriesView from './components/EnquiriesView';
+import SkipLink from './components/ui/SkipLink';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
@@ -516,6 +517,7 @@ export default function App() {
   // 5. Otherwise, show the dashboard
   return (
     <ThemeScope><div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
+      <SkipLink />
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
@@ -542,7 +544,7 @@ export default function App() {
           onLogout={handleLogout}
         />
 
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto focus:outline-none">
           {loadError && (
             <div
               role="alert"
