@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Employee, LeaveRequest, Payslip, User } from '../types';
 import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
-import { formatTND } from '../format';
+import { formatTND, plural } from '../format';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
 import Button from './ui/Button';
 import { FormAlert } from './ui/Field';
@@ -168,18 +168,36 @@ export default function DashboardView({
   const latestPayslip = user.role === 'employee' ? payslips[0] ?? null : null;
   const unread = notifications.filter((n) => !n.read).length;
 
+  const awaitingBooking: Metric = {
+    label: 'Awaiting booking',
+    value: countOf('Pending'),
+    hint: `${plural(countOf('Pending'), 'invoice')} in Pending`,
+    to: 'invoices',
+    highlight: true,
+  };
+
   const metrics: Metric[] =
     user.role === 'admin'
       ? [
-          { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
+          awaitingBooking,
           ...directionMetrics,
-          { label: 'Leave to decide', value: pendingLeaves, hint: 'pending requests', to: 'team' },
-          { label: 'Active team', value: activeTeam, hint: `${teamTotal} employees in total`, to: 'team' },
+          { label: 'Leave to decide', value: pendingLeaves, hint: `pending ${plural(pendingLeaves, 'request')}`, to: 'team' },
+          {
+            label: 'Active team',
+            value: activeTeam,
+            hint: `${teamTotal} ${plural(teamTotal, 'employee')} in total`,
+            to: 'team',
+          },
         ]
       : user.role === 'accountant'
         ? [
-            { label: 'Awaiting booking', value: countOf('Pending'), hint: 'invoices in Pending', to: 'invoices', highlight: true },
-            { label: 'To complete', value: countOf('Processed'), hint: 'invoices in Processed', to: 'invoices' },
+            awaitingBooking,
+            {
+              label: 'To complete',
+              value: countOf('Processed'),
+              hint: `${plural(countOf('Processed'), 'invoice')} in Processed`,
+              to: 'invoices',
+            },
             { label: 'Completed', value: countOf('Completed'), hint: 'ready for the month close', to: 'invoices' },
             ...directionMetrics,
           ]
@@ -194,7 +212,9 @@ export default function DashboardView({
             {
               label: 'Next leave',
               value: upcomingLeave ? upcomingLeave.startDate : 'None',
-              hint: upcomingLeave ? `${upcomingLeave.type} · ${upcomingLeave.duration} days` : 'nothing approved ahead',
+              hint: upcomingLeave
+                ? `${upcomingLeave.type} · ${upcomingLeave.duration} ${plural(upcomingLeave.duration, 'day')}`
+                : 'nothing approved ahead',
               to: 'leave-requests',
             },
             {
@@ -203,7 +223,7 @@ export default function DashboardView({
               hint: latestPayslip ? `net ${formatTND(latestPayslip.netPay)}` : 'none issued yet',
               to: 'payslips',
             },
-            { label: 'Unread', value: unread, hint: 'notifications', to: 'notifications' },
+            { label: 'Unread', value: unread, hint: plural(unread, 'notification'), to: 'notifications' },
           ];
 
   const maxProcessing = Math.max(...processingCounts.map((p) => p.count), 1);
@@ -243,7 +263,7 @@ export default function DashboardView({
           {seesInvoices && (
             <Section
               title="Invoices by processing state"
-              aside={<span className={EYEBROW}>{invoiceCount} invoices</span>}
+              aside={<span className={EYEBROW}>{invoiceCount} {plural(invoiceCount, 'invoice')}</span>}
             >
               {loading ? (
                 <LoadingRow />

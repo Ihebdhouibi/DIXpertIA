@@ -51,7 +51,7 @@ export function tabLabel(id: string, role: UserRole): string {
 }
 
 export const ROLE_LABEL: Record<UserRole, string> = {
-  admin: 'HR Admin',
+  admin: 'Admin',
   accountant: 'Accountant',
   employee: 'Employee',
 };
