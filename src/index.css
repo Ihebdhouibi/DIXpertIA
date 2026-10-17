@@ -99,6 +99,35 @@
   --color-on-tertiary-fixed-variant: var(--color-ink);
   --color-surface-variant: var(--color-surface-container-high);
 
+  /* Public homepage (#165, design/homepage-v2/tokens.css). Its own roles,
+     because the page has surfaces the app has not: an engineering grid, an
+     always-dark console and CTA, a blurred header, a cursor spotlight. Light
+     values here, dark ones in .dark below. Two deviations from the handoff:
+     accented text is Lime Deep, not its #5C7A0A (4.42:1, fails AA), and the
+     muted shades come from opacity modifiers (text-home-fg/70) rather than
+     an "r,g,b" variable. */
+  --color-home-bg: var(--color-paper);
+  --color-home-fg: var(--color-ink);
+  --color-home-surface: #FBFAF7;
+  --color-home-accent-text: var(--color-lime-deep);
+  --color-home-grid-line: rgba(16, 19, 20, 0.055);
+  --color-home-header: rgba(243, 242, 238, 0.88);
+  --color-home-spotlight: rgba(198, 242, 78, 0.4);
+  /* Always dark, in both themes: the console, the phase diagram, the CTA. */
+  --color-home-panel: var(--color-ink);
+  --color-home-panel-border: transparent;
+  --color-home-cta: var(--color-ink);
+  --color-home-cta-grid-line: rgba(243, 242, 238, 0.045);
+  /* The header's "Go to Dashboard". */
+  --color-home-strong: var(--color-ink);
+  --color-home-on-strong: var(--color-paper);
+  --color-home-strong-hover: #2A2F31;
+  /* The active engagement tab: an ink pill here, a lime one in dark. */
+  --color-home-tab: var(--color-ink);
+  --color-home-on-tab: var(--color-paper);
+  --color-home-tab-number: var(--color-lime);
+  --color-lime-hover: #D4F76E;
+
   --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
@@ -213,6 +242,25 @@
   --color-error-container: var(--color-danger-container);
   --color-on-error-container: var(--color-danger);
   --color-on-error: var(--color-ink);
+
+  /* Public homepage (#165). Lime replaces Lime Deep for accented text, as for
+     the app's roles: 14.41:1 on ink. The active tab turns lime. */
+  --color-home-bg: var(--color-ink);
+  --color-home-fg: var(--color-paper);
+  --color-home-surface: #171B1C;
+  --color-home-accent-text: var(--color-lime);
+  --color-home-grid-line: rgba(243, 242, 238, 0.055);
+  --color-home-header: rgba(16, 19, 20, 0.88);
+  --color-home-spotlight: rgba(198, 242, 78, 0.14);
+  --color-home-panel: #1A1F21;
+  --color-home-panel-border: rgba(243, 242, 238, 0.08);
+  --color-home-cta: #171B1C;
+  --color-home-strong: var(--color-paper);
+  --color-home-on-strong: var(--color-ink);
+  --color-home-strong-hover: #FFFFFF;
+  --color-home-tab: var(--color-lime);
+  --color-home-on-tab: var(--color-ink);
+  --color-home-tab-number: var(--color-ink);
 
   /* Deprecated M3 aliases, mirrored from the light theme. */
   --color-primary-container: var(--color-surface-container-high);
