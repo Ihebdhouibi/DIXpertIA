@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Wordmark from './ui/Wordmark';
 import HomeHeader, { type HomeTarget } from './home/HomeHeader';
+import Hero from './home/Hero';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -413,38 +414,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
       {header}
 
-      {/* Hero: ink, as on the business card - offset tonal discs and the mark. */}
-      <section className="relative overflow-hidden bg-ink text-paper">
-        <div aria-hidden="true" className="absolute -right-40 -top-40 w-[36rem] h-[36rem] rounded-full bg-paper/[0.04]"></div>
-        <div aria-hidden="true" className="absolute -right-10 top-48 w-[26rem] h-[26rem] rounded-full bg-paper/[0.03]"></div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 grid lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-7">
-            <p className={`${EYEBROW} text-paper/60`}>{TAGLINE}</p>
-            <h1 className="mt-6 text-4xl sm:text-5xl md:text-6xl font-bold tracking-[-0.02em] leading-[1.05]">
-              Digital solutions built around you.
-            </h1>
-            <p className="mt-6 text-base md:text-lg text-paper/70 max-w-xl leading-relaxed">
-              We deliver enterprise-grade IT solutions tailored to your unique operational needs,
-              ensuring professional, reliable, and modern technical precision.
-            </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <button onClick={() => handleNavClick('contact')} className={LIME_CTA}>
-                Contact Us <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleNavClick('services')}
-                className="inline-flex items-center justify-center px-6 py-3 rounded-lg font-semibold text-sm border border-paper/25 text-paper hover:bg-paper/10 transition"
-              >
-                Our Services
-              </button>
-            </div>
-          </div>
-          <div className="hidden lg:flex lg:col-span-5 justify-center">
-            <img src="/brand/mark-light.svg" alt="" className="w-64 h-64" />
-          </div>
-        </div>
-      </section>
+      <Hero onContact={() => handleNavClick('contact')} onServices={() => handleNavClick('services')} />
 
       {/* Services */}
       <section id="services" className="py-20 scroll-mt-16">

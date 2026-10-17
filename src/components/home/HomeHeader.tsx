@@ -34,7 +34,7 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
                 type="button"
                 onClick={() => onNavigate(target)}
                 aria-current={active ? 'page' : undefined}
-                className={`cursor-pointer transition-colors duration-200 ${active ? 'text-home-fg' : 'text-home-fg/65 hover:text-home-fg'}`}
+                className={`cursor-pointer transition-colors duration-200 ${active ? 'text-home-fg' : 'text-home-fg/66 hover:text-home-fg'}`}
               >
                 {label}
               </button>
