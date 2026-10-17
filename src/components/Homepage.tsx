@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Wordmark from './ui/Wordmark';
+import HomeHeader, { type HomeTarget } from './home/HomeHeader';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -11,7 +12,11 @@ interface HomepageProps {
   onDashboardClick: () => void;
 }
 
-type Page = 'home' | 'services' | 'about' | 'contact';
+type Page = HomeTarget;
+
+/** Smooth scrolling, unless the visitor asked for less motion. */
+const scrollBehavior = (): ScrollBehavior =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
 // FAQ data (same as in ContactView, but translated to English)
 const faqData = [
@@ -85,14 +90,14 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+      el.scrollIntoView({ behavior: scrollBehavior() });
     }
   };
 
   const handleNavClick = (page: Page) => {
     if (page === 'home') {
       setCurrentPage('home');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     } else if (page === 'services') {
       setCurrentPage('home');
       setTimeout(() => scrollToSection('services'), 100);
@@ -101,7 +106,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       setTimeout(() => scrollToSection('about'), 100);
     } else if (page === 'contact') {
       setCurrentPage('contact');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     }
   };
 
@@ -139,34 +144,12 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     setExpandedFaqIdx(expandedFaqIdx === idx ? null : idx);
   };
 
-  const navLink = (page: Page, label: string) => (
-    <button
-      onClick={() => handleNavClick(page)}
-      className={`text-sm transition hover:text-ink ${
-        currentPage === page ? 'text-ink font-semibold' : 'text-ink-muted font-medium'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   const header = (
-    <header className="sticky top-0 z-20 bg-paper/90 backdrop-blur border-b border-hairline">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-        <button onClick={() => handleNavClick('home')} aria-label="DI Xpertia home" className="cursor-pointer">
-          <Wordmark />
-        </button>
-        <nav className="hidden md:flex items-center gap-8">
-          {navLink('home', 'Home')}
-          {navLink('services', 'Services')}
-          {navLink('about', 'About')}
-          {navLink('contact', 'Contact')}
-        </nav>
-        <button onClick={onDashboardClick} className={INK_BUTTON}>
-          Go to Dashboard
-        </button>
-      </div>
-    </header>
+    <HomeHeader
+      current={currentPage === 'contact' ? 'contact' : 'home'}
+      onNavigate={handleNavClick}
+      onDashboardClick={onDashboardClick}
+    />
   );
 
   const footerLink = (label: string, onClick?: () => void) => (
@@ -243,7 +226,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     ];
 
     return (
-      <div className="min-h-screen bg-paper text-ink font-sans">
+      <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
         {header}
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -427,7 +410,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
 
   // ---------- Homepage (default) ----------
   return (
-    <div className="min-h-screen bg-paper text-ink font-sans">
+    <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
       {header}
 
       {/* Hero: ink, as on the business card - offset tonal discs and the mark. */}
