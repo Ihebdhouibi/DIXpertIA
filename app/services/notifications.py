@@ -5,6 +5,7 @@ notification is part of the event's transaction, so an event that fails or
 rolls back tells nobody, and one that commits always does.
 """
 
+from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy import insert
@@ -33,11 +34,13 @@ def notify(
     ref_type: str | None = None,
     ref_id: int | None = None,
     exclude: str | None = None,
+    at: datetime | None = None,
 ) -> int:
     """Queue one notification per recipient in the current transaction.
 
     `exclude` leaves out the person who acted: nobody needs telling about what
-    they just did themselves. Returns how many were queued.
+    they just did themselves. `at` sets created_at, for the reminder job, which
+    decides what is due from that time (#134). Returns how many were queued.
     """
     if tone not in TONES:
         raise ValueError(f"unknown notification tone {tone!r}")
@@ -49,7 +52,8 @@ def notify(
         # else. The admin's submit would fail on the accountant's notification.
         db.execute(insert(Notification.__table__).inline(), [
             {"user_id": user_id, "kind": kind, "message": message, "tone": tone,
-             "link": link, "ref_type": ref_type, "ref_id": ref_id}
+             "link": link, "ref_type": ref_type, "ref_id": ref_id,
+             **({"created_at": at} if at else {})}
             for user_id in recipients
         ])
     return len(recipients)

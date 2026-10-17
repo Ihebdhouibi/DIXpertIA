@@ -119,6 +119,7 @@ def database():
     os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-32-characters-long")
     # The application runs as the least-privileged role, as it does in
     # production. Migrations and fixtures run as the owner.
+    os.environ["REMINDERS_ENABLED"] = "false"  # tests call the job directly (#134)
     os.environ["DATABASE_URL"] = _role_url("dixpertia_app", APP_PASSWORD)
     os.environ["SCHEMA_DATABASE_URL"] = _role_url("dixpertia_owner", OWNER_PASSWORD)
 
