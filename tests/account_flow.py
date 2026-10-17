@@ -5,8 +5,6 @@ import secrets
 
 from sqlalchemy import text
 
-from app.core.security import hash_password
-
 # Generated per run, like conftest's role passwords: nothing to leak or reuse.
 PASSWORD = secrets.token_hex(12)
 
@@ -25,6 +23,10 @@ def link_token(mailbox, to: str) -> str:
 def make_account(database, email: str, role: str = "employee", *, active=True, verified=True,
                  password: str = PASSWORD) -> str:
     """An account with a known password, inserted directly. Returns its id."""
+    # Imported here, not at the top: app.core.config refuses to load before
+    # the database fixture has set DATABASE_URL, and modules are collected first.
+    from app.core.security import hash_password
+
     with database.connect() as c:
         return c.execute(text(
             'INSERT INTO users (email, "firstName", "lastName", role, "hashedPassword",'

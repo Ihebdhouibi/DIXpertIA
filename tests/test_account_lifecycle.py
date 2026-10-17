@@ -16,8 +16,6 @@ from jose import jwt
 from sqlalchemy import text
 
 from account_flow import bearer, link_token, make_account, sign_in
-from app.core.config import settings
-from app.core.security import hash_account_token
 
 pytestmark = pytest.mark.identity("admin")
 
@@ -123,6 +121,10 @@ def test_a_reset_token_is_not_a_session(client, database, mailbox):
     reset = link_token(mailbox, f"reset@{DOMAIN}")
     assert client.get("/api/me", headers=bearer(reset)).status_code == 401
 
+    # Imported here, not at the top: app.core.config refuses to load before
+    # the database fixture has set DATABASE_URL, and modules are collected first.
+    from app.core.config import settings
+
     # Nor is a JWT signed with the session key for another purpose, the shape
     # the old reset token had: only typ "access" opens a session.
     forged = jwt.encode({"sub": user_id, "purpose": "reset", "ver": 0,
@@ -132,6 +134,10 @@ def test_a_reset_token_is_not_a_session(client, database, mailbox):
 
 
 def test_only_the_hash_of_a_reset_token_is_stored(client, database, mailbox):
+    # Imported here, not at the top: app.core.config refuses to load before
+    # the database fixture has set DATABASE_URL, and modules are collected first.
+    from app.core.security import hash_account_token
+
     user_id = make_account(database, f"hashed@{DOMAIN}")
     client.post("/api/forgot-password", json={"email": f"hashed@{DOMAIN}"})
     reset = link_token(mailbox, f"hashed@{DOMAIN}")
