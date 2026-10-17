@@ -63,8 +63,9 @@ def test_an_abandoned_draft_leaves_no_gap(client, admin, identities, a_client, d
     assert client.post(f"/api/invoices/{rejected['id']}/reject", headers=identities["accountant"]["headers"],
                        json={"comment": "wrong client"}).status_code == 200
     cancelled = draft(client, admin, a_client).json()
-    with database.begin() as c:
-        c.execute(text("UPDATE invoices SET statut = 'ANNULEE' WHERE id = :i"), {"i": int(cancelled["id"])})
+    # Through the endpoint since #126: a cancellation carries a reason.
+    assert client.post(f"/api/invoices/{cancelled['id']}/cancel", headers=admin,
+                       json={"reason": "Client withdrew the order"}).status_code == 200
 
     for abandoned in (never_submitted, rejected, cancelled):
         assert abandoned["numero"] is None, "a draft holds no legal number"
@@ -247,7 +248,8 @@ def test_a_client_may_still_pay_an_archived_invoice(client, admin, identities, a
     client.post(f"/api/periods/{month}/close", headers=admin)
 
     with database.connect() as c:
-        c.execute(text("UPDATE invoices SET statut = 'PAYEE' WHERE id = :i"),
+        # paid_on since #126: a paid invoice carries its payment date.
+        c.execute(text("UPDATE invoices SET statut = 'PAYEE', paid_on = current_date WHERE id = :i"),
                   {"i": invoice_id})
         row = c.execute(text(
             "SELECT statut, processing_status FROM invoices WHERE id = :i"),

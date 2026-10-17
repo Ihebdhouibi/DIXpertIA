@@ -124,7 +124,7 @@ PROBES = [
     # The two below MUST be accepted. They prove the rule is targeted rather
     # than a blanket freeze, and that the two status axes are independent.
     ("archived invoice marked paid by the client",
-     "UPDATE invoices SET statut = 'PAYEE' WHERE id = 99002", True),
+     "UPDATE invoices SET statut = 'PAYEE', paid_on = date_emission WHERE id = 99002", True),
     ("open invoice moved from pending to processed",
      "UPDATE invoices SET processing_status = 'PROCESSED' WHERE id = 99001", True),
     # --- accounting periods: a closed month is sealed (#42) ----------------
