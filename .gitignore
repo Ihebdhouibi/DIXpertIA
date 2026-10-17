@@ -50,6 +50,10 @@ db.json
 !/design/DI Xpertia Logo Concepts/exports/palette/
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.css
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.json
+# Reference renders of the invoice PDF (#81), regenerated when it changes.
+!/design/invoice-pdf/
+!/design/invoice-pdf/invoice-sample-fr.pdf
+!/design/invoice-pdf/invoice-sample-en-draft.pdf
 
 # Env backups
 .env.backup
