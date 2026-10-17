@@ -20,7 +20,8 @@ class NotificationOut(BaseModel):
     timestamp: int
     link: Optional[str] = None
     refType: Optional[str] = None
-    refId: Optional[int] = None
+    # A string, like InvoiceOut.id, so the UI compares it with invoice.id as is.
+    refId: Optional[str] = None
 
     @classmethod
     def from_orm_row(cls, row) -> "NotificationOut":
@@ -33,5 +34,5 @@ class NotificationOut(BaseModel):
             timestamp=int(row.created_at.timestamp() * 1000) if row.created_at else 0,
             link=row.link or None,
             refType=row.ref_type,
-            refId=row.ref_id,
+            refId=None if row.ref_id is None else str(row.ref_id),
         )

@@ -288,7 +288,7 @@ export interface ServerNotification {
   timestamp: number;
   link?: string | null;
   refType?: string | null;
-  refId?: number | null;
+  refId?: string | null;
 }
 
 /** The caller's notifications and how many are unread, read from the response headers. */
