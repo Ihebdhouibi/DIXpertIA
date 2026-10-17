@@ -186,6 +186,34 @@
      children. Turned off under prefers-reduced-motion below. */
   --animate-fade-in: fade-in 180ms ease-out backwards;
 
+  /* The public homepage (#165, design/homepage-v2/README.md "Interactions").
+     Transform and opacity only. All of it stops under prefers-reduced-motion
+     (see .home-page below). */
+  --ease-home-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-home-draw: cubic-bezier(0.6, 0, 0.2, 1);
+  --ease-home-magnet: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-home-blink: home-blink 1050ms steps(1, end) infinite;
+  --animate-home-draw: home-draw 1400ms var(--ease-home-draw) 300ms backwards;
+  --animate-home-glow: home-glow 2800ms ease-in-out infinite alternate;
+  --animate-home-panel: home-panel 450ms var(--ease-home-out) backwards;
+
+  @keyframes home-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes home-draw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes home-glow {
+    from { opacity: 0.2; transform: scale(0.92); }
+    to { opacity: 0.36; transform: scale(1.08); }
+  }
+  @keyframes home-panel {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -310,6 +338,44 @@
   :focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * The public homepage (#165). Scroll reveal: <Reveal> sets data-shown once the
+ * element is 12% visible, staggered by --reveal-index. The page's focus ring
+ * is the handoff's: an outline in the text colour plus a lime halo.
+ */
+.home-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+}
+.home-reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 800ms var(--ease-home-out),
+    transform 800ms var(--ease-home-out);
+  transition-delay: calc(var(--reveal-index, 0) * 90ms);
+}
+.home-page :focus-visible {
+  outline: 2px solid var(--color-home-fg);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--color-lime);
+  border-radius: 8px;
+}
+/* Every animation and transition off, content shown at once. */
+@media (prefers-reduced-motion: reduce) {
+  .home-page *,
+  .home-page *::before,
+  .home-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .home-reveal {
+    opacity: 1;
+    transform: none;
   }
 }
 
