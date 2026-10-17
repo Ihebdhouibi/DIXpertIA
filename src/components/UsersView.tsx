@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, UserX, UserCheck, Mail } from 'lucide-react';
 import { User, UserRole } from '../types';
+import * as api from '../api';
 import StatusBadge from './StatusBadge';
 import Dialog from './ui/Dialog';
 import Button from './ui/Button';
@@ -14,14 +15,25 @@ import { ROLE_LABEL } from '../navigation';
 
 interface UsersViewProps {
   users: User[];
-  onAddUser?: (user: Partial<User> & { password?: string }) => void;
-  onEditUser?: (id: string, updates: Partial<User>) => void;
-  onDeleteUser?: (id: string) => void;
   userRole: UserRole;
+  /** The signed-in account: an admin cannot demote or deactivate themselves. */
+  currentUserId?: string;
+  /**
+   * Called after the server accepted a change, so the app reloads the list.
+   * The view talks to the API itself (#62), like the invoice view (#128): it
+   * can then report what actually happened instead of announcing success
+   * before the server has answered.
+   */
+  onChanged?: () => void;
 }
 
-export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, userRole }: UsersViewProps) {
+function failure(error: unknown, fallback: string): string {
+  return error instanceof api.ApiError ? error.message : fallback;
+}
+
+export default function UsersView({ users, userRole, currentUserId, onChanged }: UsersViewProps) {
   const isAdmin = userRole === 'admin';
+  const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
@@ -34,7 +46,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
 
   const toast = useToast();
   const confirm = useConfirm();
-  const showToast = (message: string, type: 'success' | 'error') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     toast(message, type);
   };
 
@@ -62,35 +74,81 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
     setShowModal(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!isAdmin || saving) return;
     if (!email || !firstName || !lastName) {
       showToast('Please fill in all fields.', 'error');
       return;
     }
-    if (editingUser) {
-      onEditUser?.(editingUser.id, { email, firstName, lastName, role });
-      showToast(`User ${firstName} ${lastName} updated.`, 'success');
-    } else {
-      onAddUser?.({ email, firstName, lastName, role });
-      showToast(`User ${firstName} ${lastName} created.`, 'success');
+    setSaving(true);
+    try {
+      if (editingUser) {
+        await api.users.update(editingUser.id, { firstName, lastName, role });
+        showToast(`User ${firstName} ${lastName} updated.`, 'success');
+      } else {
+        const created = await api.users.create({ email, firstName, lastName, role });
+        showToast(
+          created.activationEmailSent
+            ? `Account created. An activation link was e-mailed to ${email}.`
+            : 'Account created, but the activation e-mail could not be sent. Use "Resend activation link".',
+          created.activationEmailSent ? 'success' : 'info',
+        );
+      }
+      setShowModal(false);
+      resetForm();
+      onChanged?.();
+    } catch (error) {
+      // The form stays open with what was typed, so it can be corrected.
+      showToast(failure(error, editingUser ? 'Could not update the account.' : 'Could not create the account.'), 'error');
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
-    resetForm();
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDeactivate = async (user: User) => {
     if (!isAdmin) return;
+    const name = `${user.firstName} ${user.lastName}`;
     const ok = await confirm({
-      title: `Delete user ${name}?`,
-      message: 'Their account will be removed. This cannot be undone.',
-      confirmLabel: 'Delete user',
+      title: `Deactivate ${name}?`,
+      message: 'They are signed out everywhere at once and can no longer sign in. '
+        + 'Their payslips and history are kept, and the account can be reactivated.',
+      confirmLabel: 'Deactivate',
       tone: 'danger',
     });
-    if (ok) {
-      onDeleteUser?.(id);
-      showToast(`User ${name} deleted.`, 'success');
+    if (!ok) return;
+    try {
+      await api.users.deactivate(user.id);
+      showToast(`${name} was deactivated.`, 'success');
+      onChanged?.();
+    } catch (error) {
+      showToast(failure(error, 'Could not deactivate the account.'), 'error');
+    }
+  };
+
+  const handleReactivate = async (user: User) => {
+    if (!isAdmin) return;
+    try {
+      await api.users.update(user.id, { isActive: true });
+      showToast(`${user.firstName} ${user.lastName} was reactivated.`, 'success');
+      onChanged?.();
+    } catch (error) {
+      showToast(failure(error, 'Could not reactivate the account.'), 'error');
+    }
+  };
+
+  const handleResendActivation = async (user: User) => {
+    if (!isAdmin) return;
+    try {
+      const result = await api.users.resendActivation(user.id);
+      showToast(
+        result.activationEmailSent
+          ? `A new activation link was e-mailed to ${user.email}. The previous one no longer works.`
+          : 'The activation e-mail could not be sent. Check the e-mail settings and try again.',
+        result.activationEmailSent ? 'success' : 'error',
+      );
+    } catch (error) {
+      showToast(failure(error, 'Could not send the activation link.'), 'error');
     }
   };
 
@@ -163,36 +221,57 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                 </span>
               </Td>
               <Td>
-                <StatusBadge status={u.isActive ? 'Active' : 'Inactive'} />
+                {/* Pending: created, but the owner has not set a password yet. */}
+                <StatusBadge status={!u.isActive ? 'Inactive' : u.isVerified ? 'Active' : 'Pending'} />
               </Td>
               {/*
-                Each button appears only if its handler was supplied. The
-                API has no endpoint for editing or deleting an account yet
-                (#62), so they are currently hidden rather than shown doing
-                nothing - a button that silently fails is worse than no
-                button.
+                No delete: payslips and leave history must be kept, so a
+                departure is a deactivation, which also signs the person out
+                everywhere (#62). An admin's own row has no deactivate button;
+                the server refuses it as well.
               */}
               {isAdmin && (
                 <Td numeric>
                   <div className="flex justify-end gap-1">
-                    {onEditUser && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(u)}
+                      aria-label={`Edit ${u.firstName} ${u.lastName}`}
+                      className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                    >
+                      <Edit className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                    {u.isActive && !u.isVerified && (
                       <button
                         type="button"
-                        onClick={() => handleOpenEdit(u)}
-                        aria-label={`Edit ${u.firstName} ${u.lastName}`}
+                        onClick={() => handleResendActivation(u)}
+                        aria-label={`Resend activation link to ${u.firstName} ${u.lastName}`}
+                        title="Resend activation link"
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                       >
-                        <Edit className="w-4 h-4" aria-hidden="true" />
+                        <Mail className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
-                    {onDeleteUser && (
+                    {u.isActive && u.id !== currentUserId && (
                       <button
                         type="button"
-                        onClick={() => handleDelete(u.id, `${u.firstName} ${u.lastName}`)}
-                        aria-label={`Delete ${u.firstName} ${u.lastName}`}
+                        onClick={() => handleDeactivate(u)}
+                        aria-label={`Deactivate ${u.firstName} ${u.lastName}`}
+                        title="Deactivate"
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-error-container hover:text-error cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        <UserX className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
+                    {!u.isActive && (
+                      <button
+                        type="button"
+                        onClick={() => handleReactivate(u)}
+                        aria-label={`Reactivate ${u.firstName} ${u.lastName}`}
+                        title="Reactivate"
+                        className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                      >
+                        <UserCheck className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -226,7 +305,7 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
               <Button variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
                 Cancel
               </Button>
-              <Button type="submit" form="user-form">
+              <Button type="submit" form="user-form" loading={saving}>
                 {editingUser ? 'Update user' : 'Create user'}
               </Button>
             </>
@@ -243,21 +322,37 @@ export default function UsersView({ users, onAddUser, onEditUser, onDeleteUser, 
                 <Input id={id} required value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g. Doe" />
               )}
             </Field>
-            <Field label="Email *">
-              {({ id }) => (
+            <Field
+              label="Email *"
+              hint={editingUser
+                ? 'The e-mail is the sign-in identity and cannot be changed here.'
+                : 'An activation link is sent here; the person chooses their own password.'}
+            >
+              {({ id, describedBy }) => (
                 <Input
                   id={id}
+                  aria-describedby={describedBy}
                   type="email"
                   required
+                  disabled={!!editingUser}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="jane.doe@example.com"
                 />
               )}
             </Field>
-            <Field label="Role">
-              {({ id }) => (
-                <Select id={id} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+            <Field
+              label="Role"
+              hint={editingUser?.id === currentUserId ? 'You cannot change your own role.' : undefined}
+            >
+              {({ id, describedBy }) => (
+                <Select
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={role}
+                  disabled={editingUser?.id === currentUserId}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
+                >
                   <option value="employee">Employee</option>
                   <option value="admin">Admin</option>
                   <option value="accountant">Accountant</option>

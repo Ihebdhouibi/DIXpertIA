@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Index, String, text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, text
 from datetime import datetime
 from sqlalchemy.orm import relationship
 
@@ -17,10 +17,11 @@ class User(Base):
     avatarUrl = Column(String, nullable=True)
     hashedPassword = Column(String, nullable=False)
     isActive = Column(Boolean, nullable=False, default=True, server_default=text("true"))
-    isVerified = Column(Boolean, default=False)
-    resetToken = Column(String, nullable=True)
-    resetTokenExpiry = Column(DateTime, nullable=True)
+    # False until the owner sets a password through the activation link (#62).
+    isVerified = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     createdAt = Column(DateTime, default=datetime.utcnow)
+    # Carried in every access token; bumping it revokes them all (#62).
+    token_version = Column(Integer, nullable=False, default=0, server_default=text("0"))
 
     employee = relationship("Employee", back_populates="user", uselist=False)
 
@@ -30,4 +31,28 @@ class User(Base):
         # Email is an identity, so uniqueness must ignore case: PROBE@x and
         # probe@x were both accepted. UNIQUE(email) cannot express this.
         Index("ux_users_email_ci", text("lower(email)"), unique=True),
+    )
+
+
+class AccountToken(Base):
+    """A single-use reset or activation token (#62). Only its SHA-256 is stored.
+
+    Replaces users.resetToken, which held a session-key JWT in clear. A token
+    is spent by setting used_at, never deleted.
+    """
+
+    __tablename__ = "account_tokens"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    purpose = Column(String(20), nullable=False)  # "reset" or "activation"
+    token_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("purpose IN ('reset', 'activation')", name="ck_account_tokens_purpose"),
+        CheckConstraint("expires_at > created_at", name="ck_account_tokens_expiry"),
+        Index("ix_account_tokens_user_live", "user_id", "purpose", postgresql_where=text("used_at IS NULL")),
     )

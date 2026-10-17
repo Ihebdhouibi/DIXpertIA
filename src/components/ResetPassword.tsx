@@ -6,12 +6,40 @@ import { Field, FormAlert, Input } from './ui/Field';
 
 interface ResetPasswordProps {
   token: string;
+  /**
+   * 'reset' for a forgotten password, 'activate' for a new account's first
+   * password (#62). Same form; each link only works on its own endpoint.
+   */
+  mode?: 'reset' | 'activate';
   onComplete: () => void;
 }
 
-const MIN_LENGTH = 8;
+// Mirrors MIN_PASSWORD_LENGTH in app/core/security.py, which is what decides.
+const MIN_LENGTH = 12;
 
-export default function ResetPassword({ token, onComplete }: ResetPasswordProps) {
+const TEXT = {
+  reset: {
+    endpoint: '/api/reset-password',
+    title: 'Set a new password',
+    subtitle: 'Choose a new password for your account.',
+    submit: 'Reset password',
+    done: 'Password updated',
+    doneMessage: 'Your password has been reset. You are signed out everywhere else. Redirecting you to login...',
+    invalid: 'Invalid reset link',
+  },
+  activate: {
+    endpoint: '/api/activate',
+    title: 'Activate your account',
+    subtitle: 'Choose the password you will sign in with.',
+    submit: 'Activate account',
+    done: 'Account activated',
+    doneMessage: 'Your account is ready. Redirecting you to login...',
+    invalid: 'Invalid activation link',
+  },
+};
+
+export default function ResetPassword({ token, mode = 'reset', onComplete }: ResetPasswordProps) {
+  const text = TEXT[mode];
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -48,7 +76,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
     }
     setLoading(true);
     try {
-      const response = await fetch('/api/reset-password', {
+      const response = await fetch(text.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword: password })
@@ -58,7 +86,9 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
         setSuccess(true);
         setTimeout(onComplete, 3000); // auto navigate to login after success
       } else {
-        setError(data.detail || 'Something went wrong. Please try again.');
+        // A refused password comes back as a string; a malformed request as a
+        // list of field errors, which would render as "[object Object]".
+        setError(typeof data.detail === 'string' ? data.detail : 'Something went wrong. Please try again.');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -69,10 +99,14 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
 
   if (validToken === false) {
     return (
-      <AuthLayout title="Invalid reset link" subtitle="The reset token is missing or invalid.">
+      <AuthLayout title={text.invalid} subtitle="The link is missing or invalid.">
         <div className="flex items-center gap-3 text-error">
           <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
-          <p className="text-sm">Request a new link from the login screen.</p>
+          <p className="text-sm">
+            {mode === 'activate'
+              ? 'Ask your administrator to send a new activation link.'
+              : 'Request a new link from the login screen.'}
+          </p>
         </div>
         <Button size="lg" fullWidth onClick={onComplete}>
           Back to login
@@ -83,17 +117,17 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
 
   if (success) {
     return (
-      <AuthLayout title="Password updated">
+      <AuthLayout title={text.done}>
         <div role="status" className="flex items-start gap-3 rounded-lg bg-success-container px-4 py-3 text-success">
           <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
-          <p className="text-sm">Your password has been reset. Redirecting you to login...</p>
+          <p className="text-sm">{text.doneMessage}</p>
         </div>
       </AuthLayout>
     );
   }
 
   return (
-    <AuthLayout title="Set a new password" subtitle="Choose a new password for your account.">
+    <AuthLayout title={text.title} subtitle={text.subtitle}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
         <Field label="New password" hint={`At least ${MIN_LENGTH} characters.`}>
@@ -127,7 +161,7 @@ export default function ResetPassword({ token, onComplete }: ResetPasswordProps)
           )}
         </Field>
         <Button type="submit" size="lg" fullWidth loading={loading} className="mt-2">
-          {loading ? 'Updating...' : 'Reset password'}
+          {loading ? 'Saving...' : text.submit}
         </Button>
       </form>
     </AuthLayout>

@@ -298,6 +298,7 @@ harness made that mistake and a policy test caught it.
 | `test_invoice_rules.py` | gapless numbering, chronological order, the two series, per-supplier references, the monthly close |
 | `test_row_level_security.py` | an employee cannot read another's payroll; no response carries a password hash |
 | `test_audit_trail.py` | one audit event per sensitive action, by the right actor; append-only; admin-only reads; no secret in the trail |
+| `test_account_lifecycle.py` | inactive accounts refused; deactivation, role and password changes revoke sessions; reset and activation links hashed, single use, never a session; login timing |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
@@ -733,12 +734,13 @@ nothing, so it records nothing.
 | `invoice.processing_status_changed` | the accountant's workflow |
 | `accounting_period.closed` | `app/routers/accounting.py`; one event for the close, with the number of invoices archived |
 | `leave_request.approved`, `.rejected` | `main.py` |
-| `user.created`, `employee.created` | `main.py`; the role only, never the temporary password |
+| `user.created`, `employee.created` | `main.py`; the role only |
+| `user.updated`, `.role_changed`, `.deactivated`, `.reactivated` | `PATCH /api/users/{id}`, `POST .../deactivate` (#62); the changed fields, before and after |
+| `user.activation_sent`, `user.activated` | the activation link (#62) |
 | `user.password_reset_requested`, `user.password_reset` | `main.py`; an unknown e-mail records nothing |
 
-Not recorded yet, because the endpoints do not exist: user update,
-deactivation and role change (#62), and invoice cancellation (#126). Those
-issues add the endpoints and must call `record_event()`.
+Not recorded yet, because the endpoint does not exist: invoice cancellation
+(#126). That issue adds it and must call `record_event()`.
 
 **Never put a secret in `before`/`after`**: no password, hash, token or
 temporary password. The trail is kept for years and read by people who must not
@@ -783,3 +785,67 @@ statement only, and is itself recorded.
   (`invoice_reviews`) keeps its own actors.
 - `log_connections` and statement logging on the server: server configuration,
   part of the deployment milestone with the rest of #77.
+
+## Accounts and sessions
+
+How an account is created, signs in, and loses access (#62; AUDIT-DB-004,
+-005, -009, -024).
+
+### A token is checked against the account on every request
+
+An access token is a JWT with `typ: "access"`, the account id and the
+account's `token_version` at sign-in. `require_authentication` (main.py) checks
+it before any route runs, and refuses it unless the account exists, is active,
+is activated, and still has that `token_version`. A route that never loads the
+current user is covered too. The role published to row-level security is the
+account's, not the token's claim.
+
+`token_version` goes up when the account is deactivated, when its role
+changes, and when its password is reset or set by activation. Every session
+issued before is then refused on its next request, instead of living out its
+60 minutes. Editing a name does not sign anyone out.
+
+### No delete; deactivation
+
+Payslips and leave requests reference the account and payroll must be kept,
+so an account is never deleted. `POST /api/users/{id}/deactivate` (or `PATCH`
+with `isActive: false`) blocks it at once; `PATCH` with `isActive: true`
+reactivates it. An admin cannot change their own role or deactivate
+themselves, which also guarantees an active admin remains.
+
+### Reset and activation links
+
+Both are opaque random tokens (`secrets.token_urlsafe(32)`) sent by e-mail.
+Only their SHA-256 is stored, in `account_tokens`; a database read hands out
+nothing usable. Each is single use (`used_at`), expires (reset 1 hour,
+activation 72 hours), and issuing a new one for the same purpose spends the
+previous one. A token for one purpose is refused by the other endpoint, and
+neither is ever accepted as a session.
+
+`POST /api/users` creates the account with an unusable password and e-mails an
+activation link: no password is chosen by the admin, returned in the response
+or sent by e-mail. The account cannot sign in until its owner sets a password
+through `POST /api/activate`. `activationEmailSent` in the response says
+whether the e-mail left; `POST /api/users/{id}/activation` sends a new link.
+Accounts that existed before #62 were marked activated by its migration.
+
+A new password must be 12 characters at least and 72 bytes at most (bcrypt
+reads no further, so a longer one would be silently truncated).
+
+### Sign-in does not reveal who has an account
+
+Every refusal is the same 401 `Invalid credentials`, whatever the reason:
+unknown e-mail, wrong password, inactive or not activated. An unknown e-mail
+still runs one bcrypt check against a dummy hash, so it takes as long as a
+known one; the audit measured 24 ms against 292 ms before. `forgot-password`
+answers the same for every e-mail.
+
+### Not covered yet
+
+- Rate limiting of `/api/login` and the reset endpoints. It belongs with the
+  attempt counter 2FA needs (#44), in the deployment milestone.
+- Changing one's own password from Settings: the form there is a placeholder.
+  When it is built it must check the current password, apply the same policy
+  and bump `token_version`.
+- A server-side sign-out of one session. Signing out clears the browser's
+  token; revoking every session is what deactivation and a reset do.
