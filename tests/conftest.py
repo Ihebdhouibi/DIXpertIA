@@ -59,6 +59,7 @@ TRUNCATED_BETWEEN_TESTS = (
     # TRUNCATE, not DELETE, which the append-only trigger refuses (#63).
     "audit_events",
     "notifications",
+    "contact_requests",
     "invoice_reviews",
     "invoice_items",
     "invoices",

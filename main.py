@@ -44,7 +44,7 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, invoicing, notifications
+from app.routers import accounting, audit, contact, invoicing, notifications
 from app.i18n import ApiError, set_locale, t
 from app.services import accounts
 from app.services.audit import record_event
@@ -68,6 +68,8 @@ PUBLIC_PATHS = frozenset({
     "/api/forgot-password",
     "/api/reset-password",
     "/api/activate",
+    # The website's contact form (#98): anonymous, rate limited in the database.
+    "/api/contact",
 })
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
@@ -150,6 +152,8 @@ app.include_router(invoicing.router, prefix="/api")
 app.include_router(accounting.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
+app.include_router(contact.public, prefix="/api")
+app.include_router(contact.admin, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,

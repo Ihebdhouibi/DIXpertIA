@@ -20,7 +20,10 @@ def email_configured() -> bool:
     return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
 
 
-def send_email(to_email: str, subject: str, body: str) -> bool:
+def send_email(to_email: str, subject: str, body: str, reply_to: str | None = None) -> bool:
+    """Send a plain-text e-mail. `reply_to` lets the recipient answer someone
+    else, such as a contact form's sender (#98); it must be a validated
+    address, since it goes into a header."""
     if not email_configured():
         log.warning("SMTP credentials missing. Email not sent.")
         return False
@@ -29,6 +32,8 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         msg["From"] = settings.SMTP_FROM
         msg["To"] = to_email
         msg["Subject"] = subject
+        if reply_to:
+            msg["Reply-To"] = reply_to
         msg.attach(MIMEText(body, "plain"))
 
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
