@@ -19,6 +19,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.notifications import Notification
 from app.models.user import User
+from app.schemas.api import NotificationsDismissedOut, NotificationsUpdatedOut
 from app.schemas.notifications import NotificationOut
 
 router = APIRouter()
@@ -78,7 +79,7 @@ def mark_read(notification_id: int, db: Session = Depends(get_db),
     return NotificationOut.from_orm_row(notification)
 
 
-@router.post("/notifications/read-all")
+@router.post("/notifications/read-all", response_model=NotificationsUpdatedOut)
 def mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     updated = (
         _live(db, current_user)
@@ -86,7 +87,7 @@ def mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(ge
         .update({Notification.read_at: datetime.now(timezone.utc)}, synchronize_session=False)
     )
     db.commit()
-    return {"updated": updated}
+    return NotificationsUpdatedOut(updated=updated)
 
 
 @router.post("/notifications/{notification_id}/dismiss", status_code=204)
@@ -99,9 +100,9 @@ def dismiss(notification_id: int, db: Session = Depends(get_db),
     return Response(status_code=204)
 
 
-@router.post("/notifications/dismiss-all")
+@router.post("/notifications/dismiss-all", response_model=NotificationsDismissedOut)
 def dismiss_all(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     dismissed = _live(db, current_user).update(
         {Notification.dismissed_at: datetime.now(timezone.utc)}, synchronize_session=False)
     db.commit()
-    return {"dismissed": dismissed}
+    return NotificationsDismissedOut(dismissed=dismissed)

@@ -42,8 +42,10 @@ from app.schemas.invoicing import (
 )
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
 
-# Allow admin, rh, and accountant to access invoice routes
-router = APIRouter(dependencies=[Depends(require_roles("rh", "admin", "accountant"))])
+# Admin and accountant. An "rh" role used to be listed here too, but no
+# account can hold it - users.role is CHECK-constrained to admin, employee and
+# accountant (#58) - so it only suggested access nobody has (#77).
+router = APIRouter(dependencies=[Depends(require_roles("admin", "accountant"))])
 
 # Every list endpoint is paginated. The previous versions returned the whole
 # table, so response size and query count grew without limit as data was added
@@ -416,8 +418,7 @@ def set_processing_status(
 ):
     """Move an invoice through the accountant's workflow.
 
-    Admin and accountant only: this is bookkeeping, not a commercial act, so
-    `rh` is excluded even though the router-wide rule allows it elsewhere.
+    Admin and accountant only: this is bookkeeping, not a commercial act.
 
     The legality of a move is not checked here. A trigger refuses anything that
     would change an archived invoice, so the rule holds for a direct SQL write

@@ -332,6 +332,7 @@ harness made that mistake and a policy test caught it.
 | `test_audit_trail.py` | one audit event per sensitive action, by the right actor; append-only; admin-only reads; no secret in the trail |
 | `test_account_lifecycle.py` | inactive accounts refused; deactivation, role and password changes revoke sessions; reset and activation links hashed, single use, never a session; login timing |
 | `test_users_rls.py` | who reads which accounts; the password hash unreadable and unwritable by the application role; the auth functions pin search_path and are not PUBLIC |
+| `test_responses.py` | every JSON route declares a response model; no secret in any response; every closed-set column constrained by the database |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
@@ -882,3 +883,42 @@ answers the same for every e-mail.
   and bump `token_version`.
 - A server-side sign-out of one session. Signing out clears the browser's
   token; revoking every session is what deactivation and a reset do.
+
+## Values and responses (#77)
+
+### Closed sets are constrained by the database
+
+A column that holds one of a fixed set of values (a role, a status, a type) is
+never free text (AUDIT-DB-019). The rule, applied everywhere:
+
+- **A workflow state, mirrored by a Python enum** - invoice `statut`,
+  `processing_status`, `review_status`, review `action`, `direction`, leave
+  `type_conge` and `statut`, period `state`, `employment_status` - is a
+  PostgreSQL enum. Adding a state is a migration, which is the point: a new
+  state needs its transitions and triggers reviewed.
+- **A small set no workflow moves through** - `users.role`, notification
+  `tone`, token `purpose`, invoice `series` - is a string with a `CHECK`. It is
+  cheaper to change, and a PostgreSQL enum cannot drop a value.
+
+Open on purpose, and listed in `test_responses.py`: audit `action` and
+notification `kind` (event names that grow with features), notification
+`ref_type`, and audit `actor_role` (a snapshot the INSERT policy already holds
+to the caller's role). The test fails for any other closed-set column the
+database does not constrain.
+
+**Roles stay a fixed set**, not a table. Permissions are not configurable, and
+the row-level security policies name roles literally; a roles table would only
+move the list without making anything configurable. Revisit if per-role
+permissions ever become something an admin edits. The `rh` role that the
+invoice routes still listed was dropped: `ck_users_role` meant no account could
+hold it.
+
+### Every JSON response is an allowlist
+
+Every route that answers with JSON declares a response model, so a field
+reaches the client only if a schema names it (AUDIT-DB-020). The denylist
+serialisation the audit found (`obj.__dict__` minus private columns) exposed
+any column added later; it was removed with `GET /api/data` (#55) and must not
+come back. `test_responses.py` fails for a route without a response model
+(the PDF download, which returns a file, is the one exception) and for any
+response that carries a password hash, a token or a token hash.

@@ -23,7 +23,9 @@ BOOKKEEPING = "admin or accountant"
 # The accountant's verification decisions (#118): not even the admin, who
 # creates the invoices and must not approve their own.
 ACCOUNTANT_ONLY = "accountant"
-BILLING = "admin, accountant or rh"
+# The invoice routes. An "rh" role was listed with them until #77, though no
+# account could hold it; the set is now the same as BOOKKEEPING.
+BILLING = "admin or accountant (invoice routes)"
 EMPLOYEE_SELF = "any signed-in user, scoped to their own rows"
 
 # (method, path, who may reach it)
@@ -80,7 +82,7 @@ ROUTES = [
     # By internal id since #86; the generic /api/invoices/1 normalisation below covers it.
     ("GET", "/api/invoices/1/download", BILLING),
 
-    # --- bookkeeping: narrower than billing, rh excluded --------------------
+    # --- bookkeeping ---------------------------------------------------------
     ("POST", "/api/invoices", ADMIN_ONLY),
     # Correcting a draft (#125): admin only, like creation - the accountant
     # reviews invoices and must not edit what she reviews.
@@ -118,7 +120,7 @@ def _may_reach(rule: str, role: str) -> bool:
     if rule == ACCOUNTANT_ONLY:
         return role == "accountant"
     if rule == BILLING:
-        return role in ("admin", "accountant")  # 'rh' has no fixture account
+        return role in ("admin", "accountant")
     raise AssertionError(f"unknown rule {rule!r}")
 
 

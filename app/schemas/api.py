@@ -383,3 +383,39 @@ class UserOut(BaseModel):
             isVerified=bool(row.isVerified),
             createdAt=row.createdAt.isoformat() if row.createdAt else None,
         )
+
+
+# --- Small responses (#77) ---------------------------------------------------
+# Every JSON route declares a response model, so what leaves the API is an
+# allowlist: a field reaches the client only if it is named here.
+# tests/test_responses.py fails for a route that declares none.
+
+class LoginOut(BaseModel):
+    access_token: str
+    # The OAuth 2 token type, always "bearer".
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class UserCreatedOut(BaseModel):
+    """POST /api/users (#62). No password: the owner sets one through the link."""
+    id: str
+    email: str
+    activationEmailSent: bool
+
+
+class ActivationSentOut(BaseModel):
+    id: str
+    activationEmailSent: bool
+
+
+class MessageOut(BaseModel):
+    message: str
+
+
+class NotificationsUpdatedOut(BaseModel):
+    updated: int
+
+
+class NotificationsDismissedOut(BaseModel):
+    dismissed: int

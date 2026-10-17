@@ -16,7 +16,11 @@ from dotenv import load_dotenv
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
 from app.schemas.api import (
+    ActivationSentOut,
     EmployeeOut,
+    LoginOut,
+    MessageOut,
+    UserCreatedOut,
     LeaveRequestCreate,
     LeaveRequestOut,
     PayslipOut,
@@ -237,23 +241,8 @@ def _account_by_email(db: Session, email: str):
     return db.execute(text("SELECT * FROM auth_account_by_email(:e)"), {"e": email}).first()
 
 
-def _user_payload(user) -> dict:
-    return {
-        "id": user.id,
-        "email": user.email,
-        "firstName": user.firstName,
-        "lastName": user.lastName,
-        "role": user.role,
-        "department": user.department,
-        "avatarUrl": user.avatarUrl,
-        "isActive": user.isActive,
-        "isVerified": user.isVerified,
-        "createdAt": user.createdAt.isoformat() if user.createdAt else None,
-    }
-
-
 # --- Auth endpoints ---
-@app.post('/api/login')
+@app.post('/api/login', response_model=LoginOut)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Exchange e-mail and password for an access token.
 
@@ -274,7 +263,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     log.info("Login OK for %s (role=%s)", user.id, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
-    return {"access_token": token, "token_type": "bearer", "user": _user_payload(user)}
+    return LoginOut(access_token=token, user=UserOut.from_orm_row(user))
 
 
 def _send_activation(user: User, token: str) -> bool:
@@ -299,7 +288,7 @@ DIXpertIA Team
 # validates the request model before the handler runs, so an in-body role check
 # let a non-admin get a 422 describing the schema before being refused.
 # Authorisation should be decided before anything else is (#57).
-@app.post('/api/users', status_code=201, dependencies=[Depends(require_admin)])
+@app.post('/api/users', status_code=201, response_model=UserCreatedOut, dependencies=[Depends(require_admin)])
 def create_user(req: UserCreate, db: Session = Depends(get_db)):
     """Create an account and e-mail its owner an activation link (#62).
 
@@ -331,10 +320,11 @@ def create_user(req: UserCreate, db: Session = Depends(get_db)):
     # After the commit: the link must not reach anyone for an account that
     # was rolled back.
     sent = _send_activation(user, token)
-    return {"id": user.id, "email": user.email, "activationEmailSent": sent}
+    return UserCreatedOut(id=user.id, email=user.email, activationEmailSent=sent)
 
 
-@app.post('/api/users/{user_id}/activation', dependencies=[Depends(require_admin)])
+@app.post('/api/users/{user_id}/activation', response_model=ActivationSentOut,
+          dependencies=[Depends(require_admin)])
 def resend_activation(user_id: str, db: Session = Depends(get_db)):
     """Send a new activation link; the previous one stops working."""
     user = db.get(User, user_id)
@@ -345,10 +335,10 @@ def resend_activation(user_id: str, db: Session = Depends(get_db)):
     token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
     record_event(db, "user.activation_sent", "user", user.id)
     db.commit()
-    return {"id": user.id, "activationEmailSent": _send_activation(user, token)}
+    return ActivationSentOut(id=user.id, activationEmailSent=_send_activation(user, token))
 
 
-@app.post('/api/activate')
+@app.post('/api/activate', response_model=MessageOut)
 def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
     """Set the first password through the activation link, and activate."""
     _require_acceptable(req.newPassword)
@@ -360,7 +350,7 @@ def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=INVALID_LINK)
     record_event(db, "user.activated", "user", user_id)
     db.commit()
-    return {"message": "Account activated. You can now sign in."}
+    return MessageOut(message="Account activated. You can now sign in.")
 
 
 def _apply_user_update(db: Session, admin: User, user: User, changes: dict) -> dict:
@@ -423,12 +413,12 @@ def deactivate_user(user_id: str, admin: User = Depends(require_admin), db: Sess
     return UserOut.from_orm_row(user)
 
 
-@app.post('/api/forgot-password')
+@app.post('/api/forgot-password', response_model=MessageOut)
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """E-mail a single-use reset link. The answer never says whether the
     e-mail has an account, and an inactive or not yet activated account gets
     no link: activation has its own."""
-    answer = {"message": "If your email is registered, you will receive a password reset link."}
+    answer = MessageOut(message="If your email is registered, you will receive a password reset link.")
     user = _account_by_email(db, req.email)
     if user is None or not user.isActive or not user.isVerified:
         return answer
@@ -454,7 +444,7 @@ DIXpertIA Team
     return answer
 
 
-@app.post('/api/reset-password')
+@app.post('/api/reset-password', response_model=MessageOut)
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Set a new password with a reset link. Spends the token, and revokes
     every session the account holds: whoever had the old password is out."""
@@ -465,7 +455,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=INVALID_LINK)
     record_event(db, "user.password_reset", "user", user_id)
     db.commit()
-    return {"message": "Password updated successfully."}
+    return MessageOut(message="Password updated successfully.")
 
 # --- Data endpoints ---
 # GET /api/data used to return every table (all users, invoices, leave requests,
@@ -673,9 +663,13 @@ def reject_leave_request(
     employee = db.query(Employee).filter(Employee.id == leave.employee_id).first()
     return LeaveRequestOut.from_orm_row(leave, employee)
 
-@app.post('/api/employees', status_code=201)
+@app.post('/api/employees', status_code=201, response_model=EmployeeOut)
 def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Attach an employee record to an existing login account."""
+    """Attach an employee record to an existing login account.
+
+    Answers with the same EmployeeOut as the list, instead of a dict built
+    by hand (#77).
+    """
     user = db.query(User).filter(User.id == req.userId).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -696,17 +690,7 @@ def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), 
     })
     db.commit()
     db.refresh(employee)
-    return {
-        "id": employee.id,
-        "userId": employee.user_id,
-        "firstName": user.firstName,
-        "lastName": user.lastName,
-        "email": user.email,
-        "jobTitle": employee.job_title,
-        "hiredOn": employee.hired_on.isoformat(),
-        "annualEntitlementDays": employee.annual_entitlement_days,
-        "employmentStatus": employee.employment_status.value,
-    }
+    return EmployeeOut.from_orm_row(employee)
 
 # NOTE: an older POST /api/invoices lived here. It was unreachable - the
 # invoicing router is registered first, so it won by registration order - and
