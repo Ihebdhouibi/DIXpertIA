@@ -5,7 +5,8 @@ import Button from './ui/Button';
 import { Field, FormAlert, Input } from './ui/Field';
 
 interface LoginProps {
-  onLogin: (email: string, password: string) => void;
+  /** Resolves to the error to show, or null once signed in. */
+  onLogin: (email: string, password: string) => Promise<string | null>;
   onBackHome?: () => void;
   onForgotPassword: () => void;
 }
@@ -17,7 +18,9 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const [signingIn, setSigningIn] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!email || !password) {
@@ -28,7 +31,10 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
     // containing "admin"; the value was discarded server-side, but the pattern
     // was a genuine privilege escalation in the now-deleted Registration.tsx.
     // The role comes from the /api/login response.
-    onLogin(email, password);
+    setSigningIn(true);
+    const failure = await onLogin(email, password);
+    setSigningIn(false);
+    if (failure) setError(failure);
   };
 
   return (
@@ -88,7 +94,7 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
             />
           )}
         </Field>
-        <Button type="submit" size="lg" fullWidth className="mt-2">
+        <Button type="submit" size="lg" fullWidth className="mt-2" loading={signingIn}>
           Sign in
           <ArrowRight className="w-4 h-4" aria-hidden="true" />
         </Button>

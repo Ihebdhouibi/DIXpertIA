@@ -22,6 +22,7 @@ from app.models.invoicing import (
     Supplier,
 )
 from app.models.user import User
+from app.services.notifications import notify, users_with_role
 # InvoiceOut comes from app.schemas.api, not from .invoicing: that module
 # holds the ORM-shaped schemas used to validate input, while the API's
 # output contract is the translated one (#37 Option C). One response shape
@@ -521,6 +522,11 @@ def _outgoing_draft(db: Session, invoice_id: int) -> Invoice:
     return invoice
 
 
+def _counterparty(invoice: Invoice) -> str:
+    """The client's name, for a notification's message."""
+    return invoice.client.nom if invoice.client else "an unknown client"
+
+
 def _commit_review(db: Session, invoice: Invoice) -> InvoiceOut:
     """Flush, build the response while it can still roll back, then commit."""
     try:
@@ -559,6 +565,10 @@ def submit_invoice(
     invoice.review_status = InvoiceReviewStatus.SUBMITTED
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.SUBMITTED, comment=""))
+    # Every accountant is told (#116): whoever is free picks it up.
+    notify(db, users_with_role(db, "accountant"), kind="invoice_submitted", tone="info",
+           message=f"Invoice {invoice.reference} for {_counterparty(invoice)} is waiting for your verification.",
+           link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
 
@@ -599,6 +609,9 @@ def approve_invoice(
         invoice.date_emission = issued_on
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.APPROVED, comment=""))
+    notify(db, [invoice.cree_par_id], kind="invoice_approved", tone="success",
+           message=f"Invoice {invoice.numero} for {_counterparty(invoice)} was approved and can be sent.",
+           link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
 
@@ -628,6 +641,9 @@ def reject_invoice(
     invoice.review_status = InvoiceReviewStatus.REJECTED
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.REJECTED, comment=payload.comment))
+    notify(db, [invoice.cree_par_id], kind="invoice_rejected", tone="warning",
+           message=f"Invoice {invoice.reference} for {_counterparty(invoice)} was rejected: {payload.comment}",
+           link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
 

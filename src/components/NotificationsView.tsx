@@ -13,7 +13,6 @@ interface Notification {
   read: boolean;
   timestamp: number;
   link?: string;
-  targetRole?: 'admin' | 'employee';
 }
 
 interface NotificationsViewProps {
