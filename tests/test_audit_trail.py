@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
 from account_flow import link_token
+from db_errors import INSUFFICIENT_PRIVILEGE, refused_with
 from invoice_flow import draft, sent, submit
 
 pytestmark = pytest.mark.identity("admin")
@@ -233,7 +234,7 @@ def test_the_application_role_cannot_change_or_delete_an_event(database, identit
     try:
         for statement in ("UPDATE audit_events SET action = 'tampered' WHERE id = :i",
                           "DELETE FROM audit_events WHERE id = :i"):
-            with pytest.raises(DBAPIError, match="permission denied"):
+            with refused_with(INSUFFICIENT_PRIVILEGE):
                 with conn.begin():
                     conn.execute(text(statement), {"i": event_id})
     finally:
@@ -253,7 +254,7 @@ def test_not_even_the_owner_can_change_or_delete_an_event(database, identities):
 def test_an_event_cannot_be_written_in_someone_elses_name(identities):
     engine, conn = as_app_role(identities["employee"]["user_id"], "employee")
     try:
-        with pytest.raises(DBAPIError, match="row-level security"):
+        with refused_with(INSUFFICIENT_PRIVILEGE):
             with conn.begin():
                 conn.execute(text(
                     "INSERT INTO audit_events (actor_id, actor_role, action, entity, entity_id)"

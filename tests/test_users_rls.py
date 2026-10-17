@@ -11,9 +11,9 @@ import os
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import DBAPIError
 
 from account_flow import link_token, make_account
+from db_errors import INSUFFICIENT_PRIVILEGE, refused_with
 
 DOMAIN = "users-rls-test.tn"
 FUNCTIONS = ("auth_account_by_email", "auth_session", "auth_spend_account_token")
@@ -85,13 +85,13 @@ def test_an_employee_cannot_change_their_own_role(as_app_role, identities, datab
 def test_the_password_hash_is_unreadable_even_ones_own(as_app_role, identities, role):
     me = identities[role]["user_id"]
     conn = as_app_role(me, role)
-    with pytest.raises(DBAPIError, match="permission denied"):
+    with refused_with(INSUFFICIENT_PRIVILEGE):
         conn.execute(text('SELECT "hashedPassword" FROM users WHERE id = :u'), {"u": me}).all()
 
 
 def test_the_password_hash_cannot_be_written_directly(as_app_role, identities):
     conn = as_app_role(identities["admin"]["user_id"], "admin")
-    with pytest.raises(DBAPIError, match="permission denied"):
+    with refused_with(INSUFFICIENT_PRIVILEGE):
         with conn.begin():
             conn.execute(text('UPDATE users SET "hashedPassword" = \'x\' WHERE id = :u'),
                          {"u": identities["employee"]["user_id"]})

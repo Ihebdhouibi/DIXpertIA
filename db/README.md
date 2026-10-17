@@ -368,6 +368,13 @@ The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
 accident.
 
+A test that expects PostgreSQL to refuse something recognises the refusal by
+its SQLSTATE (`tests/db_errors.py`, `refused_with(INSUFFICIENT_PRIVILEGE)`), not
+by the message: the server writes its own messages in its configured language,
+so "permission denied" is "droit refusé" on a French server (#161). Matching
+text is fine for messages we write - a trigger's `RAISE EXCEPTION`, or a
+constraint's name, which PostgreSQL quotes untranslated.
+
 
 ## Income and expense: one table, two directions
 
