@@ -70,7 +70,8 @@ def test_paid_and_cancelled_read_in_words(client, admin, accountant, identities,
 
     paid = sent(client, identities, a_client)
     client.post(f"/api/invoices/{paid['id']}/pay", headers=accountant, json={"paid_on": date.today().isoformat()})
-    assert history(client, accountant, paid["id"])[0]["label"] == f"Paid on {date.today().isoformat()}"
+    # The date in the reader's language since #135, like every date the API writes.
+    assert history(client, accountant, paid["id"])[0]["label"] == f"Paid on {date.today().strftime('%b %d, %Y')}"
 
     dropped = draft(client, admin, a_client).json()["id"]
     client.post(f"/api/invoices/{dropped}/cancel", headers=admin, json={"reason": "Client withdrew the order"})

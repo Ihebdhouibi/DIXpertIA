@@ -200,7 +200,10 @@ def client(app):
     from fastapi.testclient import TestClient
     # raise_server_exceptions=False so a 500 is asserted as a 500 rather than
     # blowing up the test: "this route returns 500" is a thing worth testing.
-    return TestClient(app, raise_server_exceptions=False)
+    # English by default: the suite's assertions read English messages. The
+    # API's own default, without the header, is French (#135); test_i18n.py
+    # covers both languages.
+    return TestClient(app, raise_server_exceptions=False, headers={"Accept-Language": "en"})
 
 
 @pytest.fixture

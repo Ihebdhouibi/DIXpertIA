@@ -25,17 +25,15 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.i18n import ApiError
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 def _unauthorised() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    return ApiError(status.HTTP_401_UNAUTHORIZED, "auth.not_authenticated",
+                    headers={"WWW-Authenticate": "Bearer"})
 
 
 def session_identity(token: str, db: Session) -> tuple[str, str] | None:
@@ -73,6 +71,6 @@ def require_roles(*roles: str):
     # and the database is the authority either way.
     def checker(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
+            raise ApiError(status.HTTP_403_FORBIDDEN, "auth.forbidden")
         return user
     return checker

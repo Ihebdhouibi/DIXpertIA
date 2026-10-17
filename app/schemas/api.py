@@ -22,6 +22,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.i18n import format_date, format_date_range as _format_date_range, format_month
 from app.models.leaves import LeaveStatus, LeaveType
 
 # --- Vocabulary -------------------------------------------------------------
@@ -47,14 +48,8 @@ LEAVE_STATUS_FROM_API = {v: k for k, v in LEAVE_STATUS_TO_API.items()}
 
 
 def format_date_range(start: date, end: date) -> str:
-    """Render a range the way the UI displays it today."""
-    if start == end:
-        return start.strftime("%b %d, %Y")
-    if (start.year, start.month) == (end.year, end.month):
-        return f"{start.strftime('%b %d')} - {end.strftime('%d, %Y')}"
-    if start.year == end.year:
-        return f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
-    return f"{start.strftime('%b %d, %Y')} - {end.strftime('%b %d, %Y')}"
+    """Render a range the way the UI displays it, in the request's language (#135)."""
+    return _format_date_range(start, end)
 
 
 # --- Leave requests ---------------------------------------------------------
@@ -151,10 +146,10 @@ class PayslipOut(BaseModel):
             id=str(row.id),
             employeeId=row.employee_id,
             employeeName=employee_name(row.employee),
-            period=row.periode.strftime("%B %Y"),
+            period=format_month(row.periode),
             grossPay=float(row.montant_brut or 0),
             netPay=float(row.montant_net or 0),
-            issuedOn=issued.strftime("%b %d, %Y") if issued else None,
+            issuedOn=format_date(issued),
             pdfUrl=row.fichier_pdf,
         )
 
@@ -298,11 +293,12 @@ class InvoiceOut(BaseModel):
             supplierReference=row.supplier_reference,
             amountHT=float(row.montant_ht or Decimal(0)),
             amountTTC=float(row.montant_ttc or Decimal(0)),
-            dateIssued=row.date_emission.strftime("%b %d, %Y") if row.date_emission else "-",
-            dueDate=row.date_echeance.strftime("%b %d, %Y") if row.date_echeance else "-",
+            # In the request's language (#135); the ISO forms below are for inputs.
+            dateIssued=format_date(row.date_emission) or "-",
+            dueDate=format_date(row.date_echeance) or "-",
             dueDateIso=row.date_echeance.isoformat() if row.date_echeance else None,
             dateIssuedIso=row.date_emission.isoformat() if row.date_emission else None,
-            paidOn=row.paid_on.strftime("%b %d, %Y") if row.paid_on else None,
+            paidOn=format_date(row.paid_on),
             cancelledAt=row.cancelled_at.isoformat() if row.cancelled_at else None,
             cancellationReason=row.cancellation_reason,
             status=INVOICE_STATUS_TO_API.get(statut, "Sent"),
@@ -381,6 +377,8 @@ class UserOut(BaseModel):
     isActive: bool
     isVerified: bool
     createdAt: Optional[str] = None
+    # The account's language, "fr" or "en" (#135).
+    locale: str = "fr"
 
     @classmethod
     def from_orm_row(cls, row) -> "UserOut":
@@ -395,6 +393,7 @@ class UserOut(BaseModel):
             isActive=bool(row.isActive),
             isVerified=bool(row.isVerified),
             createdAt=row.createdAt.isoformat() if row.createdAt else None,
+            locale=getattr(row, "locale", None) or "fr",
         )
 
 

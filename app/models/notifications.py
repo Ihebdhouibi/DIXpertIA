@@ -1,4 +1,5 @@
 from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
 
@@ -29,6 +30,9 @@ class Notification(Base):
     link = Column(String(40), nullable=False, default="", server_default="")
     ref_type = Column(String(30), nullable=True)
     ref_id = Column(Integer, nullable=True)
+    # The facts the text is made of (#135), so it is rendered in the reader's
+    # language when read. NULL on rows written before: `message` is shown then.
+    params = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     read_at = Column(DateTime(timezone=True), nullable=True)
     dismissed_at = Column(DateTime(timezone=True), nullable=True)

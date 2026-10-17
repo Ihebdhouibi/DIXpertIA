@@ -27,6 +27,8 @@ def admin(identities):
 def make_client(client, admin, nom="Acme Corporation", adresse="1 rue de Tunis"):
     return client.post("/api/clients", headers=admin, json={
         "nom": nom, "email": "a@acme.tn", "telephone": "+216 70 000 000", "adresse": adresse,
+        # English, so the assertions below read English; French is in test_i18n.py.
+        "locale": "en",
     }).json()["id"]
 
 

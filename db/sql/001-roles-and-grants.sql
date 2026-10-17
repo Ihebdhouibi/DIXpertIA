@@ -130,10 +130,10 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
         REVOKE SELECT, UPDATE ON TABLE public.users FROM dixpertia_app;
         GRANT SELECT (id, email, "firstName", "lastName", role, department, "avatarUrl",
-                      "isActive", "isVerified", "createdAt", token_version)
+                      "isActive", "isVerified", "createdAt", token_version, locale)
             ON TABLE public.users TO dixpertia_app;
         GRANT UPDATE ("firstName", "lastName", role, department, "avatarUrl",
-                      "isActive", "isVerified", token_version)
+                      "isActive", "isVerified", token_version, locale)
             ON TABLE public.users TO dixpertia_app;
     END IF;
 END

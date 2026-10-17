@@ -372,6 +372,7 @@ harness made that mistake and a policy test caught it.
 | `test_responses.py` | every JSON route declares a response model; no secret in any response; every closed-set column constrained by the database |
 | `test_invoice_status.py` | paid and cancelled: who, when, the payment date, the reason, the closed month, and the same rules enforced in SQL |
 | `test_invoice_overdue.py` | overdue derived at read time, the due-today boundary, the filter, the PDF, nothing stored |
+| `test_i18n.py` | French and English: request language, account language for e-mails and notifications, client language for the PDF, every trigger message translated |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
@@ -968,3 +969,30 @@ any column added later; it was removed with `GET /api/data` (#55) and must not
 come back. `test_responses.py` fails for a route without a response model
 (the PDF download, which returns a file, is the one exception) and for any
 response that carries a password hash, a token or a token hash.
+
+## Languages (#135)
+
+French and English, French by default. Everything the server writes for a
+person comes from `app/i18n.py`, where each French text sits next to its
+English one:
+
+| What | Language |
+|---|---|
+| API errors, dates and labels in responses | the request's `Accept-Language` (the UI sends its current language); French without it |
+| Notification texts | rendered when read, in the request's language, from `notifications.kind` and `params`; `message` keeps an English copy for SQL readers |
+| E-mails (activation, reset, reminders) | the recipient's `users.locale` |
+| Invoice PDF | the client's `clients.locale`, so an invoice prints the same way whoever downloads it; a supplier bill, the request's |
+
+`users.locale` is set by the admin at creation and edit, and by its owner
+through `PUT /api/me/locale`, which calls `auth_set_locale()`: that function
+changes only the caller's own row, because the UPDATE policy on `users` is
+the admin's (#76).
+
+Database triggers raise their messages in English; `translate_db_message()`
+recognises each one and answers in the request's language. A new trigger
+message needs its pattern and both texts in the catalog, or
+`test_every_trigger_message_is_recognised` fails. API errors are
+`ApiError(status, key, **params)`, returned as `{"detail": <text>, "code": <key>}`.
+
+Amounts are Tunisian dinars with three decimals in both languages
+(`1 234,500 TND`, `1,234.500 TND`); the invoice PDF printed `$` before.

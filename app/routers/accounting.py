@@ -8,7 +8,7 @@ blocking it rather than reporting a count.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, Path, Response
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.models.invoicing import (
 )
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
+from app.i18n import ApiError
 from app.services.audit import record_event
 
 # Keeping the books is the accountant's job, and the admin's by virtue of
@@ -153,10 +154,7 @@ def close_period(
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.periode == start).with_for_update().first()
     if period and period.state == PeriodState.CLOSED:
-        raise HTTPException(
-            status_code=409,
-            detail=f"the accounting period {month} is already closed and cannot be reopened",
-        )
+        raise ApiError(409, "period.already_closed", month=month)
 
     blocking = _blocking(db, start, end)
     if blocking:

@@ -4,9 +4,10 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Literal, Optional
-from fastapi import FastAPI, HTTPException, Depends, Query, Request
+from fastapi import FastAPI, Depends, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
@@ -44,6 +45,7 @@ from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, invoicing, notifications
+from app.i18n import ApiError, set_locale, t
 from app.services import accounts
 from app.services.audit import record_event
 from app.services.email import send_email
@@ -86,11 +88,14 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     rejected by the policies because the role arrived as NULL.
     """
     clear_identity()
+    # The language of this request's messages (#135): what the UI sends in
+    # Accept-Language, French without one. Set before anything can refuse.
+    set_locale(request.headers.get("accept-language"))
     if request.url.path in PUBLIC_PATHS:
         return
     identity = await run_in_threadpool(_identity_for, token) if token else None
     if identity is None:
-        raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+        raise ApiError(401, "auth.not_authenticated", headers={"WWW-Authenticate": "Bearer"})
     set_identity(*identity)
 
 
@@ -127,6 +132,15 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(dependencies=[Depends(require_authentication)], lifespan=lifespan)
+
+
+@app.exception_handler(ApiError)
+async def _api_error(_request: Request, exc: ApiError) -> JSONResponse:
+    """A catalog error (#135): its message in the request's language, and its
+    key in `code`, so the UI and the tests recognise it without parsing text."""
+    return JSONResponse(status_code=exc.status_code, headers=exc.headers,
+                        content={"detail": exc.detail, "code": exc.code})
+
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
 # registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a
@@ -152,7 +166,7 @@ app.add_middleware(
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != 'admin':
-        raise HTTPException(status_code=403, detail="Administrator role required")
+        raise ApiError(403, "auth.admin_required")
     return current_user
 
 # --- Pydantic models ---
@@ -191,11 +205,15 @@ class InvoiceCreate(BaseModel):
 
 Role = Literal["admin", "employee", "accountant"]
 
+Locale = Literal["fr", "en"]
+
 class UserCreate(BaseModel):
     email: EmailStr
     firstName: str
     lastName: str
     role: Role
+    # The language of the activation e-mail and of the account (#135).
+    locale: Locale = "fr"
 
 class UserUpdate(BaseModel):
     """What the admin may change on an account (#62). All optional; the e-mail
@@ -204,6 +222,11 @@ class UserUpdate(BaseModel):
     lastName: Optional[str] = None
     role: Optional[Role] = None
     isActive: Optional[bool] = None
+    locale: Optional[Locale] = None
+
+class LocaleUpdate(BaseModel):
+    """The signed-in account's own language (#135)."""
+    locale: Locale
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -221,13 +244,11 @@ class ActivateRequest(BaseModel):
     newPassword: str
 
 
-INVALID_LINK = "This link is invalid or has expired. Ask for a new one."
-
-
 def _require_acceptable(password: str) -> None:
     problem = password_problem(password)
     if problem:
-        raise HTTPException(status_code=422, detail=problem)
+        key, params = problem
+        raise ApiError(422, key, **params)
 
 
 def _account_by_email(db: Session, email: str):
@@ -260,28 +281,17 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         ok = verify_password(req.password, user.hashedPassword) and user.isActive and user.isVerified
     if not ok:
         log.info("Login refused")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise ApiError(401, "auth.invalid_credentials")
     log.info("Login OK for %s (role=%s)", user.id, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
     return LoginOut(access_token=token, user=UserOut.from_orm_row(user))
 
 
 def _send_activation(user: User, token: str) -> bool:
-    body = f"""
-Hello {user.firstName},
-
-An account has been created for you on DIXpertIA.
-
-Choose your password with the link below (valid for 72 hours):
-
-{accounts.link(accounts.ACTIVATION, token)}
-
-If you were not expecting this, you can ignore this e-mail.
-
-Regards,
-DIXpertIA Team
-"""
-    return send_email(user.email, "Activate your DIXpertIA account", body)
+    """In the new account's language (#135), which the admin chose at creation."""
+    body = t("email.activation.body", user.locale, name=user.firstName,
+             link=accounts.link(accounts.ACTIVATION, token))
+    return send_email(user.email, t("email.activation.subject", user.locale), body)
 
 
 # require_admin as a dependency rather than a check inside the body: FastAPI
@@ -299,7 +309,7 @@ def create_user(req: UserCreate, db: Session = Depends(get_db)):
     again with POST /api/users/{id}/activation.
     """
     if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise ApiError(400, "user.email_taken")
     # No id: the database allocates it from users_id_seq (#85).
     user = User(
         email=req.email,
@@ -309,7 +319,8 @@ def create_user(req: UserCreate, db: Session = Depends(get_db)):
         hashedPassword=unusable_password_hash(),
         isActive=True,
         isVerified=False,
-        createdAt=datetime.utcnow()
+        createdAt=datetime.utcnow(),
+        locale=req.locale,
     )
     db.add(user)
     db.flush()
@@ -329,9 +340,9 @@ def resend_activation(user_id: str, db: Session = Depends(get_db)):
     """Send a new activation link; the previous one stops working."""
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ApiError(404, "user.not_found")
     if user.isVerified:
-        raise HTTPException(status_code=409, detail="This account is already activated")
+        raise ApiError(409, "user.already_activated")
     token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
     record_event(db, "user.activation_sent", "user", user.id)
     db.commit()
@@ -347,10 +358,10 @@ def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
     user_id = accounts.spend_token(db, req.token, accounts.ACTIVATION, hash_password(req.newPassword))
     if user_id is None:
         db.rollback()
-        raise HTTPException(status_code=400, detail=INVALID_LINK)
+        raise ApiError(400, "auth.invalid_link")
     record_event(db, "user.activated", "user", user_id)
     db.commit()
-    return MessageOut(message="Account activated. You can now sign in.")
+    return MessageOut(message=t("account.activated"))
 
 
 def _apply_user_update(db: Session, admin: User, user: User, changes: dict) -> dict:
@@ -367,7 +378,7 @@ def _apply_user_update(db: Session, admin: User, user: User, changes: dict) -> d
     if not changed:
         return {}
     if user.id == admin.id and ('role' in changed or changed.get('isActive') is False):
-        raise HTTPException(status_code=409, detail="You cannot change your own role or deactivate yourself")
+        raise ApiError(409, "user.cannot_change_self")
     before = {k: getattr(user, k) for k in changed}
     for field, value in changed.items():
         setattr(user, field, value)
@@ -390,7 +401,7 @@ def update_user(user_id: str, req: UserUpdate, admin: User = Depends(require_adm
     """Change an account's name, role or status (#62). One audit event."""
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ApiError(404, "user.not_found")
     _apply_user_update(db, admin, user, req.model_dump())
     db.commit()
     db.refresh(user)
@@ -406,7 +417,7 @@ def deactivate_user(user_id: str, admin: User = Depends(require_admin), db: Sess
     """
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ApiError(404, "user.not_found")
     _apply_user_update(db, admin, user, {"isActive": False})
     db.commit()
     db.refresh(user)
@@ -418,7 +429,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """E-mail a single-use reset link. The answer never says whether the
     e-mail has an account, and an inactive or not yet activated account gets
     no link: activation has its own."""
-    answer = MessageOut(message="If your email is registered, you will receive a password reset link.")
+    answer = MessageOut(message=t("account.reset_sent"))
     user = _account_by_email(db, req.email)
     if user is None or not user.isActive or not user.isVerified:
         return answer
@@ -426,21 +437,10 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     # The token itself never goes in the trail.
     record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
-    body = f"""
-Hello {user.firstName},
-
-You requested a password reset for your DIXpertIA account.
-
-Click the link below to set a new password (valid for 1 hour, once):
-
-{accounts.link(accounts.RESET, token)}
-
-If you did not request this, please ignore this email.
-
-Regards,
-DIXpertIA Team
-"""
-    send_email(user.email, "Password Reset Request", body)
+    # In the account's language (#135), not the language of the page the
+    # request came from: the account owner reads it.
+    body = t("email.reset.body", user.locale, name=user.firstName, link=accounts.link(accounts.RESET, token))
+    send_email(user.email, t("email.reset.subject", user.locale), body)
     return answer
 
 
@@ -452,10 +452,10 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     user_id = accounts.spend_token(db, req.token, accounts.RESET, hash_password(req.newPassword))
     if user_id is None:
         db.rollback()
-        raise HTTPException(status_code=400, detail=INVALID_LINK)
+        raise ApiError(400, "auth.invalid_link")
     record_event(db, "user.password_reset", "user", user_id)
     db.commit()
-    return MessageOut(message="Password updated successfully.")
+    return MessageOut(message=t("account.password_updated"))
 
 # --- Data endpoints ---
 # GET /api/data used to return every table (all users, invoices, leave requests,
@@ -474,6 +474,21 @@ def read_me(current_user: User = Depends(get_current_user)):
     so nothing could actually be done - but the UI lied, and the fix is for the
     identity to come from the token on every load.
     """
+    return UserOut.from_orm_row(current_user)
+
+
+@app.put('/api/me/locale', response_model=UserOut)
+def set_my_locale(req: LocaleUpdate, current_user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    """Save the signed-in account's language (#135): the UI's toggle calls this,
+    so e-mails and notifications follow the choice on every device.
+
+    Through auth_set_locale(), which changes that one column of the caller's own
+    row: only the admin may update users otherwise (#76).
+    """
+    db.execute(text("SELECT auth_set_locale(:l)"), {"l": req.locale})
+    db.commit()
+    db.refresh(current_user)
     return UserOut.from_orm_row(current_user)
 
 
@@ -568,13 +583,11 @@ def list_users(
 ):
     """Login accounts. Admin only.
 
-    Checked in Python rather than by a policy because `users` is deliberately
-    NOT under row-level security: login, forgot-password and reset-password all
-    read the table with no authenticated identity, so a policy there would break
-    authentication outright. Closing that properly is #76.
+    Checked here as well as by row-level security on `users` (#76), which lets
+    the accountant read every account too: this list is the admin's.
     """
     if current_user.role != 'admin':
-        raise HTTPException(status_code=403, detail="Admins only")
+        raise ApiError(403, "auth.admin_required")
     rows = (
         db.query(User)
         .order_by(User.id)
@@ -600,7 +613,7 @@ def create_leave_request(
     (#37).
     """
     if req.endDate < req.startDate:
-        raise HTTPException(status_code=422, detail="endDate cannot be before startDate")
+        raise ApiError(422, "leave.end_before_start")
 
     # Leave belongs to the employee record, not the login account (#60), so the
     # caller is resolved through employees. A user with no employee record
@@ -608,10 +621,7 @@ def create_leave_request(
     # employee has no entitlement.
     employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
     if not employee:
-        raise HTTPException(
-            status_code=409,
-            detail="This account has no employee record, so it cannot request leave",
-        )
+        raise ApiError(409, "leave.no_employee_record")
 
     leave = LeaveRequest(employee_id=employee.id, **req.to_orm_kwargs())
     db.add(leave)
@@ -630,7 +640,7 @@ def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db:
     """
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
-        raise HTTPException(status_code=404, detail="Leave request not found")
+        raise ApiError(404, "leave.not_found")
     record_event(db, "leave_request.approved", "leave_request", leave.id,
                  before={"statut": leave.statut}, after={"statut": LeaveStatus.APPROUVE})
     leave.statut = LeaveStatus.APPROUVE
@@ -651,7 +661,7 @@ def reject_leave_request(
     `rejectionReason`, neither of which is a column, so nothing was written."""
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
     if not leave:
-        raise HTTPException(status_code=404, detail="Leave request not found")
+        raise ApiError(404, "leave.not_found")
     record_event(db, "leave_request.rejected", "leave_request", leave.id,
                  before={"statut": leave.statut},
                  after={"statut": LeaveStatus.REFUSE, "comment": body.comment or ''})
@@ -672,9 +682,9 @@ def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), 
     """
     user = db.query(User).filter(User.id == req.userId).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ApiError(404, "user.not_found")
     if db.query(Employee).filter(Employee.user_id == req.userId).first():
-        raise HTTPException(status_code=409, detail="This user already has an employee record")
+        raise ApiError(409, "employee.already_exists")
 
     employee = Employee(
         user_id=req.userId,

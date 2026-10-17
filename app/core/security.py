@@ -64,14 +64,15 @@ def unusable_password_hash() -> str:
     return "!unusable:" + secrets.token_hex(16)
 
 
-def password_problem(password: str) -> str | None:
-    """Why a new password is refused, or None if it is acceptable."""
+def password_problem(password: str) -> tuple[str, dict] | None:
+    """Why a new password is refused, as a message key and its parameters
+    (app.i18n), or None if it is acceptable."""
     if len(password) < MIN_PASSWORD_LENGTH:
-        return f"the password must be at least {MIN_PASSWORD_LENGTH} characters"
+        return "password.too_short", {"min": MIN_PASSWORD_LENGTH}
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        return f"the password must be at most {MAX_PASSWORD_BYTES} bytes"
+        return "password.too_long", {"max": MAX_PASSWORD_BYTES}
     if not password.strip():
-        return "the password cannot be blank"
+        return "password.blank", {}
     return None
 
 

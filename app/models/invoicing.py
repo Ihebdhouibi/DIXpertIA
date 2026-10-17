@@ -161,11 +161,15 @@ class Client(Base):
     email = Column(String(100), default="", server_default=text("''"), nullable=False)
     telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
     adresse = Column(Text, default="", server_default=text("''"), nullable=False)
+    # The language this client's invoices are printed in (#135), French by default:
+    # the same invoice always prints the same way, whoever downloads it.
+    locale = Column(String(2), nullable=False, default="fr", server_default=text("'fr'"))
 
     invoices = relationship("Invoice", back_populates="client")
 
     __table_args__ = (
         # Stops "Acme Corp" and "ACME CORP" becoming two customers.
+        CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
         Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
     )
 
