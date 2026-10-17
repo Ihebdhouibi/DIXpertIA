@@ -54,6 +54,14 @@ def _positive_int(name: str, default: int) -> int:
     return value
 
 
+def _minutes(name: str, default: int) -> int:
+    # No limit looks back more than a day: auth_throttle_hit() deletes older rows.
+    value = _positive_int(name, default)
+    if value > 1440:
+        raise ConfigurationError(f"{name} must be at most 1440 minutes, one day (got {value}).")
+    return value
+
+
 def _flag(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw in (None, ""):
@@ -102,6 +110,19 @@ class Settings:
     # Anti-abuse: enquiries per sender (by hashed IP) and from everyone, per hour.
     CONTACT_LIMIT_PER_SENDER: int = _positive_int("CONTACT_LIMIT_PER_SENDER", 5)
     CONTACT_LIMIT_TOTAL: int = _positive_int("CONTACT_LIMIT_TOTAL", 100)
+
+    # Brute-force limits (#175), kept in the database (app/services/throttle.py).
+    # Failed sign-ins on one e-mail before it is locked, and for how long: the
+    # lock lifts as the failures age out of the window.
+    LOGIN_MAX_FAILURES: int = _positive_int("LOGIN_MAX_FAILURES", 5)
+    LOGIN_LOCKOUT_MINUTES: int = _minutes("LOGIN_LOCKOUT_MINUTES", 15)
+    # Failed sign-ins from one address, any account, in the same window.
+    LOGIN_MAX_FAILURES_PER_IP: int = _positive_int("LOGIN_MAX_FAILURES_PER_IP", 20)
+    # Reset e-mails to one account per hour.
+    RESET_MAILS_PER_HOUR: int = _positive_int("RESET_MAILS_PER_HOUR", 3)
+    # Requests to the public routes (sign-in, password reset, activation,
+    # contact) from one address per minute.
+    PUBLIC_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_REQUESTS_PER_MINUTE", 20)
 
 
 settings = Settings()

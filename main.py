@@ -46,7 +46,7 @@ from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, contact, dashboard, invoicing, notifications
 from app.i18n import ApiError, set_locale, t
-from app.services import accounts
+from app.services import accounts, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.reminders import reminder_loop
@@ -268,8 +268,13 @@ def _account_by_email(db: Session, email: str):
 
 
 # --- Auth endpoints ---
-@app.post('/api/login', response_model=LoginOut)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+# Every public route is limited per address (#175), declared on the route so
+# that a public route added later shows whether it has a limit.
+PUBLIC_LIMIT = [Depends(throttle.limit_public_requests)]
+
+
+@app.post('/api/login', response_model=LoginOut, dependencies=PUBLIC_LIMIT)
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """Exchange e-mail and password for an access token.
 
     Every refusal is the same 401 and costs the same time (#62): an unknown
@@ -277,7 +282,28 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     not yet activated account is refused only after its password is checked.
     Answering faster, or differently, for those would tell a caller which
     e-mails have accounts and in what state.
+
+    Guessing is limited (#175). Each attempt is counted before the password
+    is checked, so parallel guesses cannot all slip under a limit; a success
+    takes its attempts back. Too many failures from one address: 429. Too
+    many on one e-mail: locked, with the same 401 as a wrong password - the
+    lock applies to unknown e-mails alike, so it reveals nothing.
     """
+    from_ip = throttle.hit(db, throttle.LOGIN_IP, throttle.ip_key(request),
+                           settings.LOGIN_MAX_FAILURES_PER_IP, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    if from_ip < 0:
+        db.commit()
+        log.info("Login refused: too many failures from one address")
+        raise throttle.too_many(-from_ip)
+    account = throttle.email_key(req.email)
+    on_account = throttle.hit(db, throttle.LOGIN_ACCOUNT, account,
+                              settings.LOGIN_MAX_FAILURES, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    # Counted now, whatever happens next.
+    db.commit()
+    if on_account < 0:
+        log.info("Login refused: account locked")
+        raise ApiError(401, "auth.invalid_credentials")
+
     user = _account_by_email(db, req.email)
     if user is None:
         burn_password_check(req.password)
@@ -287,6 +313,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not ok:
         log.info("Login refused")
         raise ApiError(401, "auth.invalid_credentials")
+    throttle.forget(db, from_ip)
+    throttle.clear(db, throttle.LOGIN_ACCOUNT, account)
+    db.commit()
     log.info("Login OK for %s (role=%s)", user.id, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
     return LoginOut(access_token=token, user=UserOut.from_orm_row(user))
@@ -354,7 +383,7 @@ def resend_activation(user_id: str, db: Session = Depends(get_db)):
     return ActivationSentOut(id=user.id, activationEmailSent=_send_activation(user, token))
 
 
-@app.post('/api/activate', response_model=MessageOut)
+@app.post('/api/activate', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
 def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
     """Set the first password through the activation link, and activate."""
     _require_acceptable(req.newPassword)
@@ -429,14 +458,23 @@ def deactivate_user(user_id: str, admin: User = Depends(require_admin), db: Sess
     return UserOut.from_orm_row(user)
 
 
-@app.post('/api/forgot-password', response_model=MessageOut)
+@app.post('/api/forgot-password', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """E-mail a single-use reset link. The answer never says whether the
     e-mail has an account, and an inactive or not yet activated account gets
-    no link: activation has its own."""
+    no link: activation has its own.
+
+    At most RESET_MAILS_PER_HOUR links per account (#175). Past it nothing is
+    sent and the answer is unchanged: the form cannot flood an inbox."""
     answer = MessageOut(message=t("account.reset_sent"))
     user = _account_by_email(db, req.email)
     if user is None or not user.isActive or not user.isVerified:
+        return answer
+    sent_lately = throttle.hit(db, throttle.RESET_MAIL, throttle.email_key(req.email),
+                               settings.RESET_MAILS_PER_HOUR, 3600)
+    if sent_lately < 0:
+        db.commit()
+        log.info("Password reset not sent: hourly limit for the account")
         return answer
     token = accounts.issue_token(db, user.id, accounts.RESET)
     # The token itself never goes in the trail.
@@ -449,7 +487,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     return answer
 
 
-@app.post('/api/reset-password', response_model=MessageOut)
+@app.post('/api/reset-password', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Set a new password with a reset link. Spends the token, and revokes
     every session the account holds: whoever had the old password is out."""
