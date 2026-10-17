@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Wordmark from './ui/Wordmark';
 import HomeHeader, { type HomeTarget } from './home/HomeHeader';
 import Hero from './home/Hero';
+import HowWeWorkConsole from './home/HowWeWorkConsole';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -414,7 +415,11 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
       {header}
 
-      <Hero onContact={() => handleNavClick('contact')} onServices={() => handleNavClick('services')} />
+      <Hero
+        onContact={() => handleNavClick('contact')}
+        onServices={() => handleNavClick('services')}
+        console={<HowWeWorkConsole />}
+      />
 
       {/* Services */}
       <section id="services" className="py-20 scroll-mt-16">
