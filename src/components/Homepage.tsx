@@ -4,6 +4,7 @@ import Hero from './home/Hero';
 import HowWeWorkConsole from './home/HowWeWorkConsole';
 import Services from './home/Services';
 import Engagement from './home/Engagement';
+import { ApiError, contact } from '../api';
 import AboutCta from './home/AboutCta';
 import HomeFooter from './home/HomeFooter';
 import {
@@ -22,7 +23,8 @@ type Page = HomeTarget;
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
-// FAQ data (same as in ContactView, but translated to English)
+// FAQ data. Worded without guarantees the company has not committed to: no
+// response times, no 24/7 line, no certification (#98).
 const faqData = [
   {
     question: 'What types of cloud services do you offer?',
@@ -30,15 +32,15 @@ const faqData = [
   },
   {
     question: 'How do you ensure the security of our data?',
-    answer: 'We apply ISO 27001 standards, regular audits, and advanced encryption protocols to protect your data.'
+    answer: 'We follow recognised security practices, such as those of ISO 27001, with regular reviews and encryption of your data.'
   },
   {
     question: 'What is your average support response time?',
-    answer: 'Our technical support responds within 4 hours for standard requests, and immediately for critical incidents (24/7 SLA).'
+    answer: 'We aim to reply quickly, usually within one business day, and we prioritise critical incidents.'
   },
   {
     question: 'Can we migrate an existing infrastructure without service interruption?',
-    answer: 'Yes, we plan phased migrations with failover testing to ensure business continuity.'
+    answer: 'In most cases, yes: we plan phased migrations with failover testing to keep your services running.'
   },
   {
     question: 'How does your service pricing estimation work?',
@@ -60,10 +62,13 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
   // Contact form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [subject, setSubject] = useState('Security audit / Penetration testing');
+  const [subject, setSubject] = useState('security_audit');
   const [message, setMessage] = useState('');
+  // The honeypot (#98): hidden from people, so only a bot fills it in.
+  const [website, setWebsite] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // FAQ state
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,9 +97,10 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     }
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccess(false);
     if (!name.trim()) {
       setErrorMsg('Please enter your full name.');
       return;
@@ -107,13 +113,27 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       setErrorMsg('Your message must be at least 10 characters.');
       return;
     }
-    // Simulate successful submission
-    setSuccess(true);
-    setName('');
-    setEmail('');
-    setMessage('');
-    setSubject('Security audit / Penetration testing');
-    setTimeout(() => setSuccess(false), 5000);
+    // The enquiry goes to the server (#98), which stores it and tells the
+    // team. It used to "simulate" success here while nothing was sent.
+    setSending(true);
+    try {
+      await contact.send({ name: name.trim(), email: email.trim(), topic: subject, message: message.trim(), website });
+      setSuccess(true);
+      setName('');
+      setEmail('');
+      setMessage('');
+      setSubject('security_audit');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof ApiError && err.status === 429
+          ? 'We received many messages in the last hour. Please try again later, or call us on +216 28 814 729.'
+          : err instanceof ApiError && err.status === 422
+            ? 'Please check the fields: a valid e-mail, and a message of 10 to 5,000 characters.'
+            : 'Your message could not be sent. Please try again, or call us on +216 28 814 729.',
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
   const filteredFaqs = faqData.filter(
@@ -141,15 +161,15 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     const contactItems = [
       {
         icon: Phone,
-        title: 'Emergency Assistance (SLA)',
-        value: '+33 (0) 1 45 88 90 22',
-        note: '24/7 emergency line for subscribed clients'
+        title: 'Phone',
+        value: '+216 28 814 729',
+        note: 'For urgent requests, during office hours'
       },
       {
         icon: Mail,
-        title: 'Business Integration Inquiries',
+        title: 'Business Inquiries',
         value: 'contact@dixpertia.com',
-        note: 'Guaranteed response within 4 business hours'
+        note: 'We usually reply within one business day'
       },
       {
         icon: MapPin,
@@ -158,9 +178,8 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       },
       {
         icon: Clock,
-        title: 'On-Call Office Uptime',
-        value: 'Monday – Friday: 8:00 AM – 7:00 PM',
-        note: 'Active network crisis team 24/7/365'
+        title: 'Office Hours',
+        value: 'Monday – Friday: 8:00 AM – 7:00 PM'
       }
     ];
 
@@ -180,8 +199,8 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
             <p className={`${EYEBROW} text-home-accent-text`}>Contact</p>
             <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-[-0.02em]">Contact our experts</h1>
             <p className="mt-4 text-base text-home-fg/62 leading-relaxed">
-              Whether you want a full system audit or to initiate a migration, our on-call architects
-              are ready to respond within 4 hours.
+              Whether you want a full system audit or to start a migration, tell us about your project and
+              our team will get back to you quickly.
             </p>
           </div>
 
@@ -207,21 +226,18 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
 
             {/* Contact form */}
             <div className="lg:col-span-7 bg-home-surface rounded-2xl border border-home-fg/14 p-6 md:p-8">
-              <div className="flex items-center justify-between gap-4 pb-4 border-b border-home-fg/14 mb-6">
+              <div className="pb-4 border-b border-home-fg/14 mb-6">
                 <h2 className="text-base font-semibold">Inquiry registration form</h2>
-                <span className="font-mono text-xs font-medium bg-home-fg/5 text-home-fg/62 px-2 py-0.5 rounded">
-                  REPLY SLA: 4h
-                </span>
               </div>
 
-              <form onSubmit={handleContactSubmit} className="flex flex-col gap-5">
+              <form onSubmit={handleContactSubmit} className="relative flex flex-col gap-5" noValidate>
                 {success && (
                   <div role="status" className="bg-home-fg/3 border border-home-fg/14 rounded-lg p-4 flex gap-3">
                     <CheckCircle2 className="w-5 h-5 text-home-fg shrink-0 mt-0.5" />
                     <div>
-                      <span className="block text-sm font-semibold">Message received successfully!</span>
+                      <span className="block text-sm font-semibold">Thank you, your message has been sent.</span>
                       <p className="text-xs text-home-fg/62 mt-0.5">
-                        A unique incident token has been generated. Our operations center has received it in real time.
+                        Our team has received it and will get back to you by e-mail.
                       </p>
                     </div>
                   </div>
@@ -260,11 +276,11 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold text-home-fg/62">Consultation Topic *</span>
                   <select value={subject} onChange={(e) => setSubject(e.target.value)} className={FIELD}>
-                    <option value="Security audit / Penetration testing">Security audit / Penetration testing</option>
-                    <option value="Hybrid Cloud Migration">Hybrid Cloud Migration Planning</option>
-                    <option value="Custom Development">Custom API / CRM Development</option>
-                    <option value="24/7 Support Subscription">24/7 SLA Support Subscription</option>
-                    <option value="Other">Other Technology Request</option>
+                    <option value="security_audit">Security audit / Penetration testing</option>
+                    <option value="cloud_migration">Hybrid Cloud Migration Planning</option>
+                    <option value="custom_development">Custom API / CRM Development</option>
+                    <option value="support_subscription">Support Subscription</option>
+                    <option value="other">Other Technology Request</option>
                   </select>
                 </label>
 
@@ -279,9 +295,18 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                   />
                 </label>
 
-                <button type="submit" className={`${LIME_CTA} self-start`}>
-                  <Send className="w-4 h-4" />
-                  Submit to Technical Team
+                {/* Honeypot (#98): off-screen and out of the tab order, so people
+                    never see or reach it; bots that fill every field do. */}
+                <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                  <label>
+                    Website
+                    <input type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                  </label>
+                </div>
+
+                <button type="submit" disabled={sending} className={`${LIME_CTA} self-start disabled:cursor-wait disabled:opacity-70`}>
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                  {sending ? 'Sending...' : 'Submit to Technical Team'}
                 </button>
               </form>
             </div>
@@ -301,7 +326,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-home-fg/62" />
                 <input
                   type="text"
-                  placeholder="Search (e.g. SLA, security)..."
+                  placeholder="Search (e.g. security, migration)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`${FIELD} pl-9`}

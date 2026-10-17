@@ -14,6 +14,7 @@ import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
+import EnquiriesView from './components/EnquiriesView';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
@@ -335,6 +336,9 @@ export default function App() {
 
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
+
+      case 'enquiries':
+        return currentUser.role === 'admin' ? <EnquiriesView /> : null;
 
       case 'invoices':
         return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;

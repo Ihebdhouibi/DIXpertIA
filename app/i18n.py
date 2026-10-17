@@ -309,6 +309,9 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "Un employé ne peut pas valider sa propre demande de congé."},
 
     # Notifications, rendered from their kind and parameters
+    "notification.contact_request": {
+        "en": "New enquiry from {name} about {topic_label}.",
+        "fr": "Nouvelle demande de {name} : {topic_label}."},
     "notification.invoice_submitted": {
         "en": "Invoice {ref} for {party} is waiting for your verification.",
         "fr": "La facture {ref} pour {party} attend votre vérification."},
@@ -397,6 +400,32 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.due_date": {"en": "DUE DATE", "fr": "ÉCHÉANCE"},
     "pdf.status": {"en": "Status", "fr": "Statut"},
     "pdf.description": {"en": "Description", "fr": "Désignation"},
+    # The public contact form (#98)
+    "contact.received": {
+        "en": "Thank you, your message has been sent. We will get back to you shortly.",
+        "fr": "Merci, votre message a bien été envoyé. Nous revenons vers vous rapidement."},
+    "contact.too_many": {
+        "en": "Too many messages from you or from everyone in the last hour. Please try again later, "
+              "or call us on +216 28 814 729.",
+        "fr": "Trop de messages reçus dans la dernière heure. Réessayez plus tard, "
+              "ou appelez-nous au +216 28 814 729."},
+    "contact.not_found": {"en": "Enquiry not found", "fr": "Demande introuvable"},
+    "contact.topic.security_audit": {
+        "en": "Security audit / penetration testing", "fr": "Audit de sécurité / test d'intrusion"},
+    "contact.topic.cloud_migration": {"en": "Hybrid cloud migration", "fr": "Migration vers le cloud hybride"},
+    "contact.topic.custom_development": {
+        "en": "Custom API / CRM development", "fr": "Développement sur mesure (API / CRM)"},
+    "contact.topic.support_subscription": {"en": "Support subscription", "fr": "Abonnement de support"},
+    "contact.topic.other": {"en": "Other request", "fr": "Autre demande"},
+    "email.contact.subject": {
+        "en": "Website enquiry from {name} - {topic}", "fr": "Demande du site de {name} - {topic}"},
+    "email.contact.body": {
+        "en": "A new enquiry arrived from the website contact form (#{id}).\n\n"
+              "Name: {name}\nE-mail: {email}\nTopic: {topic}\n\n{message}\n\n"
+              "Reply to this e-mail to answer {name}. All enquiries: {link}",
+        "fr": "Une nouvelle demande est arrivée par le formulaire de contact du site (n° {id}).\n\n"
+              "Nom : {name}\nE-mail : {email}\nSujet : {topic}\n\n{message}\n\n"
+              "Répondez à cet e-mail pour répondre à {name}. Toutes les demandes : {link}"},
     "pdf.qty": {"en": "Qty", "fr": "Qté"},
     "pdf.price": {"en": "Unit price", "fr": "Prix unitaire"},
     "pdf.total": {"en": "Total", "fr": "Total"},
@@ -452,6 +481,8 @@ def render_notification(kind: str, params: dict | None, locale: str | None = Non
         values["span"] = t("span.day" if days == 1 else "span.days", locale, n=days)
     if not values.get("party"):
         values["party"] = t("party.unknown", locale)
+    if "topic" in values and f"contact.topic.{values['topic']}" in CATALOG:
+        values["topic_label"] = t(f"contact.topic.{values['topic']}", locale)
     try:
         return t(key, locale, **values)
     except (KeyError, IndexError):

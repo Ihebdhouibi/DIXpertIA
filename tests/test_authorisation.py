@@ -39,6 +39,10 @@ ROUTES = [
     ("POST", "/api/forgot-password", PUBLIC),
     ("POST", "/api/reset-password", PUBLIC),
     ("POST", "/api/activate", PUBLIC),
+    # The website's contact form (#98): anonymous; its inbox is the admin's.
+    ("POST", "/api/contact", PUBLIC),
+    ("GET", "/api/contact-requests", ADMIN_ONLY),
+    ("POST", "/api/contact-requests/1/handle", ADMIN_ONLY),
 
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
@@ -172,6 +176,7 @@ def test_every_route_is_covered(app):
         # Normalise the sample ids back to their templates.
         normalised = (path
                       .replace("/api/leave-requests/1/", "/api/leave-requests/{req_id}/")
+                      .replace("/api/contact-requests/1/", "/api/contact-requests/{request_id}/")
                       .replace("/api/notifications/1/", "/api/notifications/{notification_id}/")
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")

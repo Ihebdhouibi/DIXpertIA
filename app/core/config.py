@@ -95,5 +95,13 @@ class Settings:
     REMINDER_REJECTED_DAYS: int = _positive_int("REMINDER_REJECTED_DAYS", 2)
     REMINDER_APPROVED_DAYS: int = _positive_int("REMINDER_APPROVED_DAYS", 1)
 
+    # The public contact form (#98). Every enquiry is stored and notified to the
+    # admins; it is also e-mailed to CONTACT_INBOX once that is set, together
+    # with SMTP. Empty for now: the professional mailbox is being set up.
+    CONTACT_INBOX: str = (os.getenv("CONTACT_INBOX") or "").strip()
+    # Anti-abuse: enquiries per sender (by hashed IP) and from everyone, per hour.
+    CONTACT_LIMIT_PER_SENDER: int = _positive_int("CONTACT_LIMIT_PER_SENDER", 5)
+    CONTACT_LIMIT_TOTAL: int = _positive_int("CONTACT_LIMIT_TOTAL", 100)
+
 
 settings = Settings()
