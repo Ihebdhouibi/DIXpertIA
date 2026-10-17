@@ -28,7 +28,6 @@ yarn-error.log*
 
 # Temporary scripts
 test_conn.py
-insert_invoices.py
 
 # OS / IDE
 .DS_Store
