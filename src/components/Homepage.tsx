@@ -7,6 +7,7 @@ import Engagement from './home/Engagement';
 import { ApiError, contact } from '../api';
 import AboutCta from './home/AboutCta';
 import HomeFooter from './home/HomeFooter';
+import SkipLink from './ui/SkipLink';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle, ArrowLeft
@@ -147,11 +148,14 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
   };
 
   const header = (
+    <>
+    <SkipLink />
     <HomeHeader
       current={currentPage === 'contact' ? 'contact' : 'home'}
       onNavigate={handleNavClick}
       onDashboardClick={onDashboardClick}
     />
+    </>
   );
 
   const footer = <HomeFooter onNavigate={handleNavClick} onDashboardClick={onDashboardClick} />;
@@ -187,7 +191,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
         {header}
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <main id="main-content" tabIndex={-1} className="focus:outline-none max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <button
             onClick={() => handleNavClick('home')}
             className="inline-flex items-center gap-2 text-sm text-home-fg/62 hover:text-home-fg transition mb-10"
@@ -377,7 +381,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
       {header}
 
-      <main>
+      <main id="main-content" tabIndex={-1} className="focus:outline-none">
         <Hero
           onContact={() => handleNavClick('contact')}
           onServices={() => handleNavClick('services')}
