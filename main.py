@@ -432,6 +432,7 @@ def list_payslips(
     """
     rows = (
         db.query(Payslip)
+        .options(joinedload(Payslip.employee).joinedload(Employee.user))
         .order_by(Payslip.periode.desc(), Payslip.id.desc())
         .limit(limit)
         .offset(offset)

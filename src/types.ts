@@ -47,6 +47,8 @@ export interface Employee {
 export interface Payslip {
   id: string;
   employeeId?: number;
+  /** Whose payslip it is (#144); empty when the record has no account. */
+  employeeName: string;
   period: string;
   grossPay: number;
   netPay: number;

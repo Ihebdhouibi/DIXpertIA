@@ -7,6 +7,10 @@ import { Pagination } from './ui/TableControls';
 import { Field, Select } from './ui/Field';
 import { useDataStatus } from '../dataStatus';
 import { formatTND } from '../format';
+import Avatar from './ui/Avatar';
+
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 interface PayslipsViewProps {
   payslips: Payslip[];
@@ -33,11 +37,14 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
       return;
     }
 
+    // The name is stored text written into a new document: escaped, never markup.
+    const employee = escapeHtml(slip.employeeName || '-');
     const content = `
       <html>
-        <head><title>Payslip ${slip.period}</title></head>
+        <head><title>Payslip ${slip.period} - ${employee}</title></head>
         <body style="font-family: Arial, sans-serif; padding: 40px;">
           <h1>DI Xpertia payslip</h1>
+          <p><strong>Employee:</strong> ${employee}</p>
           <p><strong>Period:</strong> ${slip.period}</p>
           <p><strong>Gross pay:</strong> ${formatTND(slip.grossPay)}</p>
           <p><strong>Net pay:</strong> ${formatTND(slip.netPay)}</p>
@@ -78,6 +85,8 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
   // scopes the list: an employee's own payslips, or the whole payroll for an
   // admin or accountant, so the totals and their labels follow that scope.
   const wholePayroll = userRole === 'admin' || userRole === 'accountant';
+  // The payroll view adds the Employee column (#144); an employee's own list does not need it.
+  const columns = wholePayroll ? 6 : 5;
   const ytdGross = filteredPayslips.reduce((sum, p) => sum + p.grossPay, 0);
   const ytdNet = filteredPayslips.reduce((sum, p) => sum + p.netPay, 0);
   const countLabel = filteredPayslips.length === 0
@@ -169,6 +178,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
         }
       >
         <THead>
+          {wholePayroll && <Th>Employee</Th>}
           <Th>Period</Th>
           <Th numeric>Gross pay</Th>
           <Th numeric>Net pay</Th>
@@ -181,6 +191,14 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
           {currentItems.length > 0 ? (
             currentItems.map((slip) => (
               <Tr key={slip.id}>
+                {wholePayroll && (
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={slip.employeeName || '?'} size="sm" />
+                      <span className="font-semibold">{slip.employeeName || 'Unknown employee'}</span>
+                    </div>
+                  </Td>
+                )}
                 <Td>
                   <div className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant">
@@ -196,7 +214,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
                   <button
                     type="button"
                     onClick={() => handleDownload(slip)}
-                    aria-label={`Download payslip ${slip.period}`}
+                    aria-label={`Download payslip ${slip.period}${wholePayroll && slip.employeeName ? `, ${slip.employeeName}` : ''}`}
                     className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                   >
                     <Download className="w-4 h-4" aria-hidden="true" />
@@ -205,13 +223,13 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
               </Tr>
             ))
           ) : status.loading ? (
-            <TableState kind="loading" colSpan={5} title="Loading payslips..." />
+            <TableState kind="loading" colSpan={columns} title="Loading payslips..." />
           ) : status.error && payslips.length === 0 ? (
-            <TableState kind="error" colSpan={5} message={status.error} />
+            <TableState kind="error" colSpan={columns} message={status.error} />
           ) : (
             <TableState
               kind="empty"
-              colSpan={5}
+              colSpan={columns}
               title={payslips.length === 0 ? 'No payslips yet' : `No payslips in ${selectedYear}`}
             />
           )}

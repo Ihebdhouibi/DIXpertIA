@@ -63,6 +63,16 @@ def test_an_admin_sees_everyone(client, identities, payroll_for_everyone):
 
 
 @pytest.mark.identity("accountant")
+def test_a_payslip_says_whose_it_is(client, identities, payroll_for_everyone):
+    """The payroll table lists everyone's payslips, so each names its employee (#144)."""
+    payslips = client.get("/api/payslips", headers=identities["accountant"]["headers"]).json()
+    names = {row["employeeId"]: row["employeeName"] for row in payslips}
+    assert names == {
+        identities[role]["employee_id"]: f"Test {role}" for role in ("admin", "accountant", "employee")
+    }
+
+
+@pytest.mark.identity("accountant")
 def test_an_accountant_sees_all_payroll_but_only_their_own_leave(
         client, identities, payroll_for_everyone):
     """The split decided on #10.
