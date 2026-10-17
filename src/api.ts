@@ -286,6 +286,29 @@ export const payslips = {
   list: () => request<Payslip[]>('/api/payslips'),
 };
 
+/** One status on the dashboard: how many invoices, and for how much (TTC). */
+export interface StatusFigure {
+  status: string;
+  count: number;
+  amount: number;
+}
+
+/**
+ * The dashboard's figures, computed by the server over every row (#120).
+ * A null block is not zero: the caller has no access to it - `invoices` for an
+ * employee, `team` for anyone but the admin.
+ */
+export interface DashboardSummary {
+  month: string | null;
+  invoices: { count: number; amount: number; byStatus: StatusFigure[]; byProcessing: StatusFigure[] } | null;
+  leave: { pending: number };
+  team: { active: number; total: number } | null;
+}
+
+export const dashboard = {
+  summary: () => request<DashboardSummary>('/api/dashboard/summary'),
+};
+
 export const employees = {
   list: () => request<Employee[]>('/api/employees'),
 };

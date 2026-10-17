@@ -44,7 +44,7 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, invoicing, notifications
+from app.routers import accounting, audit, contact, dashboard, invoicing, notifications
 from app.i18n import ApiError, set_locale, t
 from app.services import accounts
 from app.services.audit import record_event
@@ -154,6 +154,7 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,

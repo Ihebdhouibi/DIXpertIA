@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Client, Employee, Invoice, LeaveRequest, Payslip, User } from './types';
+import { Client, Employee, LeaveRequest, Payslip, User } from './types';
 import * as api from './api';
 import Login from './components/Login';
 import Homepage from './components/Homepage';
@@ -51,7 +51,9 @@ export default function App() {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  // The dashboard's figures, computed by the server (#120). They replaced a
+  // list of at most 200 invoices the browser added up itself.
+  const [summary, setSummary] = useState<api.DashboardSummary | null>(null);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
 
@@ -117,7 +119,7 @@ export default function App() {
       api.payslips.list(),
       api.leaveRequests.list(),
       api.employees.list(),
-      isPrivileged ? api.invoices.list({ limit: 200 }) : Promise.resolve([]),
+      api.dashboard.summary(),
       user.role === 'admin' ? api.users.list() : Promise.resolve([]),
       isPrivileged ? api.clients.list() : Promise.resolve([]),
     ]);
@@ -126,7 +128,7 @@ export default function App() {
     if (p.status === 'fulfilled') setPayslips(p.value);
     if (l.status === 'fulfilled') setLeaveRequests(l.value);
     if (e.status === 'fulfilled') setEmployees(e.value);
-    if (i.status === 'fulfilled') setInvoices(i.value as Invoice[]);
+    if (i.status === 'fulfilled') setSummary(i.value);
     if (u.status === 'fulfilled') setUsers(u.value as AppUser[]);
     if (c.status === 'fulfilled') setClients(c.value as Client[]);
 
@@ -213,7 +215,7 @@ export default function App() {
     setPayslips([]);
     setLeaveRequests([]);
     setEmployees([]);
-    setInvoices([]);
+    setSummary(null);
     setUsers([]);
     setClients([]);
     setNotifications([]);
@@ -307,7 +309,7 @@ export default function App() {
         return (
           <DashboardView
             user={currentUser}
-            invoices={invoices}
+            summary={summary}
             payslips={payslips}
             leaveRequests={leaveRequests}
             employees={employees}
@@ -341,7 +343,7 @@ export default function App() {
         return currentUser.role === 'admin' ? <EnquiriesView /> : null;
 
       case 'invoices':
-        return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
+        return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
 
       case 'leave-requests':
         // Employees only. Hiding the sidebar entry is not enough on its own -
@@ -389,13 +391,13 @@ export default function App() {
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
+          return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
 
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
+          return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return (
           <LeaveRequestsView

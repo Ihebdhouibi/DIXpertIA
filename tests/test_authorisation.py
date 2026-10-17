@@ -47,6 +47,7 @@ ROUTES = [
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
     ("PUT", "/api/me/locale", AUTHENTICATED),
+    ("GET", "/api/dashboard/summary", AUTHENTICATED),
 
     # --- notifications (#116): everyone has a list, scoped to their own rows -
     ("GET", "/api/notifications", EMPLOYEE_SELF),
