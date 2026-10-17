@@ -1,7 +1,7 @@
 """languages: users.locale, clients.locale, notifications.params
 
 Revision ID: c9e2a7b4d610
-Revises: b8d4f1a6c305
+Revises: d1f5b3c8a947
 Create Date: 2026-10-18 02:00:00.000000
 
 #135. French and English (decided on the issue).
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = 'c9e2a7b4d610'
-down_revision = 'b8d4f1a6c305'
+down_revision = 'd1f5b3c8a947'
 branch_labels = None
 depends_on = None
 
