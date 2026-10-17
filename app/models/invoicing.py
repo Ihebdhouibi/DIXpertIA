@@ -1,4 +1,5 @@
 import enum
+from datetime import date
 
 from sqlalchemy import (
     CheckConstraint,
@@ -246,6 +247,19 @@ class Invoice(Base):
     reviews = relationship("InvoiceReview", back_populates="invoice",
                            order_by="InvoiceReview.created_at")
 
+    def displayed_status(self, today: date | None = None) -> "InvoiceStatus":
+        """The commercial status as shown: Overdue is derived, never stored (#117).
+
+        A sent invoice whose due date has passed is overdue - due today is not
+        yet. A stored "overdue" went stale the day after it was written and
+        nothing ever set it, so a late invoice showed as merely sent. The list
+        filter in the invoicing router applies the same rule in SQL.
+        """
+        today = today or date.today()
+        if self.statut == InvoiceStatus.ENVOYEE and self.date_echeance and self.date_echeance < today:
+            return InvoiceStatus.EN_RETARD
+        return self.statut
+
     @property
     def reference(self) -> str:
         """The legal number, or BR- and the id while the draft has none (#118).
@@ -267,6 +281,8 @@ class Invoice(Base):
             name="ck_invoices_numbered_once_approved",
         ),
         CheckConstraint("(statut = 'PAYEE') = (paid_on IS NOT NULL)", name="ck_invoices_paid_has_date"),
+        # Overdue is derived from the due date at read time (#117), never stored.
+        CheckConstraint("statut <> 'EN_RETARD'", name="ck_invoices_overdue_is_derived"),
         CheckConstraint("paid_on IS NULL OR paid_on >= date_emission", name="ck_invoices_paid_after_issue"),
         CheckConstraint(
             "(statut = 'ANNULEE') = (cancelled_at IS NOT NULL"

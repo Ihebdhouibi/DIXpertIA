@@ -301,8 +301,8 @@ and is not implemented here.
 |---|---|---|---|
 | draft | sent | admin | approved by the accountant (#118) |
 | draft | cancelled | admin | a reason; not while waiting for verification |
-| sent, overdue | paid | admin or accountant | a payment date, not in the future nor before the issue date |
-| sent, overdue | cancelled | admin | a reason; not once its month is closed |
+| sent | paid | admin or accountant | a payment date, not in the future nor before the issue date |
+| sent | cancelled | admin | a reason; not once its month is closed |
 | paid, cancelled | - | - | final |
 
 - **Paid** means paid in full on `paid_on`. Partial payments are not modelled.
@@ -320,6 +320,14 @@ and is not implemented here.
   verification queue after it is gone.
 - CHECKs tie the columns to the status: `paid_on` is set exactly when paid, the
   reason and time exactly when cancelled.
+- **Overdue is derived, never stored** (#117): a sent invoice whose due date
+  has passed reads as overdue (`Invoice.displayed_status()`); due today is not
+  yet. The list filter applies the same condition, and "sent" excludes overdue
+  invoices, so each invoice appears under one status.
+  `ck_invoices_overdue_is_derived` refuses storing `EN_RETARD`; the enum value
+  stays because PostgreSQL cannot drop one without rebuilding the type. Any
+  figure computed in SQL (the dashboard summary of #120) must use the same
+  condition: `statut = 'ENVOYEE' AND date_echeance < current_date`.
 
 
 ## Running the test suite
@@ -363,6 +371,7 @@ harness made that mistake and a policy test caught it.
 | `test_users_rls.py` | who reads which accounts; the password hash unreadable and unwritable by the application role; the auth functions pin search_path and are not PUBLIC |
 | `test_responses.py` | every JSON route declares a response model; no secret in any response; every closed-set column constrained by the database |
 | `test_invoice_status.py` | paid and cancelled: who, when, the payment date, the reason, the closed month, and the same rules enforced in SQL |
+| `test_invoice_overdue.py` | overdue derived at read time, the due-today boundary, the filter, the PDF, nothing stored |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by

@@ -270,7 +270,9 @@ class InvoiceOut(BaseModel):
         party = row.supplier if direction == "incoming" else row.client
         name = getattr(party, "nom", None) or "Unknown"
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "?"
-        statut = getattr(row.statut, "value", row.statut) or "envoyee"
+        # Overdue is derived from the due date, never stored (#117).
+        shown = row.displayed_status() if hasattr(row, "displayed_status") else row.statut
+        statut = getattr(shown, "value", shown) or "envoyee"
         processing = getattr(row.processing_status, "value", row.processing_status) or "pending"
         review = getattr(row.review_status, "value", row.review_status) or "not_submitted"
         return cls(

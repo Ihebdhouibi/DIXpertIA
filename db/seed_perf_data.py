@@ -52,7 +52,8 @@ JOB_TITLES = ["Engineer", "Senior Engineer", "Designer", "Analyst",
               "Project Manager", "Consultant"]
 LEAVE_TYPES = ["PAYE", "MALADIE", "SANS_SOLDE"]
 LEAVE_STATUSES = ["EN_ATTENTE", "APPROUVE", "REFUSE"]
-INVOICE_STATUSES = ["BROUILLON", "ENVOYEE", "PAYEE", "EN_RETARD", "ANNULEE"]
+# No EN_RETARD: overdue is derived from the due date, never stored (#117).
+INVOICE_STATUSES = ["BROUILLON", "ENVOYEE", "PAYEE", "ANNULEE"]
 # The accountant's axis (#41), independent of the commercial one above.
 PROCESSING_STATUSES = ["PENDING", "PROCESSED", "COMPLETED", "ARCHIVED"]
 
