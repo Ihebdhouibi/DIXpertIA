@@ -194,6 +194,17 @@ export const auth = {
 // Each list takes the limit/offset the API caps (#61). The defaults here are
 // the first page; screens that need more pass their own.
 
+/** One step in an invoice's life, from the audit trail (#115). */
+export interface InvoiceHistoryEvent {
+  id: string;
+  occurredAt: string;
+  action: string;
+  /** The step in words, written by the server. */
+  label: string;
+  actorName: string;
+  actorRole?: string | null;
+}
+
 export const invoices = {
   list: (params: Record<string, string | number> = {}) =>
     request<Invoice[]>(`/api/invoices?${new URLSearchParams(
@@ -213,6 +224,8 @@ export const invoices = {
       body: JSON.stringify({ processing_status: processingStatus }),
     }),
   get: (id: number) => request<Invoice>(`/api/invoices/${id}`),
+  /** Every recorded step of one invoice, newest first (#115). Admin and accountant. */
+  history: (id: string | number) => request<InvoiceHistoryEvent[]>(`/api/invoices/${id}/history`),
   /** Verification before sending (#118): the admin submits and sends, the accountant decides. */
   submit: (id: string | number) => request<Invoice>(`/api/invoices/${id}/submit`, { method: 'POST' }),
   approve: (id: string | number) => request<Invoice>(`/api/invoices/${id}/approve`, { method: 'POST' }),

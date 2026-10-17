@@ -30,3 +30,18 @@ class AuditEventOut(BaseModel):
             before=row.before,
             after=row.after,
         )
+
+
+class InvoiceHistoryEventOut(BaseModel):
+    """One step in an invoice's life, as the details dialog shows it (#115).
+
+    Read from the audit trail; `label` is the step in words, built by the
+    server so the UI does not have to know the shape of each event.
+    """
+
+    id: str
+    occurredAt: datetime
+    action: str
+    label: str
+    actorName: str
+    actorRole: Optional[str] = None
