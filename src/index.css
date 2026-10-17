@@ -155,6 +155,29 @@
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.4;
 
+  /* The public homepage's display sizes (#165, design/homepage-v2/README.md
+     "Type scale"). Fluid, so one class serves 390px and 1440px. */
+  --text-home-hero: clamp(3rem, 8.6vw, 8.5rem);
+  --text-home-hero--line-height: 0.95;
+  --text-home-hero--letter-spacing: -0.045em;
+  --text-home-section: clamp(2rem, 3.6vw, 3.25rem);
+  --text-home-section--line-height: 1.05;
+  --text-home-section--letter-spacing: -0.025em;
+  --text-home-cta: clamp(2.125rem, 4.4vw, 4rem);
+  --text-home-cta--line-height: 1.04;
+  --text-home-cta--letter-spacing: -0.03em;
+  --text-home-title: clamp(1.5rem, 2.6vw, 2.25rem);
+  --text-home-title--line-height: 1.1;
+  --text-home-title--letter-spacing: -0.02em;
+  --text-home-subhead: clamp(1.625rem, 2.6vw, 2.25rem);
+  --text-home-subhead--line-height: 1.15;
+  --text-home-subhead--letter-spacing: -0.02em;
+  --text-home-lead: clamp(1rem, 1.4vw, 1.1875rem);
+  --text-home-lead--line-height: 1.6;
+  /* Mono micro-copy: eyebrows at 12px, meta and tags at 11px. */
+  --text-home-meta: 0.6875rem;
+  --text-home-meta--line-height: 1.4;
+
   /* 4. Motion (#141). The screens used `animate-fade-in` (13 times) before it
      was declared, so it did nothing. Short and subtle: a screen settles in
      rather than performing. Fill mode `backwards`, not `both`: once it has
