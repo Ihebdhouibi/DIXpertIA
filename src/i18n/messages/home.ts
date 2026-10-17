@@ -14,7 +14,9 @@ export default defineMessages('home', {
   'home.nav.services': { fr: 'Services', en: 'Services' },
   'home.nav.about': { fr: 'À propos', en: 'About' },
   'home.nav.contact': { fr: 'Contact', en: 'Contact' },
-  'home.nav.dashboard': { fr: 'Tableau de bord', en: 'Go to Dashboard' },
+  // The short label is part of the full one, which is the button's name at
+  // every width (WCAG 2.5.3, label in name).
+  'home.nav.dashboard': { fr: 'Accéder à mon espace', en: 'Go to Dashboard' },
   /** The same button on a phone, where the full label does not fit beside the toggle. */
   'home.nav.dashboardShort': { fr: 'Mon espace', en: 'Dashboard' },
 

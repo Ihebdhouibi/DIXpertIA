@@ -71,8 +71,9 @@ def main() -> int:
             email, _, password = account.partition(":")
             for theme in ("light", "dark"):
                 context = browser.new_context(viewport={"width": args.width, "height": 844}, color_scheme=theme,
-                                              locale="en-US")
-                context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}')")
+                                              locale="en-US")  # the checks find screens by their English names
+                context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}'); "
+                                   "localStorage.setItem('dixpertia_locale', 'en')")
                 page = context.new_page()
                 page.goto(args.url)
                 page.get_by_role("button", name="Go to Dashboard").first.click()

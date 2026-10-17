@@ -51,6 +51,8 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
           <button
             type="button"
             onClick={onDashboardClick}
+            // One name at every width; the short label on phones is part of it.
+            aria-label={t('home.nav.dashboard')}
             className="inline-flex h-10 cursor-pointer items-center whitespace-nowrap rounded-lg bg-home-strong px-3 text-sm font-semibold text-home-on-strong transition-colors duration-200 hover:bg-home-strong-hover sm:px-[18px]"
           >
             <span className="sm:hidden">{t('home.nav.dashboardShort')}</span>
