@@ -22,6 +22,7 @@ from app.models.invoicing import (
     Supplier,
 )
 from app.models.user import User
+from app.services.audit import record_event
 from app.services.notifications import notify, users_with_role
 # InvoiceOut comes from app.schemas.api, not from .invoicing: that module
 # holds the ORM-shaped schemas used to validate input, while the API's
@@ -309,6 +310,13 @@ def create_invoice(
         db.add(InvoiceItem(invoice_id=invoice.id, **item))
     db.flush()
     db.refresh(invoice)
+    # Not on an idempotent replay above: that returns the existing invoice and
+    # creates nothing, so it records nothing.
+    record_event(db, "invoice.created", "invoice", invoice.id, after={
+        "direction": invoice.direction, "client_id": invoice.client_id,
+        "montant_ht": montant_ht, "montant_ttc": montant_ttc,
+        "date_echeance": invoice.date_echeance, "lines": len(items_data),
+    })
 
     # Validate the response while the transaction can still be rolled back. If
     # this raises, nothing is persisted and the caller may safely retry.
@@ -374,6 +382,12 @@ def create_supplier_invoice(
             db.add(InvoiceItem(invoice_id=invoice.id, **item.model_dump()))
         db.flush()
         db.refresh(invoice)
+        record_event(db, "invoice.created", "invoice", invoice.id, after={
+            "direction": invoice.direction, "supplier_id": invoice.supplier_id,
+            "supplier_reference": invoice.supplier_reference, "numero": invoice.numero,
+            "montant_ht": invoice.montant_ht, "montant_ttc": invoice.montant_ttc,
+            "date_emission": invoice.date_emission,
+        })
         # Built before the commit, for the reason set out on create_invoice.
         response = InvoiceOut.from_orm_row(invoice)
         db.commit()
@@ -413,6 +427,9 @@ def set_processing_status(
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
 
+    record_event(db, "invoice.processing_status_changed", "invoice", invoice.id,
+                 before={"processing_status": invoice.processing_status},
+                 after={"processing_status": payload.processing_status})
     invoice.processing_status = payload.processing_status
     try:
         db.commit()
@@ -475,6 +492,8 @@ def update_invoice(
 
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
+    before = {"date_echeance": invoice.date_echeance, "montant_ht": invoice.montant_ht,
+              "montant_ttc": invoice.montant_ttc, "lines": len(invoice.items)}
     try:
         # Lines first, totals after: both are guarded, and the order keeps the
         # invoice and its lines consistent at every statement.
@@ -487,6 +506,10 @@ def update_invoice(
         invoice.montant_ttc = montant_ttc
         db.flush()
         db.refresh(invoice)
+        record_event(db, "invoice.updated", "invoice", invoice.id, before=before, after={
+            "date_echeance": payload.date_echeance, "montant_ht": montant_ht,
+            "montant_ttc": montant_ttc, "lines": len(items_data),
+        })
         # Built before the commit, for the reason set out on create_invoice.
         response = InvoiceOut.from_orm_row(invoice)
         db.commit()
@@ -562,6 +585,9 @@ def submit_invoice(
             f"invoice {invoice.reference} is not a draft waiting to be submitted"))
     if not invoice.items:
         raise HTTPException(status_code=422, detail="an invoice needs at least one line before it is submitted")
+    record_event(db, "invoice.submitted", "invoice", invoice.id,
+                 before={"review_status": invoice.review_status},
+                 after={"review_status": InvoiceReviewStatus.SUBMITTED})
     invoice.review_status = InvoiceReviewStatus.SUBMITTED
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.SUBMITTED, comment=""))
@@ -602,11 +628,17 @@ def approve_invoice(
         raise HTTPException(status_code=409, detail=(
             f"invoice {invoice.reference} is due {invoice.date_echeance.isoformat()}, before today's "
             "issue date; reject it so the due date can be corrected"))
+    before = {"review_status": invoice.review_status, "numero": invoice.numero,
+              "date_emission": invoice.date_emission}
     invoice.review_status = InvoiceReviewStatus.APPROVED
     # A legacy draft may already hold a number from before #118; it keeps it.
     if invoice.numero is None:
         invoice.numero = _allocate_invoice_number(db, "FA", issued_on.year)
         invoice.date_emission = issued_on
+    record_event(db, "invoice.approved", "invoice", invoice.id, before=before, after={
+        "review_status": invoice.review_status, "numero": invoice.numero,
+        "date_emission": invoice.date_emission,
+    })
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.APPROVED, comment=""))
     notify(db, [invoice.cree_par_id], kind="invoice_approved", tone="success",
@@ -638,6 +670,9 @@ def reject_invoice(
     if invoice.cree_par_id == current_user.id:
         raise HTTPException(status_code=403, detail=(
             "an invoice is never rejected by the person who created it"))
+    record_event(db, "invoice.rejected", "invoice", invoice.id,
+                 before={"review_status": invoice.review_status},
+                 after={"review_status": InvoiceReviewStatus.REJECTED, "comment": payload.comment})
     invoice.review_status = InvoiceReviewStatus.REJECTED
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.REJECTED, comment=payload.comment))
@@ -665,6 +700,8 @@ def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
     if invoice.review_status != InvoiceReviewStatus.APPROVED:
         raise HTTPException(status_code=409, detail=(
             f"invoice {invoice.reference} cannot be sent before the accountant approves it"))
+    record_event(db, "invoice.sent", "invoice", invoice.id,
+                 before={"statut": invoice.statut}, after={"statut": InvoiceStatus.ENVOYEE})
     invoice.statut = InvoiceStatus.ENVOYEE
     return _commit_review(db, invoice)
 

@@ -23,6 +23,7 @@ from app.models.invoicing import (
 )
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
+from app.services.audit import record_event
 
 # Keeping the books is the accountant's job, and the admin's by virtue of
 # running the company. `rh` is excluded, as it is for an invoice's processing
@@ -176,7 +177,7 @@ def close_period(
     # completely or nothing changed. The order is not load-bearing - the
     # period trigger watches INSERT and date_emission, which this update does
     # not touch - but it reads in the order the accountant thinks in.
-    db.query(Invoice).filter(
+    archived = db.query(Invoice).filter(
         Invoice.date_emission >= start,
         Invoice.date_emission < end,
         _in_the_books(),
@@ -191,6 +192,11 @@ def close_period(
     period.closed_by_id = current_user.id
     for field, value in totals.items():
         setattr(period, field, value)
+    # One event for the close, not one per archived invoice: the invoices did
+    # not each decide anything, and the count says how many were sealed.
+    record_event(db, "accounting_period.closed", "accounting_period", month,
+                 before={"state": PeriodState.OPEN},
+                 after={"state": PeriodState.CLOSED, "archived_invoices": archived, **totals})
 
     db.commit()
     return PeriodSummary(periode=start, state=PeriodState.CLOSED,
