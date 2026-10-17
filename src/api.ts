@@ -337,6 +337,46 @@ export interface NotificationPage {
   unread: number;
 }
 
+/** What the website's contact form sends (#98). `website` is the honeypot: always empty from a person. */
+export interface ContactSubmission {
+  name: string;
+  email: string;
+  topic: string;
+  message: string;
+  website: string;
+}
+
+/** An enquiry from the contact form, as the admin reads it (#98). */
+export interface ContactRequest {
+  id: string;
+  createdAt: string;
+  name: string;
+  email: string;
+  topic: string;
+  message: string;
+  handledAt?: string | null;
+  handledBy?: string | null;
+}
+
+/** The public contact form: no sign-in needed. */
+export const contact = {
+  send: (body: ContactSubmission) =>
+    request<{ message: string }>('/api/contact', { method: 'POST', body: JSON.stringify(body) }),
+};
+
+/** The admin's inbox of enquiries (#98). */
+export const contactRequests = {
+  page: ({ handled, limit, offset }: { handled?: boolean; limit: number; offset: number }) =>
+    requestPage<ContactRequest>(
+      `/api/contact-requests?${new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+        ...(handled === undefined ? {} : { handled: String(handled) }),
+      })}`,
+    ),
+  handle: (id: string) => request<ContactRequest>(`/api/contact-requests/${id}/handle`, { method: 'POST' }),
+};
+
 export const notifications = {
   /** The caller's own notifications, unread first (#116). */
   list: async (limit = 50): Promise<NotificationPage> => {
