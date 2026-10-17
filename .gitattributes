@@ -1,0 +1,5 @@
+# Files run or read on the Linux server keep LF endings on every checkout,
+# Windows included: a CRLF shell script fails with "bad interpreter", and a
+# CRLF line in a PostgreSQL config is a parse error (#158).
+*.sh text eol=lf
+deploy/** text eol=lf
