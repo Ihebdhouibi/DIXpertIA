@@ -1,4 +1,4 @@
-import { Bell, Calendar, FileText, Home, LayoutDashboard, Receipt, Settings, UserCog, Users } from 'lucide-react';
+import { Bell, Calendar, FileText, Home, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { UserRole } from './types';
 
@@ -25,7 +25,7 @@ const ITEMS: NavItem[] = [
   { id: 'leave-requests', label: 'Leave Requests', icon: Calendar, showFor: ['employee'] },
   // Payslips: employee and accountant. The accountant access is intentional -
   // #12 deliberately superseded the employee-only rule in #10. Do not revert.
-  { id: 'payslips', label: 'Payslips', icon: Receipt, showFor: ['employee', 'accountant'] },
+  { id: 'payslips', label: 'Payslips', icon: Wallet, showFor: ['employee', 'accountant'] },
   // Team: admin and employee (not accountant).
   { id: 'team', label: 'Team', icon: Users, showFor: ['admin', 'employee'] },
   // Users: admin and accountant (read-only for accountant).

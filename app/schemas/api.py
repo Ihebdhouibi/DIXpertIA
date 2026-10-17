@@ -85,6 +85,12 @@ class LeaveRequestCreate(BaseModel):
         }
 
 
+def employee_name(employee) -> str:
+    """An Employee row's full name; the name lives on its user account."""
+    user = getattr(employee, "user", None) if employee else None
+    return f"{user.firstName} {user.lastName}".strip() if user else ""
+
+
 class LeaveRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -107,12 +113,10 @@ class LeaveRequestOut(BaseModel):
     @classmethod
     def from_orm_row(cls, row, employee=None) -> "LeaveRequestOut":
         """`employee` is an Employee row; the person's name lives on its user."""
-        user = getattr(employee, "user", None) if employee else None
-        name = f"{user.firstName} {user.lastName}".strip() if user else ""
         return cls(
             id=str(row.id),
             employeeId=row.employee_id,
-            employeeName=name,
+            employeeName=employee_name(employee),
             jobTitle=getattr(employee, "job_title", None),
             type=LEAVE_TYPE_TO_API.get(row.type_conge, "Annual Leave"),
             dates=format_date_range(row.date_debut, row.date_fin),
@@ -132,6 +136,8 @@ class PayslipOut(BaseModel):
 
     id: str
     employeeId: Optional[int] = None
+    # Whose payslip it is (#144): the payroll table lists every employee's.
+    employeeName: str = ""
     period: str
     grossPay: float
     netPay: float
@@ -144,6 +150,7 @@ class PayslipOut(BaseModel):
         return cls(
             id=str(row.id),
             employeeId=row.employee_id,
+            employeeName=employee_name(row.employee),
             period=row.periode.strftime("%B %Y"),
             grossPay=float(row.montant_brut or 0),
             netPay=float(row.montant_net or 0),
