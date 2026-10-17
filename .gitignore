@@ -37,6 +37,13 @@ db.json
 /design/**
 !/design/
 !/design/README.md
+# The homepage redesign handoff from Claude Design (#165): spec, tokens and the
+# HTML references reviewers open in a browser (support.js is their runtime).
+!/design/homepage-v2/
+!/design/homepage-v2/*.md
+!/design/homepage-v2/tokens.css
+!/design/homepage-v2/reference/
+!/design/homepage-v2/reference/*
 !/design/DI Xpertia Logo Concepts/
 !/design/DI Xpertia Logo Concepts/exports/
 !/design/DI Xpertia Logo Concepts/exports/logo/

@@ -1,0 +1,60 @@
+/* DI Xpertia — homepage theme tokens. Light = default, dark via [data-theme="dark"] (or prefers-color-scheme). */
+:root {
+  --dx-ink: #101314;
+  --dx-paper: #F3F2EE;
+  --dx-signal: #C6F24E;          /* the ONE accent — fills, cursor, focus */
+  --dx-signal-hover: #D4F76E;
+  --dx-on-signal: #101314;       /* text on lime, both themes */
+
+  --dx-bg: #F3F2EE;
+  --dx-surface: #FBFAF7;         /* engagement section, hovered service row */
+  --dx-panel: #101314;           /* ops console + phase diagram */
+  --dx-panel-border: transparent;
+  --dx-cta-bg: #101314;
+  --dx-fg: #101314;
+  --dx-fg-rgb: 16,19,20;         /* use rgba(var(--dx-fg-rgb), a) for muted text & lines */
+  --dx-accent-text: #5C7A0A;     /* lime is not AA on paper — olive for small accent text */
+  --dx-grid-line: rgba(16,19,20,.055);
+  --dx-header-bg: rgba(243,242,238,.88);
+  --dx-spotlight: rgba(198,242,78,.40);
+  --dx-btn-strong-bg: #101314;   /* "Go to Dashboard" */
+  --dx-btn-strong-fg: #F3F2EE;
+  --dx-btn-strong-hover: #2A2F31;
+  --dx-tab-active-bg: #101314;
+  --dx-tab-active-fg: #F3F2EE;
+  --dx-tab-active-num: #C6F24E;
+  --dx-focus-outline: #101314;
+  --dx-focus-ring: #C6F24E;
+
+  --dx-font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --dx-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --dx-ease-out: cubic-bezier(.2,.7,.2,1);
+  --dx-ease-draw: cubic-bezier(.6,0,.2,1);
+  --dx-ease-magnet: cubic-bezier(.2,.8,.2,1);
+  --dx-container: 1312px;
+  --dx-gutter: clamp(20px,5vw,48px);
+}
+
+[data-theme="dark"] {
+  --dx-bg: #101314;
+  --dx-surface: #171B1C;
+  --dx-panel: #1A1F21;
+  --dx-panel-border: rgba(243,242,238,.08);
+  --dx-cta-bg: #171B1C;
+  --dx-fg: #F3F2EE;
+  --dx-fg-rgb: 243,242,238;
+  --dx-accent-text: #C6F24E;
+  --dx-grid-line: rgba(243,242,238,.055);
+  --dx-header-bg: rgba(16,19,20,.88);
+  --dx-spotlight: rgba(198,242,78,.14);
+  --dx-btn-strong-bg: #F3F2EE;
+  --dx-btn-strong-fg: #101314;
+  --dx-btn-strong-hover: #FFFFFF;
+  --dx-tab-active-bg: #C6F24E;
+  --dx-tab-active-fg: #101314;
+  --dx-tab-active-num: #101314;
+  --dx-focus-outline: #F3F2EE;
+  --dx-focus-ring: #C6F24E;
+}
+
+/* Console & phase diagram are ALWAYS dark (panel), in both themes: their inner text uses paper rgba(243,242,238,a). */
