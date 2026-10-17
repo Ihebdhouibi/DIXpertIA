@@ -4,6 +4,7 @@ import HomeHeader, { type HomeTarget } from './home/HomeHeader';
 import Hero from './home/Hero';
 import HowWeWorkConsole from './home/HowWeWorkConsole';
 import Services from './home/Services';
+import Engagement from './home/Engagement';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -423,6 +424,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       />
 
       <Services onPick={() => handleNavClick('contact')} />
+      <Engagement />
 
       {/* About / CTA: ink again, so the page closes the way it opens. */}
       <section id="about" className="bg-ink text-paper py-20 scroll-mt-16">
