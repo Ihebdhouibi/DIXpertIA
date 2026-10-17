@@ -242,7 +242,13 @@ def list_invoices(
         query = query.filter(Invoice.client_id == client_id)
     if supplier_id is not None:
         query = query.filter(Invoice.supplier_id == supplier_id)
-    if statut is not None:
+    if statut == InvoiceStatus.EN_RETARD:
+        # Derived, as in Invoice.displayed_status() (#117): sent and past due.
+        # "Sent" below excludes them, so each invoice is under one status.
+        query = query.filter(Invoice.statut == InvoiceStatus.ENVOYEE, Invoice.date_echeance < date.today())
+    elif statut == InvoiceStatus.ENVOYEE:
+        query = query.filter(Invoice.statut == InvoiceStatus.ENVOYEE, Invoice.date_echeance >= date.today())
+    elif statut is not None:
         query = query.filter(Invoice.statut == statut)
     if processing_status is not None:
         query = query.filter(Invoice.processing_status == processing_status)
@@ -722,7 +728,8 @@ def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
 # before touching anything; trg_invoice_commercial_transitions holds the same
 # rules for a direct SQL write, and a race is still caught there as a 409.
 
-AWAITING_PAYMENT = (InvoiceStatus.ENVOYEE, InvoiceStatus.EN_RETARD)
+# Overdue is not a stored status (#117): an overdue invoice is stored as sent.
+AWAITING_PAYMENT = (InvoiceStatus.ENVOYEE,)
 
 
 def _status_label(invoice: Invoice) -> str:
@@ -916,11 +923,8 @@ def _pdf_data(invoice: Invoice) -> dict:
         "client_address": party.adresse if party else "",
         "date_issued": invoice.date_emission.strftime("%b %d, %Y"),
         "due_date": invoice.date_echeance.strftime("%b %d, %Y"),
-        "status": (
-            invoice.statut
-            if isinstance(invoice.statut, str)
-            else (invoice.statut.value if invoice.statut else "Sent")
-        ),
+        # As the API shows it: Overdue is derived from the due date (#117).
+        "status": invoice.displayed_status().value,
         "items": items,
         "subtotal": float(invoice.montant_ht),
         "total": float(invoice.montant_ttc),
