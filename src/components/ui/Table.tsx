@@ -29,7 +29,11 @@ export function Table({
 }) {
   return (
     <div className={`overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest ${className}`}>
-      <div className="overflow-x-auto">
+      {/* relative: the sr-only caption and header labels are position:absolute.
+          Without a positioned box here they were placed against the page,
+          not this scroll box, so they escaped its clipping and made the whole
+          page scroll sideways on a phone (#130). */}
+      <div className="relative overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm">
           {caption && <caption className="sr-only">{caption}</caption>}
           {children}
