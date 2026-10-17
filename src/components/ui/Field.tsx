@@ -7,9 +7,14 @@ import { AlertCircle } from 'lucide-react';
  * htmlFor / aria-describedby / aria-invalid, so screen readers announce them.
  */
 
+// focus-within:outline-*: a field shows the ring whenever focus is in it.
+// :focus-visible alone lost it inside a month input: Tab moves from its month
+// to its year segment, an inner part, and Edge then reports neither :focus
+// nor :focus-visible on the input, only :focus-within (#31, WCAG 2.4.7).
 const CONTROL =
   'w-full bg-surface-container-lowest text-on-surface text-sm border rounded-lg ' +
   'placeholder:text-on-surface-variant transition-colors hover:border-outline ' +
+  'focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus-ring ' +
   'disabled:opacity-50 disabled:cursor-not-allowed';
 
 interface FieldProps {
