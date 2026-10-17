@@ -10,7 +10,8 @@ from sqlalchemy import text
 
 # Accounts made here are not in conftest's TRUNCATED_BETWEEN_TESTS (users holds
 # the fixture accounts), so they are removed by this domain after each test.
-DOMAIN = "ids.test"
+# Not a .test domain: the API's email validation rejects reserved names.
+DOMAIN = "ids-test.tn"
 
 
 @pytest.fixture(autouse=True)
