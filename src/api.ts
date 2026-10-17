@@ -10,6 +10,7 @@
  * Everything goes through `request` so that authentication, error handling and
  * the 401 path are written once rather than per call site.
  */
+import { getLocale, t, type Locale } from './i18n';
 import { Client, Employee, Invoice, LeaveRequest, Payslip, User } from './types';
 
 const TOKEN_KEY = 'token';
@@ -55,6 +56,10 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const res = await fetch(path, {
     ...init,
     headers: {
+      // The language showing (#135): the API answers its errors, dates and
+      // notifications in it. Not the browser's own languages, which can differ
+      // from the one chosen with the toggle.
+      'Accept-Language': getLocale(),
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.headers || {}),
@@ -69,7 +74,7 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
     // call retrying with a credential the server has already refused.
     setToken(null);
     onUnauthorized();
-    throw new ApiError(401, 'Your session has expired. Please sign in again.');
+    throw new ApiError(401, t('common.sessionExpired'));
   }
 
   if (!res.ok) {
@@ -129,9 +134,9 @@ async function readError(res: Response): Promise<string> {
         .filter(Boolean)
         .join('; ');
     }
-    return `Request failed (${res.status})`;
+    return t('common.requestFailed', { status: res.status });
   } catch {
-    return `Request failed (${res.status})`;
+    return t('common.requestFailed', { status: res.status });
   }
 }
 
@@ -174,7 +179,7 @@ export const auth = {
     } catch (error) {
       // Said the same way whichever of the two was wrong, as the server does.
       if (error instanceof ApiError && error.status === 401) {
-        throw new ApiError(401, 'Incorrect email or password.');
+        throw new ApiError(401, t('auth.invalidCredentials'));
       }
       throw error;
     }
@@ -187,6 +192,9 @@ export const auth = {
    * user, so the client never decides its own role.
    */
   me: () => request<User>('/api/me'),
+  /** Save the account's language, so its e-mails and other devices follow (#135). */
+  setLocale: (locale: Locale) =>
+    request<User>('/api/me/locale', { method: 'PUT', body: JSON.stringify({ locale }) }),
 };
 
 // --- Business entities ------------------------------------------------------

@@ -1,4 +1,5 @@
 import React from 'react';
+import { labelOf, useT } from '../i18n';
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -49,15 +50,20 @@ interface StatusBadgeProps {
 /**
  * Status pill: a dot plus the status label, so the state never relies on
  * colour alone.
+ *
+ * `status` is the API's English value: it picks the colour, and the label is
+ * its translation (#135). A value with no translation is shown as it is.
  */
 export default function StatusBadge({ status, tone, className = '' }: StatusBadgeProps) {
+  const t = useT();
+  const label = labelOf(t, 'common.status', status);
   const classes = TONE_CLASSES[tone ?? statusTone(status)];
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${classes.badge} ${className}`}
     >
       <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${classes.dot}`}></span>
-      {status}
+      {label}
     </span>
   );
 }

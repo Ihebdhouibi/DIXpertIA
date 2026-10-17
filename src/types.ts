@@ -25,6 +25,8 @@ export interface User {
   isActive: boolean;
   isVerified: boolean;
   createdAt: string;
+  /** The account's language (#135): its e-mails, notifications and default UI language. */
+  locale?: 'fr' | 'en';
 }
 
 /**
