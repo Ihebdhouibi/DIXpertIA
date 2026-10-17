@@ -131,6 +131,125 @@ jobs:
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
 
+  ui-checks:
+    name: ui checks (accessibility + mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The two browser checks (#181): axe-core plus a keyboard pass on every
+    # screen in light and dark (#31), and no screen wider than a 390px phone
+    # (#130). They need the whole app, so this job builds it: a database with
+    # the least-privileged roles, the migrations, realistic data, one account
+    # per role, the API, and the production build of the frontend.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: dixpertia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SUPERUSER_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia
+      SECRET_KEY: ci-secret-key-at-least-32-characters-long
+      REMINDERS_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt playwright==1.48.0
+          python -m playwright install --with-deps chromium
+          npm ci
+
+      - name: Generate throwaway passwords
+        # New for every run and masked in the log: nothing to leak or reuse.
+        run: |
+          for name in APP_PASSWORD OWNER_PASSWORD ADMIN_PASSWORD ACCOUNTANT_PASSWORD EMPLOYEE_PASSWORD; do
+            value=$(openssl rand -hex 16)
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+
+      - name: Provision the database (db/README.md)
+        run: |
+          python db/setup_roles.py --superuser-url "$SUPERUSER_URL" \
+            --app-password "$APP_PASSWORD" --owner-password "$OWNER_PASSWORD" > /dev/null
+          echo "DATABASE_URL=postgresql://dixpertia_app:$APP_PASSWORD@localhost:5432/dixpertia" >> "$GITHUB_ENV"
+          echo "SCHEMA_DATABASE_URL=postgresql://dixpertia_owner:$OWNER_PASSWORD@localhost:5432/dixpertia" >> "$GITHUB_ENV"
+
+      - name: Migrate, grant, seed
+        run: |
+          alembic upgrade head
+          python db/setup_roles.py --superuser-url "$SUPERUSER_URL" \
+            --app-password "$APP_PASSWORD" --owner-password "$OWNER_PASSWORD" > /dev/null
+          python seed_users.py --email admin@ci.dixpertia.tn --password "$ADMIN_PASSWORD" --role admin
+          python seed_users.py --email accountant@ci.dixpertia.tn --password "$ACCOUNTANT_PASSWORD" --role accountant
+          python seed_users.py --email employee@ci.dixpertia.tn --password "$EMPLOYEE_PASSWORD" --role employee
+          # Each account its employee record, as a real one has.
+          python -c "import os, psycopg2; c = psycopg2.connect(os.environ['SUPERUSER_URL']); c.autocommit = True; c.cursor().execute(\"INSERT INTO employees (user_id, job_title, hired_on, annual_entitlement_days) SELECT id, 'Consultant', '2024-01-01', 21 FROM users WHERE email LIKE '%@ci.dixpertia.tn' ON CONFLICT (user_id) DO NOTHING\")"
+
+      - name: Start the API and the built frontend
+        run: |
+          nohup uvicorn main:app --port 8000 > api.log 2>&1 &
+          npm run build
+          # vite preview serves dist/ and proxies /api to the API, as in dev. It
+          # listens on "localhost", which is ::1 on the runner: poll that name.
+          nohup npx vite preview --port 3000 --strictPort > web.log 2>&1 &
+          for _ in $(seq 60); do
+            curl -sf http://127.0.0.1:8000/openapi.json > /dev/null && curl -sf http://localhost:3000/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "The app did not start"; cat api.log web.log; exit 1
+
+      - name: Seed screens with data, through the API
+        # Tables with rows: the sideways scroll #130 fixed only showed with data.
+        run: |
+          python scripts/seed_ui_data.py --api http://127.0.0.1:8000             --admin "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --accountant "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --employee "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Accessibility (axe-core and keyboard, light and dark)
+        run: |
+          python scripts/check_accessibility.py --browser chromium --screenshots ui-failures \
+            --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD" \
+            --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Mobile overflow (390px, light and dark)
+        if: success() || failure()
+        run: |
+          python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures \
+            --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD" \
+            --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Keep the screenshots and logs of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-check-failures
+          path: |
+            ui-failures/
+            api.log
+            web.log
+          retention-days: 7
+
   hygiene:
     name: pre-commit hygiene
     runs-on: ubuntu-latest
