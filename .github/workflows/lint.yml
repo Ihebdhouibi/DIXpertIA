@@ -113,6 +113,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Runtime dependencies only: build tools are not shipped to users. The
+      # baseline was cleaned in #142; a new high or critical finding fails the
+      # job instead of piling up unnoticed.
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   hygiene:
     name: pre-commit hygiene
     runs-on: ubuntu-latest
