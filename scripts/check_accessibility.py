@@ -15,9 +15,9 @@ so they do not regress:
 2. a keyboard pass on each screen: Tab from the top, checking that the first
    stop is "Skip to content" and that every stop shows a focus ring.
 
-It needs a browser, the running app and real accounts, so it is a local check
-run before a frontend PR, like scripts/check_mobile_overflow.py (#130). It
-changes no data.
+It needs a browser, the running app and real accounts. Run it before a
+frontend PR; CI runs it on every PR as well (#181), with Chromium. It changes
+no data.
 
 axe-core is fetched from cdnjs at a pinned version, and its SHA-256 is checked
 before it is injected into the page. A different file is refused.
@@ -27,14 +27,17 @@ Usage
     python scripts/check_accessibility.py \\
         --account admin@example.com:PASSWORD --account employee@example.com:PASSWORD
 
-Options: --url (default http://localhost:3000/). Requires Playwright with
-Microsoft Edge. Exit status 1 on any axe violation or keyboard failure.
+Options: --url (default http://localhost:3000/), --browser (msedge, the
+default, or chromium), --screenshots DIR (a PNG of each failing screen).
+Requires Playwright. Exit status 1 on any axe violation or keyboard failure.
 """
 
 import argparse
 import hashlib
+import re
 import sys
 import urllib.request
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -88,8 +91,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--account", action="append", required=True, metavar="EMAIL:PASSWORD")
     parser.add_argument("--url", default="http://localhost:3000/")
+    parser.add_argument("--browser", choices=("msedge", "chromium"), default="msedge",
+                        help="msedge locally; chromium in CI, where Edge is not installed")
+    parser.add_argument("--screenshots", type=Path, help="save a PNG of each failing screen here")
     args = parser.parse_args()
     axe = load_axe()
+    if args.screenshots:
+        args.screenshots.mkdir(parents=True, exist_ok=True)
 
     problems, checked = [], 0
 
@@ -105,12 +113,16 @@ def main() -> int:
         print(f"{'PASS' if not found else 'FAIL'}  {where}")
         for f in found:
             print(f"        {f}")
+        if found and args.screenshots:
+            page.screenshot(path=args.screenshots / f"a11y-{re.sub(r'[^A-Za-z0-9]+', '-', where).strip('-')}.png",
+                            full_page=True)
         problems.extend(f"{where}: {f}" for f in found)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="msedge")
+        browser = p.chromium.launch(channel="msedge" if args.browser == "msedge" else None)
         for theme in ("light", "dark"):
-            context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme)
+            context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme,
+                                          locale="en-US")
             context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}')")
             page = context.new_page()
             page.goto(args.url)
@@ -124,7 +136,8 @@ def main() -> int:
 
             for account in args.account:
                 email, _, password = account.partition(":")
-                context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme)
+                context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme=theme,
+                                              locale="en-US")
                 context.add_init_script(f"localStorage.setItem('dixpertia_theme', '{theme}')")
                 page = context.new_page()
                 page.goto(args.url)
