@@ -11,6 +11,7 @@ import { useToast } from './ui/feedback';
 import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { FilterPills, SearchField, TableToolbar } from './ui/TableControls';
 import { useDataStatus } from '../dataStatus';
+import { labelOf, useT } from '../i18n';
 
 interface TeamViewProps {
   userRole: UserRole;
@@ -20,14 +21,18 @@ interface TeamViewProps {
   onRejectLeave: (id: string, comment: string) => void;
 }
 
-/** The employment status as a label, matching the StatusBadge vocabulary. */
+/**
+ * The employment status as a label, matching the StatusBadge vocabulary. An
+ * employee on leave reads "On leave" (it read "On Hold", a project state with
+ * no translation); the badge keeps the warning tone it had.
+ */
 function employmentLabel(status: string): string {
   if (status === 'active') return 'Active';
-  if (status === 'on_leave') return 'On Hold';
+  if (status === 'on_leave') return 'On leave';
   return 'Inactive';
 }
 
-const STATUS_FILTERS = ['All', 'Active', 'On Hold', 'Inactive'] as const;
+const STATUS_FILTERS = ['All', 'Active', 'On leave', 'Inactive'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 const ALL_ROLES = 'All roles';
 
@@ -47,6 +52,7 @@ export default function TeamView({
   const isAdmin = userRole === 'admin';
   const isAccountant = userRole === 'accountant';
   const status = useDataStatus();
+  const t = useT();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState(ALL_ROLES);
@@ -65,7 +71,7 @@ export default function TeamView({
   // --- Handlers (admin only) ---
   const handleApprove = (id: string, name: string) => {
     onApproveLeave(id);
-    showToast(`Leave request from ${name} approved.`);
+    showToast(t('people.team.approved', { name }));
   };
 
   const triggerReject = (id: string) => {
@@ -80,7 +86,7 @@ export default function TeamView({
     setIsRejectOpen(false);
     setRejectionComment('');
     setRejectingRequestId(null);
-    showToast(`Leave request from ${req?.employeeName || 'employee'} rejected.`);
+    showToast(t('people.team.rejected', { name: req?.employeeName || t('people.team.theEmployee') }));
   };
 
   // --- Filters ---
@@ -115,17 +121,23 @@ export default function TeamView({
   const directory = (
     <>
       <TableToolbar>
-        <SearchField label="Search employees" value={searchQuery} onChange={setSearchQuery} />
+        <SearchField label={t('people.team.search')} value={searchQuery} onChange={setSearchQuery} />
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <FilterPills label="Filter by status" options={STATUS_FILTERS} value={selectedStatus} onChange={setSelectedStatus} />
+          <FilterPills
+            label={t('people.filterByStatus')}
+            options={STATUS_FILTERS}
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+            renderOption={(option) => (option === 'All' ? t('people.team.filterAll') : labelOf(t, 'common.status', option))}
+          />
           {roles.length > 1 && (
             <Select
-              aria-label="Filter by role"
+              aria-label={t('people.team.filterByRole')}
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
               className="md:w-48"
             >
-              <option value={ALL_ROLES}>{ALL_ROLES}</option>
+              <option value={ALL_ROLES}>{t('people.team.allRoles')}</option>
               {roles.map(r => (
                 <option key={r} value={r}>
                   {r}
@@ -137,24 +149,25 @@ export default function TeamView({
       </TableToolbar>
 
       <Table
-        caption="Team members"
+        caption={t('people.team.caption')}
         footer={
           employees.length > 0 && (
             <p className="border-t border-outline-variant px-5 py-3 text-sm text-on-surface-variant">
-              <span className="font-mono tabular-nums text-on-surface">{filteredEmployees.length}</span> of{' '}
-              <span className="font-mono tabular-nums text-on-surface">{employees.length}</span> employees
+              <span className="font-mono tabular-nums text-on-surface">{filteredEmployees.length}</span> {t('people.team.of')}{' '}
+              <span className="font-mono tabular-nums text-on-surface">{employees.length}</span>{' '}
+              {t('people.team.employeesNoun', { count: employees.length })}
             </p>
           )
         }
       >
         <THead>
-          <Th>Name</Th>
-          <Th>Email</Th>
-          <Th>Role</Th>
-          <Th>Status</Th>
+          <Th>{t('people.col.name')}</Th>
+          <Th>{t('people.col.email')}</Th>
+          <Th>{t('people.team.colRole')}</Th>
+          <Th>{t('people.col.status')}</Th>
           {isAdmin && (
             <Th numeric>
-              <span className="sr-only">Actions</span>
+              <span className="sr-only">{t('people.col.actions')}</span>
             </Th>
           )}
         </THead>
@@ -170,7 +183,10 @@ export default function TeamView({
               <Td muted>{member.email}</Td>
               <Td muted>{member.role || '-'}</Td>
               <Td>
-                <StatusBadge status={employmentLabel(member.employmentStatus)} />
+                <StatusBadge
+                  status={employmentLabel(member.employmentStatus)}
+                  tone={member.employmentStatus === 'on_leave' ? 'warning' : undefined}
+                />
               </Td>
               {isAdmin && (
                 <Td numeric>
@@ -179,16 +195,16 @@ export default function TeamView({
                   <div className="flex justify-end gap-1">
                     <button
                       type="button"
-                      onClick={() => showToast(`Edit ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
-                      aria-label={`Edit ${member.name}`}
+                      onClick={() => showToast(t('people.team.editSoon', { name: member.name.split(' ')[0] }), 'error')}
+                      aria-label={t('people.team.edit', { name: member.name })}
                       className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                     >
                       <Edit className="w-4 h-4" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => showToast(`Toggle status for ${member.name.split(' ')[0]} (not implemented yet)`, 'error')}
-                      aria-label={`Change the status of ${member.name}`}
+                      onClick={() => showToast(t('people.team.statusSoon', { name: member.name.split(' ')[0] }), 'error')}
+                      aria-label={t('people.team.changeStatus', { name: member.name })}
                       className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-error-container hover:text-error cursor-pointer"
                     >
                       <Ban className="w-4 h-4" aria-hidden="true" />
@@ -200,15 +216,15 @@ export default function TeamView({
           ))}
           {filteredEmployees.length === 0 &&
             (status.loading ? (
-              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title="Loading the team..." />
+              <TableState kind="loading" colSpan={isAdmin ? 5 : 4} title={t('people.team.loading')} />
             ) : status.error && employees.length === 0 ? (
               <TableState kind="error" colSpan={isAdmin ? 5 : 4} message={status.error} />
             ) : (
               <TableState
                 kind="empty"
                 colSpan={isAdmin ? 5 : 4}
-                title={employees.length === 0 ? 'No team members yet' : 'No one matches'}
-                message={employees.length === 0 ? undefined : 'Try another name, status or role.'}
+                title={employees.length === 0 ? t('people.team.emptyNone') : t('people.team.emptyNoMatch')}
+                message={employees.length === 0 ? undefined : t('people.team.emptyHint')}
               />
             ))}
         </TBody>
@@ -228,8 +244,8 @@ export default function TeamView({
     return (
       <div className="flex-1 flex flex-col gap-6 animate-fade-in">
         {isAccountant
-          ? header('Team', 'View team members.')
-          : header('Team Directory', 'View and connect with your colleagues.')}
+          ? header(t('people.team.title.accountant'), t('people.team.subtitle.accountant'))
+          : header(t('people.team.title.employee'), t('people.team.subtitle.employee'))}
         {directory}
       </div>
     );
@@ -266,14 +282,14 @@ export default function TeamView({
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-      {header('Team Dashboard', 'Manage team members and leave requests.')}
+      {header(t('people.team.title.admin'), t('people.team.subtitle.admin'))}
 
-      <div role="tablist" aria-label="Team sections" className="flex gap-6 border-b border-outline-variant">
-        {tab('employees', 'Employee Management')}
+      <div role="tablist" aria-label={t('people.team.sections')} className="flex gap-6 border-b border-outline-variant">
+        {tab('employees', t('people.team.tab.employees'))}
         {tab(
           'leave-approvals',
           <>
-            Leave Approvals
+            {t('people.team.tab.approvals')}
             {pendingRequests.length > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 font-mono text-[10px] font-medium text-on-error">
                 {pendingRequests.length}
@@ -288,28 +304,28 @@ export default function TeamView({
       {activeSubTab === 'leave-approvals' && (
         <div className="flex flex-col gap-6 animate-fade-in">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {stat('Pending', pendingRequests.length, FileText)}
-            {stat('Approved', approvedCount, CheckCircle)}
-            {stat('On leave today', onLeaveToday, Calendar)}
+            {stat(t('people.team.stat.pending'), pendingRequests.length, FileText)}
+            {stat(t('people.team.stat.approved'), approvedCount, CheckCircle)}
+            {stat(t('people.team.stat.onLeaveToday'), onLeaveToday, Calendar)}
           </div>
 
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold tracking-[-0.02em] text-on-surface">Pending leave requests</h2>
+            <h2 className="text-lg font-bold tracking-[-0.02em] text-on-surface">{t('people.team.pendingTitle')}</h2>
             <Button variant="secondary" size="sm" onClick={() => setShowCalendar(true)}>
               <Calendar className="w-4 h-4" aria-hidden="true" />
-              View calendar
+              {t('people.viewCalendar')}
             </Button>
           </div>
 
-          <Table caption="Pending leave requests">
+          <Table caption={t('people.team.pendingTitle')}>
             <THead>
-              <Th>Employee</Th>
-              <Th numeric>Dates</Th>
-              <Th>Type</Th>
-              <Th>Reason</Th>
+              <Th>{t('people.col.employee')}</Th>
+              <Th numeric>{t('people.col.dates')}</Th>
+              <Th>{t('people.col.type')}</Th>
+              <Th>{t('people.col.reason')}</Th>
               {/* No status column: every row in this table is Pending. */}
               <Th numeric>
-                <span className="sr-only">Decision</span>
+                <span className="sr-only">{t('people.team.decision')}</span>
               </Th>
             </THead>
             <TBody>
@@ -327,20 +343,20 @@ export default function TeamView({
                   <Td numeric>
                     {req.dates}
                     <div className="text-xs text-on-surface-variant">
-                      {req.duration} {req.duration === 1 ? 'day' : 'days'}
+                      {t('people.days', { count: req.duration })}
                     </div>
                   </Td>
-                  <Td muted className="whitespace-nowrap">{req.type}</Td>
+                  <Td muted className="whitespace-nowrap">{labelOf(t, 'common.leaveType', req.type)}</Td>
                   <Td muted className="max-w-48 truncate" title={req.reason}>
                     {req.reason || '-'}
                   </Td>
                   <Td numeric>
                     <div className="flex items-center justify-end gap-2">
                       <Button size="sm" onClick={() => handleApprove(req.id, req.employeeName)}>
-                        Approve
+                        {t('people.team.approve')}
                       </Button>
                       <Button size="sm" variant="secondary" onClick={() => triggerReject(req.id)}>
-                        Reject
+                        {t('people.team.reject')}
                       </Button>
                     </div>
                   </Td>
@@ -348,9 +364,14 @@ export default function TeamView({
               ))}
               {pendingRequests.length === 0 &&
                 (status.loading ? (
-                  <TableState kind="loading" colSpan={5} title="Loading leave requests..." />
+                  <TableState kind="loading" colSpan={5} title={t('people.loadingLeave')} />
                 ) : (
-                  <TableState kind="empty" colSpan={5} title="No pending leave requests" message="Every request has a decision." />
+                  <TableState
+                    kind="empty"
+                    colSpan={5}
+                    title={t('people.team.emptyPending')}
+                    message={t('people.team.emptyPendingHint')}
+                  />
                 ))}
             </TBody>
           </Table>
@@ -369,27 +390,27 @@ export default function TeamView({
       <Dialog
         open={isRejectOpen}
         onClose={() => setIsRejectOpen(false)}
-        title="Reject leave request"
-        description="Give a reason for rejecting this request. The employee will see it."
+        title={t('people.team.rejectTitle')}
+        description={t('people.team.rejectDescription')}
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsRejectOpen(false)}>
-              Cancel
+              {t('people.cancel')}
             </Button>
             <Button variant="danger" onClick={handleConfirmReject}>
-              Confirm rejection
+              {t('people.team.confirmReject')}
             </Button>
           </>
         }
       >
-        <Field label="Rejection reason">
+        <Field label={t('people.team.rejectReason')}>
           {({ id }) => (
             <Textarea
               id={id}
               rows={4}
               value={rejectionComment}
               onChange={(e) => setRejectionComment(e.target.value)}
-              placeholder="E.g., Project deadline conflicts..."
+              placeholder={t('people.team.rejectPlaceholder')}
             />
           )}
         </Field>

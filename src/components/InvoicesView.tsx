@@ -41,6 +41,8 @@ import InvoiceHistory from './InvoiceHistory';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useConfirm, useToast, ToastTone } from './ui/feedback';
+import { formatTND } from '../format';
+import { labelOf, useLocale, useT, type MessageKey } from '../i18n';
 
 interface InvoicesViewProps {
   /** Kept for the dashboard's sake; this view loads its own pages from the server (#113). */
@@ -55,6 +57,8 @@ interface InvoicesViewProps {
 const DETAIL_LABEL = 'font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant self-center whitespace-nowrap';
 
 export default function InvoicesView({ clients, onInvoiceCreated, userRole }: InvoicesViewProps) {
+  const t = useT();
+  const locale = useLocale();
   const isAdmin = userRole === 'admin';
   // Who may move an invoice through the books (the API allows admin and
   // accountant, #96); everyone else sees the list read-only.
@@ -83,14 +87,17 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       const url = URL.createObjectURL(await api.invoices.pdf(invoice.id));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Invoice_${invoice.reference}.pdf`;
+      a.download = t('invoices.fileName', { ref: invoice.reference });
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast(`Invoice ${invoice.reference} downloaded.`);
+      showToast(t('invoices.downloaded', { ref: invoice.reference }));
     } catch (error) {
-      showToast(`Download failed: ${error instanceof Error ? error.message : 'network error'}`, 'error');
+      showToast(
+        t('invoices.downloadFailed', { error: error instanceof Error ? error.message : t('invoices.networkError') }),
+        'error',
+      );
     }
   };
 
@@ -148,7 +155,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         setLoadError(null);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not load invoices');
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : t('invoices.couldNotLoad'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -156,7 +163,8 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     return () => {
       cancelled = true;
     };
-  }, [month, clientFilter, direction, commercial, processing, review, sorting, pagination, reloadKey]);
+    // The language too: the API writes the dates in it (#135).
+  }, [month, clientFilter, direction, commercial, processing, review, sorting, pagination, reloadKey, locale]);
 
   /** Move invoices to `target`, one request each (no bulk endpoint yet - #115). */
   const moveTo = async (targets: Invoice[], target: ProcessingStatus) => {
@@ -168,11 +176,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     setMoving(false);
     const done = results.filter((r) => r.status === 'fulfilled').length;
     const refused = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (done) showToast(`${done} invoice${done === 1 ? '' : 's'} ${target.toLowerCase()}.`);
+    if (done) showToast(t(target === 'Completed' ? 'invoices.moved.Completed' : 'invoices.moved.Processed', { count: done }));
     if (refused) {
       const failed = results.length - done;
       showToast(
-        `${failed} invoice${failed === 1 ? '' : 's'} not moved: ${refused.reason?.message ?? 'refused by the server'}`,
+        t('invoices.notMoved', { count: failed, reason: refused.reason?.message ?? t('invoices.refused') }),
         'error',
       );
     }
@@ -180,16 +188,12 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     reload();
   };
 
-  const formatDirection = (inv: Invoice) => (inv.direction === 'incoming' ? 'Incoming' : 'Outgoing');
+  const formatDirection = (inv: Invoice) =>
+    t(inv.direction === 'incoming' ? 'invoices.direction.incoming' : 'invoices.direction.outgoing');
 
-  const formatCurrency = (val: number) => {
-    // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars.
-    // The dinar has three decimal places, which is why minimumFractionDigits is
-    // set rather than left to the default two.
-    return new Intl.NumberFormat('fr-TN', {
-      style: 'currency', currency: 'TND', minimumFractionDigits: 3,
-    }).format(val);
-  };
+  // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars,
+  // with the dinar's three decimal places, in the language showing.
+  const formatCurrency = formatTND;
 
   // --- Columns ---------------------------------------------------------------
   // meta.numeric right-aligns a column in mono; ids 'date' and 'amount' are the
@@ -203,7 +207,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         header: ({ table }) => (
           <input
             type="checkbox"
-            aria-label="Select every invoice on this page that can move"
+            aria-label={t('invoices.selectAll')}
             className="h-4 w-4 accent-primary cursor-pointer"
             checked={table.getIsAllPageRowsSelected()}
             ref={(el) => {
@@ -215,7 +219,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label={`Select invoice ${row.original.reference}`}
+            aria-label={t('invoices.selectOne', { ref: row.original.reference })}
             className="h-4 w-4 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
@@ -227,7 +231,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     cols.push(
       {
         id: 'numero',
-        header: 'Invoice',
+        header: t('invoices.col.invoice'),
         enableSorting: false,
         meta: { mono: true },
         cell: ({ row }) => (
@@ -242,7 +246,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       },
       {
         id: 'counterparty',
-        header: 'Client / supplier',
+        header: t('invoices.col.counterparty'),
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
@@ -261,7 +265,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         // is never compared here (manualSorting), the server orders by it.
         id: 'amount',
         accessorFn: (inv) => inv.amountTTC,
-        header: 'Amount',
+        header: t('invoices.col.amount'),
         meta: { numeric: true },
         cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountTTC)}</span>,
       },
@@ -270,7 +274,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         accessorFn: (inv) => inv.dateIssued,
         // Issue and due dates share one column, stacked like the counterparty,
         // so the row action still fits at desktop widths.
-        header: 'Issued / due',
+        header: t('invoices.col.dates'),
         meta: { numeric: true },
         cell: ({ row }) => (
           <div>
@@ -278,14 +282,14 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             <div
               className={`text-[11px] ${row.original.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface-variant'}`}
             >
-              due {row.original.dueDate}
+              {t('invoices.due', { date: row.original.dueDate })}
             </div>
           </div>
         ),
       },
       {
         id: 'status',
-        header: 'Status',
+        header: t('invoices.col.status'),
         enableSorting: false,
         // A draft is shown by where it stands in verification (#118).
         cell: ({ row }) =>
@@ -297,13 +301,13 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       },
       {
         id: 'processing',
-        header: 'Books',
+        header: t('invoices.books'),
         enableSorting: false,
         cell: ({ row }) => <ProcessingBadge status={row.original.processingStatus} />,
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
+        header: () => <span className="sr-only">{t('invoices.col.actions')}</span>,
         enableSorting: false,
         meta: { numeric: true },
         cell: ({ row }) => {
@@ -316,10 +320,10 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                   size="sm"
                   variant="secondary"
                   onClick={() => setSelectedInvoice(row.original)}
-                  aria-label={`Verify invoice ${row.original.reference}`}
+                  aria-label={t('invoices.verifyOne', { ref: row.original.reference })}
                 >
                   <SearchCheck className="w-3.5 h-3.5" aria-hidden="true" />
-                  Verify
+                  {t('invoices.verify')}
                 </Button>
               )}
               {canProcess && next && (
@@ -328,17 +332,17 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                   variant="secondary"
                   disabled={moving}
                   onClick={() => moveTo([row.original], next)}
-                  aria-label={`${PROCESSING_ACTION[next]}: invoice ${row.original.reference}`}
-                  title={PROCESSING_ACTION[next]}
+                  aria-label={t('invoices.stepOne', { action: t(PROCESSING_ACTION[next]!), ref: row.original.reference })}
+                  title={t(PROCESSING_ACTION[next]!)}
                 >
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                  {PROCESSING_ACTION_SHORT[next]}
+                  {t(PROCESSING_ACTION_SHORT[next]!)}
                 </Button>
               )}
               <button
                 type="button"
                 onClick={() => handleDownload(row.original)}
-                aria-label={`Download invoice ${row.original.reference}`}
+                aria-label={t('invoices.downloadOne', { ref: row.original.reference })}
                 className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
               >
                 <Download className="w-4 h-4" aria-hidden="true" />
@@ -350,7 +354,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
     );
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canProcess, isAccountant, moving]);
+  }, [canProcess, isAccountant, moving, locale]);
 
   const table = useReactTable({
     data: rows,
@@ -386,17 +390,17 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   };
 
   /** Run a verification step (#118), then show the invoice as the server returned it. */
-  const runReview = async (done: string, step: () => Promise<Invoice>) => {
+  const runReview = async (done: MessageKey, step: () => Promise<Invoice>) => {
     setReviewing(true);
     try {
       const updated = await step();
       setSelectedInvoice(updated);
       setPdfVersion((v) => v + 1);
-      showToast(`Invoice ${updated.reference} ${done}.`);
+      showToast(t(done, { ref: updated.reference }));
       reload();
       onInvoiceCreated();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Refused by the server', 'error');
+      showToast(err instanceof Error ? err.message : t('invoices.refused'), 'error');
     } finally {
       setReviewing(false);
     }
@@ -404,33 +408,33 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
 
   const approve = async (invoice: Invoice) => {
     const ok = await confirm({
-      title: `Approve ${invoice.reference}?`,
-      message: 'It gets its legal number and today\'s date, and can then be sent. This cannot be undone.',
-      confirmLabel: 'Approve',
+      title: t('invoices.approve.title', { ref: invoice.reference }),
+      message: t('invoices.approve.message'),
+      confirmLabel: t('invoices.approve'),
     });
-    if (ok) await runReview('approved', () => api.invoices.approve(invoice.id));
+    if (ok) await runReview('invoices.done.approved', () => api.invoices.approve(invoice.id));
   };
 
   const markSent = async (invoice: Invoice) => {
     const ok = await confirm({
-      title: `Mark ${invoice.reference} as sent?`,
-      message: 'Do it once the PDF has gone to the client. The invoice is then final and the books can take it.',
-      confirmLabel: 'Mark as sent',
+      title: t('invoices.send.title', { ref: invoice.reference }),
+      message: t('invoices.send.message'),
+      confirmLabel: t('invoices.markSent'),
     });
-    if (ok) await runReview('marked as sent', () => api.invoices.send(invoice.id));
+    if (ok) await runReview('invoices.done.sent', () => api.invoices.send(invoice.id));
   };
 
   return (
     <div className="flex-grow flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Invoices</h1>
-          <p className="text-body-lg text-on-surface-variant mt-1">Manage and track billing across all projects.</p>
+          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{t('invoices.title')}</h1>
+          <p className="text-body-lg text-on-surface-variant mt-1">{t('invoices.intro')}</p>
         </div>
         {isAdmin && (
           <Button onClick={() => setIsNewInvoiceOpen(true)} className="shrink-0">
             <Plus className="w-4 h-4" aria-hidden="true" />
-            New invoice
+            {t('invoices.new')}
           </Button>
         )}
       </div>
@@ -438,13 +442,13 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       {/* Filters - each one is a query parameter of GET /api/invoices */}
       <div className="flex flex-col gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="Month">
+          <Field label={t('invoices.filter.month')}>
             {({ id }) => <Input id={id} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />}
           </Field>
-          <Field label="Client">
+          <Field label={t('invoices.filter.client')}>
             {({ id }) => (
               <Select id={id} value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
-                <option value="">All clients</option>
+                <option value="">{t('invoices.filter.allClients')}</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nom}
@@ -453,34 +457,34 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               </Select>
             )}
           </Field>
-          <Field label="Direction">
+          <Field label={t('invoices.direction')}>
             {({ id }) => (
               <Select id={id} value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
-                <option value="">Incoming and outgoing</option>
-                <option value="outgoing">Outgoing (we bill)</option>
-                <option value="incoming">Incoming (we are billed)</option>
+                <option value="">{t('invoices.direction.both')}</option>
+                <option value="outgoing">{t('invoices.direction.outgoingLong')}</option>
+                <option value="incoming">{t('invoices.direction.incomingLong')}</option>
               </Select>
             )}
           </Field>
-          <Field label="Status">
+          <Field label={t('invoices.filter.status')}>
             {({ id }) => (
               <Select id={id} value={commercial} onChange={(e) => setCommercial(e.target.value as typeof commercial)}>
-                <option value="All">All statuses</option>
+                <option value="All">{t('invoices.filter.allStatuses')}</option>
                 {COMMERCIAL_STATUSES.map((st) => (
                   <option key={st} value={st}>
-                    {st}
+                    {labelOf(t, 'common.status', st)}
                   </option>
                 ))}
               </Select>
             )}
           </Field>
-          <Field label="Verification">
+          <Field label={t('invoices.filter.verification')}>
             {({ id }) => (
               <Select id={id} value={review} onChange={(e) => setReview(e.target.value as typeof review)}>
-                <option value="All">Any stage</option>
+                <option value="All">{t('invoices.filter.anyStage')}</option>
                 {REVIEW_STATUSES.map((st) => (
                   <option key={st} value={st}>
-                    {REVIEW_LABEL[st]}
+                    {t(REVIEW_LABEL[st])}
                   </option>
                 ))}
               </Select>
@@ -489,16 +493,17 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <FilterPills
-            label="Books"
+            label={t('invoices.books')}
             showLabel
             options={['All', ...PROCESSING_STATUSES] as const}
             value={processing}
             onChange={setProcessing}
+            renderOption={(option) => (option === 'All' ? t('invoices.filter.all') : labelOf(t, 'common.status', option))}
           />
           {filtersActive && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X className="w-4 h-4" aria-hidden="true" />
-              Clear filters
+              {t('invoices.filter.clear')}
             </Button>
           )}
         </div>
@@ -508,11 +513,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       {selected.length > 0 && (
         <div
           role="region"
-          aria-label="Selected invoices"
+          aria-label={t('invoices.selection')}
           className="flex flex-wrap items-center gap-3 rounded-xl border border-outline-variant bg-surface-container px-4 py-3"
         >
           <span className="text-sm text-on-surface">
-            <span className="font-mono tabular-nums font-semibold">{selected.length}</span> selected
+            {t('invoices.selectedCount', { count: selected.length })}
           </span>
           {(['Processed', 'Completed'] as const).map((target) => {
             const eligible = selectedByTarget(target);
@@ -520,19 +525,19 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               eligible.length > 0 && (
                 <Button key={target} size="sm" loading={moving} onClick={() => moveTo(eligible, target)}>
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                  {PROCESSING_ACTION[target]} ({eligible.length})
+                  {t(PROCESSING_ACTION[target]!)} ({eligible.length})
                 </Button>
               )
             );
           })}
           <Button variant="ghost" size="sm" onClick={() => setRowSelection({})}>
-            Clear selection
+            {t('invoices.clearSelection')}
           </Button>
         </div>
       )}
 
       <Table
-        caption="Invoices"
+        caption={t('invoices.title')}
         footer={
           total > 0 && (
             <Pagination
@@ -540,7 +545,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               pageSize={pagination.pageSize}
               total={total}
               onPageChange={(p) => table.setPageIndex(p - 1)}
-              noun="invoices"
+              noun={t('invoices.noun')}
             />
           )
         }
@@ -567,7 +572,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         </thead>
         <TBody>
           {loading && rows.length === 0 ? (
-            <TableState kind="loading" colSpan={columns.length} title="Loading invoices..." />
+            <TableState kind="loading" colSpan={columns.length} title={t('invoices.loading')} />
           ) : loadError ? (
             <TableState
               kind="error"
@@ -575,7 +580,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               message={loadError}
               action={
                 <Button variant="secondary" size="sm" onClick={reload}>
-                  Retry
+                  {t('invoices.retry')}
                 </Button>
               }
             />
@@ -583,12 +588,12 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             <TableState
               kind="empty"
               colSpan={columns.length}
-              title={filtersActive ? 'No invoices match' : 'No invoices yet'}
-              message={filtersActive ? 'Try another month, client or status.' : undefined}
+              title={filtersActive ? t('invoices.noneMatch') : t('invoices.noneYet')}
+              message={filtersActive ? t('invoices.noneMatchHint') : undefined}
               action={
                 filtersActive && (
                   <Button variant="secondary" size="sm" onClick={clearFilters}>
-                    Clear filters
+                    {t('invoices.filter.clear')}
                   </Button>
                 )
               }
@@ -614,7 +619,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       <Dialog
         open={selectedInvoice !== null}
         onClose={() => setSelectedInvoice(null)}
-        title={`Invoice ${selectedInvoice?.reference ?? ''}`}
+        title={t('invoices.detail.title', { ref: selectedInvoice?.reference ?? '' })}
         size="xl"
         bodyClassName="overflow-auto p-6 bg-surface-container-low"
         headerActions={
@@ -631,14 +636,14 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 {isAdmin && (selectedInvoice.reviewStatus === 'Not submitted' || selectedInvoice.reviewStatus === 'Rejected') && (
                   <>
                     <Button variant="secondary" size="sm" onClick={() => setEditing(selectedInvoice)} disabled={reviewing}>
-                      <Pencil className="w-4 h-4" aria-hidden="true" /> Edit
+                      <Pencil className="w-4 h-4" aria-hidden="true" /> {t('invoices.edit')}
                     </Button>
                     <Button
                       size="sm"
                       loading={reviewing}
-                      onClick={() => runReview('submitted for verification', () => api.invoices.submit(selectedInvoice.id))}
+                      onClick={() => runReview('invoices.done.submitted', () => api.invoices.submit(selectedInvoice.id))}
                     >
-                      <Send className="w-4 h-4" aria-hidden="true" /> Submit for verification
+                      <Send className="w-4 h-4" aria-hidden="true" /> {t('invoices.submit')}
                     </Button>
                   </>
                 )}
@@ -646,17 +651,17 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 {isAccountant && selectedInvoice.reviewStatus === 'Submitted' && (
                   <>
                     <Button variant="secondary" size="sm" onClick={() => setRejecting(selectedInvoice)} disabled={reviewing}>
-                      <XCircle className="w-4 h-4" aria-hidden="true" /> Reject
+                      <XCircle className="w-4 h-4" aria-hidden="true" /> {t('invoices.reject')}
                     </Button>
                     <Button size="sm" loading={reviewing} onClick={() => approve(selectedInvoice)}>
-                      <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Approve
+                      <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> {t('invoices.approve')}
                     </Button>
                   </>
                 )}
                 {/* Once approved, the admin marks it sent. */}
                 {isAdmin && selectedInvoice.reviewStatus === 'Approved' && (
                   <Button size="sm" loading={reviewing} onClick={() => markSent(selectedInvoice)}>
-                    <Send className="w-4 h-4" aria-hidden="true" /> Mark as sent
+                    <Send className="w-4 h-4" aria-hidden="true" /> {t('invoices.markSent')}
                   </Button>
                 )}
               </>
@@ -666,7 +671,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             {selectedInvoice && (isAdmin || isAccountant)
               && (selectedInvoice.status === 'Sent' || selectedInvoice.status === 'Overdue') && (
               <Button size="sm" onClick={() => setPaying(selectedInvoice)} disabled={reviewing}>
-                <Banknote className="w-4 h-4" aria-hidden="true" /> Mark as paid
+                <Banknote className="w-4 h-4" aria-hidden="true" /> {t('invoices.markPaid')}
               </Button>
             )}
             {selectedInvoice && isAdmin && selectedInvoice.processingStatus !== 'Archived' && (
@@ -674,11 +679,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               || selectedInvoice.status === 'Sent' || selectedInvoice.status === 'Overdue'
             ) && (
               <Button variant="secondary" size="sm" onClick={() => setCancelling(selectedInvoice)} disabled={reviewing}>
-                <Ban className="w-4 h-4" aria-hidden="true" /> Cancel invoice
+                <Ban className="w-4 h-4" aria-hidden="true" /> {t('invoices.cancelInvoice')}
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={() => selectedInvoice && handleDownload(selectedInvoice)}>
-              <Download className="w-4 h-4" aria-hidden="true" /> Download
+              <Download className="w-4 h-4" aria-hidden="true" /> {t('invoices.download')}
             </Button>
           </>
         }
@@ -687,43 +692,43 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-6">
               <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
-                <h3 className="mb-4 text-sm font-semibold text-on-surface">Summary</h3>
+                <h3 className="mb-4 text-sm font-semibold text-on-surface">{t('invoices.summary')}</h3>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
-                  <dt className={DETAIL_LABEL}>Excl. VAT</dt>
+                  <dt className={DETAIL_LABEL}>{t('invoices.exclVat')}</dt>
                   <dd className="text-right font-mono tabular-nums text-on-surface">{formatCurrency(selectedInvoice.amountHT)}</dd>
-                  <dt className={DETAIL_LABEL}>VAT</dt>
+                  <dt className={DETAIL_LABEL}>{t('invoices.vat')}</dt>
                   <dd className="text-right font-mono tabular-nums text-on-surface">
                     {formatCurrency(selectedInvoice.amountTTC - selectedInvoice.amountHT)}
                   </dd>
-                  <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>Total incl. VAT</dt>
+                  <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>{t('invoices.inclVat')}</dt>
                   <dd className="border-t border-outline-variant pt-3 text-right font-mono text-base font-semibold tabular-nums text-on-surface">
                     {formatCurrency(selectedInvoice.amountTTC)}
                   </dd>
-                  <dt className={DETAIL_LABEL}>Issued</dt>
+                  <dt className={DETAIL_LABEL}>{t('invoices.issued')}</dt>
                   <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>
-                  <dt className={DETAIL_LABEL}>Due</dt>
+                  <dt className={DETAIL_LABEL}>{t('invoices.dueLabel')}</dt>
                   <dd className={`whitespace-nowrap text-right font-mono tabular-nums ${selectedInvoice.status === 'Overdue' ? 'font-semibold text-error' : 'text-on-surface'}`}>
                     {selectedInvoice.dueDate}
                   </dd>
-                  <dt className={DETAIL_LABEL}>Books</dt>
+                  <dt className={DETAIL_LABEL}>{t('invoices.books')}</dt>
                   <dd className="text-right"><ProcessingBadge status={selectedInvoice.processingStatus} /></dd>
                   {selectedInvoice.paidOn && (
                     <>
-                      <dt className={DETAIL_LABEL}>Paid</dt>
+                      <dt className={DETAIL_LABEL}>{t('invoices.paid')}</dt>
                       <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.paidOn}</dd>
                     </>
                   )}
                 </dl>
                 {selectedInvoice.status === 'Cancelled' && selectedInvoice.cancellationReason && (
                   <p className="mt-4 rounded-lg bg-surface-container px-3 py-2 text-sm text-on-surface-variant">
-                    <span className="font-semibold text-on-surface">Cancelled:</span> {selectedInvoice.cancellationReason}
+                    <span className="font-semibold text-on-surface">{t('invoices.cancelledPrefix')}</span> {selectedInvoice.cancellationReason}
                   </p>
                 )}
               </section>
 
               <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
                 <h3 className="mb-4 text-sm font-semibold text-on-surface">
-                  {selectedInvoice.direction === 'incoming' ? 'Supplier' : 'Client'}
+                  {t(selectedInvoice.direction === 'incoming' ? 'invoices.supplier' : 'invoices.client')}
                 </h3>
                 <div className="flex items-center gap-3">
                   <Avatar name={selectedInvoice.counterparty} shape="square" />
@@ -738,11 +743,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 </div>
                 {/* The address as stored, line breaks kept; nothing invented when it is missing. */}
                 <p className="mt-4 whitespace-pre-line border-t border-outline-variant pt-3 text-sm text-on-surface-variant">
-                  {selectedInvoice.counterpartyAddress || 'No address on file.'}
+                  {selectedInvoice.counterpartyAddress || t('invoices.noAddress')}
                 </p>
                 {selectedInvoice.supplierReference && (
                   <p className="mt-3 text-xs text-on-surface-variant">
-                    Supplier reference <span className="font-mono text-on-surface">{selectedInvoice.supplierReference}</span>
+                    {t('invoices.supplierReference')} <span className="font-mono text-on-surface">{selectedInvoice.supplierReference}</span>
                   </p>
                 )}
               </section>
@@ -766,7 +771,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             const updated = await api.invoices.reject(invoice.id, comment);
             setRejecting(null);
             setSelectedInvoice(updated);
-            showToast(`Invoice ${updated.reference} sent back to the admin.`);
+            showToast(t('invoices.done.rejected', { ref: updated.reference }));
             reload();
           }}
         />
@@ -780,7 +785,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             const updated = await api.invoices.pay(invoice.id, paidOn);
             setPaying(null);
             setSelectedInvoice(updated);
-            showToast(`Invoice ${updated.reference} marked as paid.`);
+            showToast(t('invoices.done.paid', { ref: updated.reference }));
             reload();
             onInvoiceCreated();
           }}
@@ -796,7 +801,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             setCancelling(null);
             setSelectedInvoice(updated);
             setPdfVersion((v) => v + 1);
-            showToast(`Invoice ${updated.reference} cancelled.`);
+            showToast(t('invoices.done.cancelled', { ref: updated.reference }));
             reload();
             onInvoiceCreated();
           }}
@@ -811,7 +816,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             setEditing(null);
             setSelectedInvoice(updated);
             setPdfVersion((v) => v + 1);
-            showToast(`Invoice ${updated.reference} updated.`);
+            showToast(t('invoices.done.updated', { ref: updated.reference }));
             reload();
           }}
         />
@@ -825,7 +830,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
           onClose={() => setIsNewInvoiceOpen(false)}
           onCreated={(created) => {
             setIsNewInvoiceOpen(false);
-            showToast(`Invoice ${created.reference} created as a draft.`);
+            showToast(t('invoices.done.created', { ref: created.reference }));
             reload();
             onInvoiceCreated();
           }}

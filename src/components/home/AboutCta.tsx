@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Reveal, useReducedMotion } from './motion';
+import { useT } from '../../i18n';
 
 const GRID: React.CSSProperties = {
   backgroundImage:
@@ -18,6 +19,7 @@ const finePointer = () => window.matchMedia('(hover: hover) and (pointer: fine)'
  * and focusable.
  */
 export default function AboutCta({ onStart }: { onStart: () => void }) {
+  const t = useT();
   const reduced = useReducedMotion();
   const button = useRef<HTMLButtonElement>(null);
 
@@ -42,13 +44,13 @@ export default function AboutCta({ onStart }: { onStart: () => void }) {
       <div className="relative mx-auto grid max-w-[1312px] grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] items-center gap-10 px-[clamp(20px,5vw,48px)] py-[clamp(80px,10vw,136px)]">
         <div className="flex flex-col gap-5">
           <Reveal as="p" className="m-0 font-mono text-caption leading-none font-semibold tracking-[0.18em] text-lime uppercase">
-            03 — About
+            {t('home.cta.eyebrow')}
           </Reveal>
           <Reveal as="h2" index={1} id="cta-title" className="m-0 max-w-[10.37em] text-home-closing font-bold text-balance">
-            Ready to transform your IT infrastructure?
+            {t('home.cta.title')}
           </Reveal>
           <Reveal as="p" index={2} className="m-0 max-w-[29.49em] text-home-lead text-paper/74">
-            Partner with DI Xpertia to bring modern, reliable technology to your organisation.
+            {t('home.cta.lead')}
           </Reveal>
         </div>
 
@@ -63,7 +65,7 @@ export default function AboutCta({ onStart }: { onStart: () => void }) {
             onClick={onStart}
             className="relative inline-flex h-[60px] cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-xl bg-lime px-8 text-[17px] font-semibold text-ink transition-[transform,background-color] duration-450 ease-home-magnet hover:bg-lime-hover"
           >
-            Get started today <span aria-hidden="true">→</span>
+            {t('home.cta.button')} <span aria-hidden="true">→</span>
           </button>
         </Reveal>
       </div>

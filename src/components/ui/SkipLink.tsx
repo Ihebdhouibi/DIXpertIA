@@ -1,3 +1,5 @@
+import { useT } from '../../i18n';
+
 /**
  * "Skip to content" (#31, WCAG 2.4.1): the first stop of the tab order, shown
  * only when focused. Without it a keyboard user crossed the whole sidebar,
@@ -7,6 +9,7 @@
  * change.
  */
 export default function SkipLink({ targetId = 'main-content' }: { targetId?: string }) {
+  const t = useT();
   return (
     <a
       href={`#${targetId}`}
@@ -19,7 +22,7 @@ export default function SkipLink({ targetId = 'main-content' }: { targetId?: str
       }}
       className="sr-only rounded-lg bg-primary text-sm font-semibold text-on-primary shadow-lg focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5"
     >
-      Skip to content
+      {t('common.skipToContent')}
     </a>
   );
 }

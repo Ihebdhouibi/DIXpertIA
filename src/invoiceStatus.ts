@@ -1,3 +1,4 @@
+import type { MessageKey } from './i18n';
 import type { Invoice } from './types';
 
 /**
@@ -21,11 +22,11 @@ export const REVIEW_TO_API: Record<ReviewStatus, string> = {
   Rejected: 'rejected',
 };
 /** How each review state reads in the UI: "Submitted" is the accountant's "to verify". */
-export const REVIEW_LABEL: Record<ReviewStatus, string> = {
-  'Not submitted': 'Draft',
-  Submitted: 'To verify',
-  Approved: 'Approved',
-  Rejected: 'Rejected',
+export const REVIEW_LABEL: Record<ReviewStatus, MessageKey> = {
+  'Not submitted': 'common.status.Draft',
+  Submitted: 'common.status.To verify',
+  Approved: 'common.status.Approved',
+  Rejected: 'invoices.review.rejected',
 };
 
 /**
@@ -62,13 +63,13 @@ export function nextProcessingStatus(status: ProcessingStatus): ProcessingStatus
 }
 
 /** The label of the action that moves an invoice to `status`. */
-export const PROCESSING_ACTION: Partial<Record<ProcessingStatus, string>> = {
-  Processed: 'Mark processed',
-  Completed: 'Mark completed',
+export const PROCESSING_ACTION: Partial<Record<ProcessingStatus, MessageKey>> = {
+  Processed: 'invoices.action.markProcessed',
+  Completed: 'invoices.action.markCompleted',
 };
 
 /** The same action, shortened for the row button where width is scarce. */
-export const PROCESSING_ACTION_SHORT: Partial<Record<ProcessingStatus, string>> = {
-  Processed: 'Process',
-  Completed: 'Complete',
+export const PROCESSING_ACTION_SHORT: Partial<Record<ProcessingStatus, MessageKey>> = {
+  Processed: 'invoices.action.process',
+  Completed: 'invoices.action.complete',
 };

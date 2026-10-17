@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { Input } from './Field';
+import { useT } from '../../i18n';
 
 /**
  * Controls around a table (#28). All controlled - `value` / `onChange`, no
@@ -101,11 +102,12 @@ interface PaginationProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
-  /** What is being counted, e.g. "invoices". */
+  /** What is being counted, e.g. "invoices", already translated. Defaults to "results". */
   noun?: string;
 }
 
-export function Pagination({ page, pageSize, total, onPageChange, noun = 'results' }: PaginationProps) {
+export function Pagination({ page, pageSize, total, onPageChange, noun }: PaginationProps) {
+  const t = useT();
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
@@ -114,14 +116,15 @@ export function Pagination({ page, pageSize, total, onPageChange, noun = 'result
 
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={t('common.pagination.label')}
       className="flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant px-5 py-3"
     >
       <p className="text-sm text-on-surface-variant">
         <span className="font-mono tabular-nums text-on-surface">
           {first}-{last}
         </span>{' '}
-        of <span className="font-mono tabular-nums text-on-surface">{total}</span> {noun}
+        {t('common.pagination.of')} <span className="font-mono tabular-nums text-on-surface">{total}</span>{' '}
+        {noun ?? t('common.pagination.results')}
       </p>
       <div className="flex items-center gap-1">
         <button
@@ -129,7 +132,7 @@ export function Pagination({ page, pageSize, total, onPageChange, noun = 'result
           className={`${button} text-on-surface-variant hover:bg-surface-container`}
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          aria-label="Previous page"
+          aria-label={t('common.pagination.previous')}
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -139,7 +142,7 @@ export function Pagination({ page, pageSize, total, onPageChange, noun = 'result
             type="button"
             onClick={() => onPageChange(n)}
             aria-current={n === page ? 'page' : undefined}
-            aria-label={`Page ${n}`}
+            aria-label={t('common.pagination.page', { n })}
             className={`${button} ${
               n === page ? 'bg-primary text-on-primary' : 'text-on-surface hover:bg-surface-container'
             }`}
@@ -152,7 +155,7 @@ export function Pagination({ page, pageSize, total, onPageChange, noun = 'result
           className={`${button} text-on-surface-variant hover:bg-surface-container`}
           onClick={() => onPageChange(page + 1)}
           disabled={page >= pages}
-          aria-label="Next page"
+          aria-label={t('common.pagination.next')}
         >
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>

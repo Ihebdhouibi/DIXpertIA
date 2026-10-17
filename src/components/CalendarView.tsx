@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, dateFnsLocalizer, Views, View } from 'react-big-calendar';
+import { Calendar, dateFnsLocalizer, Views, View, type Messages } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
-import { enUS } from 'date-fns/locale';
+import { enUS, fr } from 'date-fns/locale';
 import { LeaveRequest, UserRole } from '../types';
 import StatusBadge, { statusTone } from './StatusBadge';
 import Dialog from './ui/Dialog';
+import { labelOf, useLocale, useT } from '../i18n';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 // Brand and theme overrides for the library's colours; must load after it (#79).
 import '../styles/calendar.css';
 
-const locales = { 'en-US': enUS };
+// Keyed by the app's languages: the calendar's `culture` is useLocale().
+const locales = { fr, en: enUS };
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -50,6 +52,24 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
   // Next, Week and Day did nothing and the calendar stayed on this month (#79).
   const [view, setView] = useState<View>(Views.MONTH);
   const [date, setDate] = useState(() => new Date());
+  const t = useT();
+  const locale = useLocale();
+
+  const messages: Messages<CalendarEvent> = {
+    today: t('people.calendar.today'),
+    previous: t('people.calendar.previous'),
+    next: t('people.calendar.next'),
+    month: t('people.calendar.month'),
+    week: t('people.calendar.week'),
+    day: t('people.calendar.day'),
+    agenda: t('people.calendar.agenda'),
+    date: t('people.calendar.date'),
+    time: t('people.calendar.time'),
+    event: t('people.calendar.event'),
+    allDay: t('people.calendar.allDay'),
+    noEventsInRange: t('people.calendar.noEvents'),
+    showMore: (count) => t('people.calendar.showMore', { count }),
+  };
 
   const events = useMemo(() => {
     let filtered = leaveRequests;
@@ -76,7 +96,7 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
           id: req.id,
           // The status in words as well as in colour (#31, WCAG 1.4.1): a hover
           // tooltip alone reached neither keyboard, touch nor colour-blind users.
-          title: `${req.employeeName} - ${req.type} · ${req.status}`,
+          title: `${req.employeeName} - ${labelOf(t, 'common.leaveType', req.type)} · ${labelOf(t, 'common.status', req.status)}`,
           start,
           end,
           allDay: true,
@@ -85,7 +105,9 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
         };
       })
       .filter((event): event is CalendarEvent => event !== null);
-  }, [leaveRequests, userRole, currentEmployeeId]);
+    // t changes with the language; `locale` stands for it in the dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaveRequests, userRole, currentEmployeeId, locale]);
 
   // Same tones as the status badges, as theme variables so events follow
   // light and dark. Tint fill with tone text and a tone edge: AA in both themes.
@@ -109,9 +131,11 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
   const handleSelectEvent = (event: CalendarEvent) => setSelected(event.resource);
 
   return (
-    <Dialog open onClose={onClose} title="Leave calendar" size="full" bodyClassName="p-4 overflow-auto">
+    <Dialog open onClose={onClose} title={t('people.calendar.title')} size="full" bodyClassName="p-4 overflow-auto">
       <Calendar
         localizer={localizer}
+        culture={locale}
+        messages={messages}
         events={events}
         startAccessor="start"
         endAccessor="end"
@@ -124,28 +148,33 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
         eventPropGetter={eventStyleGetter}
         onSelectEvent={handleSelectEvent}
         tooltipAccessor={(event) =>
-          `${event.resource.employeeName}\n${event.resource.type}\n${event.resource.dates}\nStatus: ${event.resource.status}`
+          [
+            event.resource.employeeName,
+            labelOf(t, 'common.leaveType', event.resource.type),
+            event.resource.dates,
+            t('people.calendar.statusLine', { status: labelOf(t, 'common.status', event.resource.status) }),
+          ].join('\n')
         }
       />
 
       <Dialog
         open={selected !== null}
         onClose={() => setSelected(null)}
-        title={selected ? `${selected.employeeName} - ${selected.type}` : ''}
+        title={selected ? `${selected.employeeName} - ${labelOf(t, 'common.leaveType', selected.type)}` : ''}
         size="sm"
         headerActions={selected && <StatusBadge status={selected.status} />}
       >
         {selected && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Dates</dt>
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">{t('people.col.dates')}</dt>
             <dd className="font-mono">{selected.dates}</dd>
-            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Duration</dt>
-            <dd className="font-mono">{selected.duration} day{selected.duration === 1 ? '' : 's'}</dd>
-            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Reason</dt>
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">{t('people.col.duration')}</dt>
+            <dd className="font-mono">{t('people.days', { count: selected.duration })}</dd>
+            <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">{t('people.col.reason')}</dt>
             <dd>{selected.reason || '-'}</dd>
             {selected.rejectionReason && (
               <>
-                <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">Rejected</dt>
+                <dt className="font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant pt-0.5">{t('people.calendar.rejected')}</dt>
                 <dd>{selected.rejectionReason}</dd>
               </>
             )}

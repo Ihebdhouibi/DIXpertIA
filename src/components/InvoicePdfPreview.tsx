@@ -3,6 +3,7 @@ import { ExternalLink, FileWarning, Loader2 } from 'lucide-react';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import * as api from '../api';
 import Button from './ui/Button';
+import { useT } from '../i18n';
 
 interface InvoicePdfPreviewProps {
   invoiceId: string;
@@ -33,6 +34,7 @@ async function loadPdfJs() {
  * still opens the file itself, for zoom, search, print or copy.
  */
 export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: InvoicePdfPreviewProps) {
+  const t = useT();
   const [url, setUrl] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [rendered, setRendered] = useState(false);
@@ -69,7 +71,7 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
         docRef.current = doc;
         setPageCount(doc.numPages);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the PDF.');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('invoices.pdf.couldNotLoad'));
       }
     })();
     return () => {
@@ -119,7 +121,7 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
       } catch (err) {
         // A redraw cancels the previous one; only a real failure is shown.
         if ((err as { name?: string })?.name !== 'RenderingCancelledException') {
-          setError(err instanceof Error ? err.message : 'Could not draw the PDF.');
+          setError(err instanceof Error ? err.message : t('invoices.pdf.couldNotDraw'));
         }
       }
     };
@@ -147,7 +149,7 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
     <div className="flex h-full min-h-[60vh] flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
       <div className="flex items-center justify-between gap-3 border-b border-outline-variant px-4 py-2.5">
         <span className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-on-surface-variant">
-          Document sent to the client
+          {t('invoices.pdf.heading')}
         </span>
         {url && (
           <a
@@ -156,7 +158,7 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded text-xs font-semibold text-on-surface-variant hover:text-on-surface"
           >
-            Open PDF <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('invoices.pdf.open')} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         )}
       </div>
@@ -168,7 +170,7 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
                 key={i}
                 ref={(el) => { canvasRefs.current[i] = el; }}
                 role="img"
-                aria-label={`Invoice ${label}, page ${i + 1} of ${pageCount}`}
+                aria-label={t('invoices.pdf.page', { ref: label, page: i + 1, count: pageCount })}
                 className="shadow-md"
               />
             ))}
@@ -176,16 +178,16 @@ export default function InvoicePdfPreview({ invoiceId, label, version = 0 }: Inv
         )}
         {loading && (
           <p role="status" className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-on-surface-variant">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading the PDF…
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('invoices.pdf.loading')}
           </p>
         )}
         {error && (
           <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
             <FileWarning className="h-6 w-6 text-error" aria-hidden="true" />
-            <p className="text-sm font-semibold text-on-surface">The PDF could not be generated.</p>
+            <p className="text-sm font-semibold text-on-surface">{t('invoices.pdf.failed')}</p>
             <p className="max-w-sm text-sm text-on-surface-variant">{error}</p>
             <Button variant="secondary" size="sm" onClick={retry}>
-              Retry
+              {t('invoices.retry')}
             </Button>
           </div>
         )}

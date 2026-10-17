@@ -1,5 +1,5 @@
 import React from 'react';
-import { labelOf, useT } from '../i18n';
+import { labelOf, useT, type MessageKey } from '../i18n';
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -90,14 +90,16 @@ export function ProcessingBadge({ status, className = '' }: { status: Processing
 // where it stands in review: "To verify" is the accountant's queue.
 export type ReviewStatus = 'Not submitted' | 'Submitted' | 'Approved' | 'Rejected';
 
-const REVIEW_TONES: Record<ReviewStatus, { tone: StatusTone; label: string }> = {
-  'Not submitted': { tone: 'neutral', label: 'Draft' },
-  Submitted: { tone: 'info', label: 'To verify' },
-  Approved: { tone: 'success', label: 'Approved' },
-  Rejected: { tone: 'danger', label: 'Rejected' },
+const REVIEW_TONES: Record<ReviewStatus, { tone: StatusTone; label: MessageKey }> = {
+  'Not submitted': { tone: 'neutral', label: 'common.status.Draft' },
+  Submitted: { tone: 'info', label: 'common.status.To verify' },
+  Approved: { tone: 'success', label: 'common.status.Approved' },
+  Rejected: { tone: 'danger', label: 'invoices.review.rejected' },
 };
 
 export function ReviewBadge({ status, className = '' }: { status: ReviewStatus; className?: string }) {
+  const t = useT();
   const { tone, label } = REVIEW_TONES[status];
-  return <StatusBadge status={label} tone={tone} className={className} />;
+  // Already translated; StatusBadge shows a label it has no entry for as it is.
+  return <StatusBadge status={t(label)} tone={tone} className={className} />;
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { LogOut, X } from 'lucide-react';
 import { User } from '../types';
 import { navItemsFor, ROLE_LABEL } from '../navigation';
+import { useT } from '../i18n';
 import Wordmark from './ui/Wordmark';
 import { wrapTab } from './ui/Dialog';
 
@@ -33,6 +34,7 @@ export default function Sidebar({
   setIsOpenMobile,
   onGoHome,
 }: SidebarProps) {
+  const t = useT();
   const navItems = navItemsFor(currentUser.role);
   const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || ''}`;
 
@@ -70,12 +72,12 @@ export default function Sidebar({
             {currentUser.firstName} {currentUser.lastName}
           </p>
           <p className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant">
-            {ROLE_LABEL[currentUser.role]}
+            {t(ROLE_LABEL[currentUser.role])}
           </p>
         </div>
       </div>
 
-      <nav aria-label="Main" className="flex flex-1 flex-col gap-1">
+      <nav aria-label={t('common.nav.main')} className="flex flex-1 flex-col gap-1">
         {navItems.map(({ id, label, icon: Icon, isHome }) => {
           const active = !isHome && activeTab === id;
           return (
@@ -99,7 +101,7 @@ export default function Sidebar({
                 <span aria-hidden="true" className="absolute left-0 top-1/2 h-5 w-1.5 -translate-y-1/2 rounded-sm bg-secondary" />
               )}
               <Icon className={`h-5 w-5 shrink-0 ${active ? '' : 'text-on-surface-variant'}`} aria-hidden="true" />
-              <span className="truncate">{label}</span>
+              <span className="truncate">{t(label)}</span>
             </button>
           );
         })}
@@ -112,7 +114,7 @@ export default function Sidebar({
           className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-semibold text-error transition-colors hover:bg-error-container cursor-pointer"
         >
           <LogOut className="h-5 w-5" aria-hidden="true" />
-          Sign out
+          {t('common.signOut')}
         </button>
       </div>
     </div>
@@ -134,6 +136,7 @@ export default function Sidebar({
  * Escape and a scrim click close it, and focus returns to the menu button.
  */
 function MobileDrawer({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -146,7 +149,7 @@ function MobileDrawer({ open, onClose, children }: { open: boolean; onClose: () 
   return (
     <dialog
       ref={ref}
-      aria-label="Navigation"
+      aria-label={t('common.nav.navigation')}
       onCancel={(e) => {
         if (e.target !== e.currentTarget) return;
         e.preventDefault();
@@ -163,7 +166,7 @@ function MobileDrawer({ open, onClose, children }: { open: boolean; onClose: () 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close navigation"
+            aria-label={t('common.nav.close')}
             className="absolute right-3 top-4 z-10 rounded-lg p-2 text-on-surface-variant hover:bg-surface-container cursor-pointer"
           >
             <X className="h-5 w-5" aria-hidden="true" />

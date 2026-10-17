@@ -1,67 +1,39 @@
 import React, { useRef, useState } from 'react';
 import { Reveal, useReducedMotion } from './motion';
 import { SectionHeading } from './Services';
+import { useT, type MessageKey } from '../../i18n';
 
 /** Who leads a phase: 0 your team, 0.5 joint, 1 DI Xpertia. */
 type Lead = 0 | 0.5 | 1;
-const LEAD_LABEL: Record<Lead, string> = { 0: 'your team', 0.5: 'joint', 1: 'DI Xpertia' };
+const LEAD_LABEL: Record<Lead, MessageKey> = {
+  0: 'home.engage.lead.team',
+  0.5: 'home.engage.lead.joint',
+  1: 'home.engage.lead.us',
+};
 
+type Phase = 'scope' | 'build' | 'launch' | 'run';
+const PHASE_LABEL: Record<Phase, MessageKey> = {
+  scope: 'home.engage.phase.scope',
+  build: 'home.engage.phase.build',
+  launch: 'home.engage.phase.launch',
+  run: 'home.engage.phase.run',
+};
+
+/** Each model's words live under home.engage.<id>.* in ../../i18n/messages/home.ts. */
 const MODELS: {
   n: string;
-  name: string;
-  headline: string;
-  desc: string;
-  items: string[];
-  fit: string;
-  footnote: string;
-  phases: [string, Lead][];
+  id: 'project' | 'extension' | 'managed';
+  phases: [Phase, Lead][];
 }[] = [
-  {
-    n: '01',
-    name: 'Project delivery',
-    headline: 'You define the outcome. We deliver it, end to end.',
-    desc: 'A fixed scope, a dedicated team and a clear timeline. We handle architecture, build, security and launch, then hand over a documented system you fully own.',
-    items: [
-      'Scoping workshop and written specification',
-      'Dedicated team with a single technical lead',
-      'Security reviewed before every release',
-      'Full documentation and handover — the code is yours',
-    ],
-    fit: 'A new platform, a migration or a well-defined product.',
-    footnote: 'We lead delivery; you validate at each milestone.',
-    phases: [['Scope', 0.5], ['Build', 1], ['Launch', 1], ['Run', 0]],
-  },
-  {
-    n: '02',
-    name: 'Team extension',
-    headline: 'Senior engineers, embedded in your team.',
-    desc: 'Your roadmap, your rituals, your tools. Our engineers join your team to add capacity or expertise you don’t have in-house — cloud, security or software.',
-    items: [
-      'Engineers matched to your stack and seniority needs',
-      'Work inside your tools, sprints and code review',
-      'Knowledge transfer built into the engagement',
-      'Scale up or down as your roadmap changes',
-    ],
-    fit: 'Teams that need to move faster without hiring.',
-    footnote: 'You lead the roadmap; we strengthen execution.',
-    phases: [['Scope', 0], ['Build', 0.5], ['Launch', 0.5], ['Run', 0]],
-  },
-  {
-    n: '03',
-    name: 'Managed operations',
-    headline: 'We run it, so your team can build.',
-    desc: 'Ongoing operation of your cloud and applications: monitoring, updates, security patches and incident response, with regular reporting on what we did and why.',
-    items: [
-      'Monitoring and alerting across your systems',
-      'Security patching and access reviews',
-      'Incident response and post-incident reports',
-      'Regular reviews of cost, risk and performance',
-    ],
-    fit: 'Systems that must stay up, secure and up to date.',
-    footnote: 'We run day to day; you keep full visibility and control.',
-    phases: [['Scope', 0.5], ['Build', 0.5], ['Launch', 1], ['Run', 1]],
-  },
+  { n: '01', id: 'project', phases: [['scope', 0.5], ['build', 1], ['launch', 1], ['run', 0]] },
+  { n: '02', id: 'extension', phases: [['scope', 0], ['build', 0.5], ['launch', 0.5], ['run', 0]] },
+  { n: '03', id: 'managed', phases: [['scope', 0.5], ['build', 0.5], ['launch', 1], ['run', 1]] },
 ];
+
+const ITEMS = ['item1', 'item2', 'item3', 'item4'] as const;
+type ModelText = 'name' | 'headline' | 'desc' | 'fit' | 'footnote' | (typeof ITEMS)[number];
+/** Typed: every model x part combination must exist in the catalog, or tsc fails. */
+const textKey = (id: (typeof MODELS)[number]['id'], part: ModelText): MessageKey => `home.engage.${id}.${part}` as const;
 
 const tabId = (i: number) => `engage-tab-${i}`;
 
@@ -73,11 +45,13 @@ const tabId = (i: number) => `engage-tab-${i}`;
  * motion.
  */
 export default function Engagement() {
+  const t = useT();
   const [active, setActive] = useState(0);
   const reduced = useReducedMotion();
   const panel = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const model = MODELS[active];
+  const text = (part: ModelText) => t(textKey(model.id, part));
 
   const select = (i: number, focus = false) => {
     if (focus) tabs.current[i]?.focus();
@@ -111,16 +85,16 @@ export default function Engagement() {
     <section id="engage" aria-labelledby="engage-title" className="border-y border-home-fg/10 bg-home-surface">
       <div className="mx-auto flex max-w-[1312px] flex-col gap-[clamp(32px,4vw,48px)] px-[clamp(20px,5vw,48px)] py-[clamp(72px,9vw,120px)]">
         <SectionHeading
-          eyebrow="02 — Engagement"
-          title="Ways to work with us"
+          eyebrow={t('home.engage.eyebrow')}
+          title={t('home.engage.title')}
           id="engage-title"
-          note="Choose how involved you want to be. We adapt the model, not the standard."
+          note={t('home.engage.note')}
         />
 
         <Reveal index={1}>
           <div
             role="tablist"
-            aria-label="Engagement models"
+            aria-label={t('home.engage.tablist')}
             onKeyDown={onKeyDown}
             className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2 rounded-[14px] border border-home-fg/10 bg-home-bg p-1.5"
           >
@@ -146,7 +120,7 @@ export default function Engagement() {
                   <span className={`font-mono text-caption leading-none font-medium ${selected ? 'text-home-tab-number' : 'text-home-accent-text'}`}>
                     {m.n}
                   </span>
-                  {m.name}
+                  {t(textKey(m.id, 'name'))}
                 </button>
               );
             })}
@@ -161,31 +135,33 @@ export default function Engagement() {
           className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] items-start gap-[clamp(28px,4vw,64px)]"
         >
           <div className="flex flex-col gap-[22px]">
-            <h3 className="m-0 text-home-subhead font-semibold text-balance">{model.headline}</h3>
-            <p className="m-0 max-w-[33.33em] text-[17px] leading-[1.6] text-pretty text-home-fg/72">{model.desc}</p>
+            <h3 className="m-0 text-home-subhead font-semibold text-balance">{text('headline')}</h3>
+            <p className="m-0 max-w-[33.33em] text-[17px] leading-[1.6] text-pretty text-home-fg/72">{text('desc')}</p>
             <ul className="m-0 flex list-none flex-col border-t border-home-fg/14 p-0">
-              {model.items.map((item) => (
+              {ITEMS.map((item) => (
                 <li key={item} className="flex items-baseline gap-3.5 border-b border-home-fg/10 py-3.5 text-[15px] leading-[1.5]">
                   <span aria-hidden="true" className="h-2.5 w-1.5 flex-none -translate-y-px rounded-[1px] bg-home-accent-text" />
-                  {item}
+                  {text(item)}
                 </li>
               ))}
             </ul>
             <p className="m-0 font-mono text-caption leading-[1.6] font-medium tracking-[0.06em] text-home-fg/70">
-              <span className="tracking-[0.16em] text-home-accent-text">BEST FOR → </span>
-              {model.fit}
+              <span className="tracking-[0.16em] text-home-accent-text">{t('home.engage.bestFor')}</span>
+              {text('fit')}
             </p>
           </div>
 
           <div
             role="img"
-            aria-label={`Who leads each phase in ${model.name}: ${model.phases
-              .map(([phase, lead]) => `${phase}, ${LEAD_LABEL[lead]}`)
-              .join('; ')}. ${model.footnote}`}
+            aria-label={t('home.engage.chartLabel', {
+              model: text('name'),
+              phases: model.phases.map(([phase, lead]) => `${t(PHASE_LABEL[phase])}, ${t(LEAD_LABEL[lead])}`).join('; '),
+              footnote: text('footnote'),
+            })}
             className="flex flex-col gap-5 rounded-2xl border border-home-panel-border bg-home-panel p-6 text-paper"
           >
             <div className="flex justify-between gap-3 font-mono text-home-meta leading-none font-medium tracking-[0.14em] text-paper/60 uppercase">
-              <span>Who leads each phase</span>
+              <span>{t('home.engage.whoLeads')}</span>
               <span className="flex gap-3.5">
                 <span className="flex items-center gap-1.5">
                   <span className="size-2.5 rounded-[2px] bg-lime" />
@@ -193,14 +169,14 @@ export default function Engagement() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="size-2.5 rounded-[2px] border border-paper/60" />
-                  Your team
+                  {t('home.engage.legendTeam')}
                 </span>
               </span>
             </div>
             <div className="flex flex-col gap-3.5">
               {model.phases.map(([phase, lead]) => (
                 <div key={phase} className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3.5 font-mono text-caption leading-none font-medium">
-                  <span className="tracking-[0.12em] uppercase">{phase}</span>
+                  <span className="tracking-[0.12em] uppercase">{t(PHASE_LABEL[phase])}</span>
                   <span className="relative h-7 overflow-hidden rounded-md border border-paper/22">
                     <span
                       className="absolute inset-0 origin-left bg-lime transition-transform duration-700 ease-home-out"
@@ -208,13 +184,13 @@ export default function Engagement() {
                     />
                     {/* Ink on lime, paper on the empty bar: each label stays AA. */}
                     <span className={`absolute inset-0 flex items-center px-2.5 text-home-meta leading-none ${lead > 0 ? 'text-ink' : 'text-paper'}`}>
-                      {LEAD_LABEL[lead]}
+                      {t(LEAD_LABEL[lead])}
                     </span>
                   </span>
                 </div>
               ))}
             </div>
-            <p className="m-0 border-t border-paper/10 pt-3.5 text-[13px] leading-[1.5] text-paper/72">{model.footnote}</p>
+            <p className="m-0 border-t border-paper/10 pt-3.5 text-[13px] leading-[1.5] text-paper/72">{text('footnote')}</p>
           </div>
         </div>
       </div>

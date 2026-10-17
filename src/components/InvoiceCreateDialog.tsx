@@ -4,6 +4,7 @@ import type { Client, Invoice } from '../types';
 import Button from './ui/Button';
 import Dialog from './ui/Dialog';
 import { Field, FormAlert, Input, Select } from './ui/Field';
+import { useT } from '../i18n';
 import {
   InvoiceLinesEditor,
   InvoiceLinesTotals,
@@ -47,6 +48,7 @@ interface InvoiceCreateDialogProps {
  * and the Idempotency-Key makes a double submission create one invoice only.
  */
 export default function InvoiceCreateDialog({ open, clients, onClose, onCreated }: InvoiceCreateDialogProps) {
+  const t = useT();
   const [clientId, setClientId] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [dueDate, setDueDate] = useState('');
@@ -69,11 +71,11 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
     e.preventDefault();
     if (saving) return;
     const problem = !clientId
-      ? 'Choose a client.'
+      ? t('invoices.error.chooseClient')
       : !dueDate
-        ? 'Choose a due date.'
+        ? t('invoices.error.chooseDueDate')
         : dueDate < today()
-          ? 'The due date cannot be in the past.'
+          ? t('invoices.error.dueInPast')
           : problemWithLines(lines);
     if (problem) {
       setError(problem);
@@ -89,7 +91,7 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
       onCreated(invoice);
     } catch (err) {
       // The entry stays as typed; the server's own words say what to fix.
-      setError(err instanceof Error ? err.message : 'Could not create the invoice.');
+      setError(err instanceof Error ? err.message : t('invoices.create.failed'));
     } finally {
       setSaving(false);
     }
@@ -99,16 +101,16 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
     <Dialog
       open={open}
       onClose={() => { if (!saving) onClose(); }}
-      title="Create new invoice"
-      description="Created as a draft. The number and the issue date are assigned by the server."
+      title={t('invoices.create.title')}
+      description={t('invoices.create.description')}
       size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('invoices.cancel')}
           </Button>
           <Button type="submit" form="new-invoice-form" loading={saving}>
-            Create invoice
+            {t('invoices.create.submit')}
           </Button>
         </>
       }
@@ -121,12 +123,12 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
           that does not belong to anybody.
         */}
         <Field
-          label="Client"
-          hint={clients.length === 0 ? 'No clients yet. Add one before issuing an invoice.' : undefined}
+          label={t('invoices.client')}
+          hint={clients.length === 0 ? t('invoices.create.noClients') : undefined}
         >
           {({ id, describedBy }) => (
             <Select id={id} aria-describedby={describedBy} required value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Choose a client</option>
+              <option value="">{t('invoices.create.chooseClient')}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.nom}</option>
               ))}
@@ -134,7 +136,7 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
           )}
         </Field>
         <InvoiceLinesEditor lines={lines} onChange={setLines} />
-        <Field label="Due date">
+        <Field label={t('invoices.dueDate')}>
           {({ id }) => (
             <Input id={id} type="date" required min={today()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           )}

@@ -3,6 +3,7 @@ import type { Invoice } from '../types';
 import Button from './ui/Button';
 import Dialog from './ui/Dialog';
 import { Field, FormAlert, Input, Textarea } from './ui/Field';
+import { useT } from '../i18n';
 
 /**
  * Marking an invoice paid, and cancelling one (#126). Each sends one request
@@ -23,6 +24,7 @@ interface PayInvoiceDialogProps {
 
 /** Paid in full on a date: not in the future, not before the issue date. */
 export function PayInvoiceDialog({ invoice, onClose, onPay }: PayInvoiceDialogProps) {
+  const t = useT();
   const [paidOn, setPaidOn] = useState(today());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,7 @@ export function PayInvoiceDialog({ invoice, onClose, onPay }: PayInvoiceDialogPr
     e.preventDefault();
     if (!invoice) return;
     if (!paidOn) {
-      setError('Enter the date the payment arrived.');
+      setError(t('invoices.pay.required'));
       return;
     }
     setSaving(true);
@@ -46,7 +48,7 @@ export function PayInvoiceDialog({ invoice, onClose, onPay }: PayInvoiceDialogPr
     try {
       await onPay(invoice, paidOn);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not record the payment.');
+      setError(err instanceof Error ? err.message : t('invoices.pay.failed'));
     } finally {
       setSaving(false);
     }
@@ -56,22 +58,22 @@ export function PayInvoiceDialog({ invoice, onClose, onPay }: PayInvoiceDialogPr
     <Dialog
       open={invoice !== null}
       onClose={() => { if (!saving) onClose(); }}
-      title={`Mark ${invoice?.reference ?? ''} as paid`}
-      description="Paid in full on the date below. This cannot be undone."
+      title={t('invoices.pay.title', { ref: invoice?.reference ?? '' })}
+      description={t('invoices.pay.description')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('invoices.cancel')}
           </Button>
           <Button type="submit" form="pay-invoice-form" loading={saving}>
-            Mark as paid
+            {t('invoices.markPaid')}
           </Button>
         </>
       }
     >
       <form id="pay-invoice-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
-        <Field label="Payment date" hint={invoice?.dateIssuedIso ? `Between the issue date and today.` : undefined}>
+        <Field label={t('invoices.pay.date')} hint={invoice?.dateIssuedIso ? t('invoices.pay.dateHint') : undefined}>
           {({ id, describedBy }) => (
             <Input
               id={id}
@@ -99,6 +101,7 @@ interface CancelInvoiceDialogProps {
 
 /** The admin cancels with a mandatory reason. A numbered invoice keeps its number. */
 export function CancelInvoiceDialog({ invoice, onClose, onCancelInvoice }: CancelInvoiceDialogProps) {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -114,7 +117,7 @@ export function CancelInvoiceDialog({ invoice, onClose, onCancelInvoice }: Cance
     e.preventDefault();
     if (!invoice) return;
     if (!reason.trim()) {
-      setError('Say why the invoice is cancelled.');
+      setError(t('invoices.cancel.required'));
       return;
     }
     setSaving(true);
@@ -122,7 +125,7 @@ export function CancelInvoiceDialog({ invoice, onClose, onCancelInvoice }: Cance
     try {
       await onCancelInvoice(invoice, reason.trim());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not cancel the invoice.');
+      setError(err instanceof Error ? err.message : t('invoices.cancel.failed'));
     } finally {
       setSaving(false);
     }
@@ -133,24 +136,24 @@ export function CancelInvoiceDialog({ invoice, onClose, onCancelInvoice }: Cance
     <Dialog
       open={invoice !== null}
       onClose={() => { if (!saving) onClose(); }}
-      title={`Cancel ${invoice?.reference ?? ''}`}
+      title={t('invoices.cancel.title', { ref: invoice?.reference ?? '' })}
       description={numbered
-        ? 'It keeps its number in the series, marked cancelled. The accountants are told, to book a credit note. This cannot be undone.'
-        : 'The draft has no legal number, so nothing is left in the series. This cannot be undone.'}
+        ? t('invoices.cancel.numbered')
+        : t('invoices.cancel.draft')}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Keep it
+            {t('invoices.cancel.keep')}
           </Button>
           <Button variant="danger" type="submit" form="cancel-invoice-form" loading={saving}>
-            Cancel invoice
+            {t('invoices.cancelInvoice')}
           </Button>
         </>
       }
     >
       <form id="cancel-invoice-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
-        <Field label="Reason">
+        <Field label={t('invoices.cancel.reason')}>
           {({ id }) => (
             <Textarea
               id={id}
@@ -158,7 +161,7 @@ export function CancelInvoiceDialog({ invoice, onClose, onCancelInvoice }: Cance
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. The client withdrew the order."
+              placeholder={t('invoices.cancel.placeholder')}
             />
           )}
         </Field>

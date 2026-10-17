@@ -8,6 +8,7 @@ import { ApiError, contact } from '../api';
 import AboutCta from './home/AboutCta';
 import HomeFooter from './home/HomeFooter';
 import SkipLink from './ui/SkipLink';
+import { useT, type MessageKey } from '../i18n';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle, ArrowLeft
@@ -24,30 +25,21 @@ type Page = HomeTarget;
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
-// FAQ data. Worded without guarantees the company has not committed to: no
-// response times, no 24/7 line, no certification (#98).
-const faqData = [
-  {
-    question: 'What types of cloud services do you offer?',
-    answer: 'We provide IaaS, PaaS, and SaaS solutions with a multi-cloud architecture (AWS, Azure, GCP) for optimal scalability.'
-  },
-  {
-    question: 'How do you ensure the security of our data?',
-    answer: 'We follow recognised security practices, such as those of ISO 27001, with regular reviews and encryption of your data.'
-  },
-  {
-    question: 'What is your average support response time?',
-    answer: 'We aim to reply quickly, usually within one business day, and we prioritise critical incidents.'
-  },
-  {
-    question: 'Can we migrate an existing infrastructure without service interruption?',
-    answer: 'In most cases, yes: we plan phased migrations with failover testing to keep your services running.'
-  },
-  {
-    question: 'How does your service pricing estimation work?',
-    answer: 'We conduct a preliminary audit of your needs, then provide a detailed quote with no obligation.'
-  }
+// FAQ entries (question and answer keys). Worded without guarantees the
+// company has not committed to: no response times, no 24/7 line, no
+// certification (#98).
+const FAQ: { question: MessageKey; answer: MessageKey }[] = [
+  { question: 'home.faq.cloud.q', answer: 'home.faq.cloud.a' },
+  { question: 'home.faq.security.q', answer: 'home.faq.security.a' },
+  { question: 'home.faq.response.q', answer: 'home.faq.response.a' },
+  { question: 'home.faq.migration.q', answer: 'home.faq.migration.a' },
+  { question: 'home.faq.pricing.q', answer: 'home.faq.pricing.a' },
 ];
+
+/** The topics the API accepts; only their labels are translated. */
+const TOPICS = ['security_audit', 'cloud_migration', 'custom_development', 'support_subscription', 'other'] as const;
+
+const PHONE = '+216 28 814 729';
 
 // Shared class strings for the contact page. They use the homepage roles, so
 // the page follows the light/dark theme with the rest of the site (#165).
@@ -58,6 +50,7 @@ const FIELD =
 const EYEBROW = 'font-mono text-xs font-medium uppercase tracking-[0.18em]';
 
 export default function Homepage({ onDashboardClick }: HomepageProps) {
+  const t = useT();
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
   // Contact form state
@@ -67,7 +60,8 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
   const [message, setMessage] = useState('');
   // The honeypot (#98): hidden from people, so only a bot fills it in.
   const [website, setWebsite] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  // The error's key, not its text, so it follows a change of language.
+  const [errorMsg, setErrorMsg] = useState<MessageKey | null>(null);
   const [success, setSuccess] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -100,18 +94,18 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErrorMsg(null);
     setSuccess(false);
     if (!name.trim()) {
-      setErrorMsg('Please enter your full name.');
+      setErrorMsg('home.contact.error.name');
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      setErrorMsg('Please enter a valid email address.');
+      setErrorMsg('home.contact.error.email');
       return;
     }
     if (message.trim().length < 10) {
-      setErrorMsg('Your message must be at least 10 characters.');
+      setErrorMsg('home.contact.error.messageLength');
       return;
     }
     // The enquiry goes to the server (#98), which stores it and tells the
@@ -127,17 +121,19 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     } catch (err) {
       setErrorMsg(
         err instanceof ApiError && err.status === 429
-          ? 'We received many messages in the last hour. Please try again later, or call us on +216 28 814 729.'
+          ? 'home.contact.error.tooMany'
           : err instanceof ApiError && err.status === 422
-            ? 'Please check the fields: a valid e-mail, and a message of 10 to 5,000 characters.'
-            : 'Your message could not be sent. Please try again, or call us on +216 28 814 729.',
+            ? 'home.contact.error.invalid'
+            : 'home.contact.error.notSent',
       );
     } finally {
       setSending(false);
     }
   };
 
-  const filteredFaqs = faqData.filter(
+  // Searched in the language shown, so a French query finds French answers.
+  const faqs = FAQ.map(({ question, answer }) => ({ question: t(question), answer: t(answer) }));
+  const filteredFaqs = faqs.filter(
     (faq) =>
       faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
       faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
@@ -165,25 +161,25 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     const contactItems = [
       {
         icon: Phone,
-        title: 'Phone',
-        value: '+216 28 814 729',
-        note: 'For urgent requests, during office hours'
+        title: t('home.contact.phone'),
+        value: PHONE,
+        note: t('home.contact.phoneNote')
       },
       {
         icon: Mail,
-        title: 'Business Inquiries',
+        title: t('home.contact.business'),
         value: 'contact@dixpertia.com',
-        note: 'We usually reply within one business day'
+        note: t('home.contact.businessNote')
       },
       {
         icon: MapPin,
-        title: 'Technical Headquarters',
-        value: 'DI Xpertia SUARL · Rue de Pasteur, Dar Chaabane El Fehri, 8011 Nabeul, Tunisia'
+        title: t('home.contact.headquarters'),
+        value: t('home.contact.address')
       },
       {
         icon: Clock,
-        title: 'Office Hours',
-        value: 'Monday – Friday: 8:00 AM – 7:00 PM'
+        title: t('home.contact.hours'),
+        value: t('home.contact.hoursValue')
       }
     ];
 
@@ -196,22 +192,21 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
             onClick={() => handleNavClick('home')}
             className="inline-flex items-center gap-2 text-sm text-home-fg/62 hover:text-home-fg transition mb-10"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to Home
+            <ArrowLeft className="w-4 h-4" /> {t('home.contact.back')}
           </button>
 
           <div className="max-w-2xl mb-12">
-            <p className={`${EYEBROW} text-home-accent-text`}>Contact</p>
-            <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-[-0.02em]">Contact our experts</h1>
+            <p className={`${EYEBROW} text-home-accent-text`}>{t('home.contact.eyebrow')}</p>
+            <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-[-0.02em]">{t('home.contact.title')}</h1>
             <p className="mt-4 text-base text-home-fg/62 leading-relaxed">
-              Whether you want a full system audit or to start a migration, tell us about your project and
-              our team will get back to you quickly.
+              {t('home.contact.intro')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Contact details */}
             <div className="lg:col-span-5">
-              <h2 className="text-base font-semibold pb-3 border-b border-home-fg/14">Our contact details</h2>
+              <h2 className="text-base font-semibold pb-3 border-b border-home-fg/14">{t('home.contact.details')}</h2>
               <ul className="divide-y divide-home-fg/14">
                 {contactItems.map(({ icon: Icon, title, value, note }) => (
                   <li key={title} className="flex gap-4 items-start py-5">
@@ -231,7 +226,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
             {/* Contact form */}
             <div className="lg:col-span-7 bg-home-surface rounded-2xl border border-home-fg/14 p-6 md:p-8">
               <div className="pb-4 border-b border-home-fg/14 mb-6">
-                <h2 className="text-base font-semibold">Inquiry registration form</h2>
+                <h2 className="text-base font-semibold">{t('home.contact.form.title')}</h2>
               </div>
 
               <form onSubmit={handleContactSubmit} className="relative flex flex-col gap-5" noValidate>
@@ -239,9 +234,9 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                   <div role="status" className="bg-home-fg/3 border border-home-fg/14 rounded-lg p-4 flex gap-3">
                     <CheckCircle2 className="w-5 h-5 text-home-fg shrink-0 mt-0.5" />
                     <div>
-                      <span className="block text-sm font-semibold">Thank you, your message has been sent.</span>
+                      <span className="block text-sm font-semibold">{t('home.contact.form.sent')}</span>
                       <p className="text-xs text-home-fg/62 mt-0.5">
-                        Our team has received it and will get back to you by e-mail.
+                        {t('home.contact.form.sentHint')}
                       </p>
                     </div>
                   </div>
@@ -250,26 +245,26 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 {errorMsg && (
                   <div role="alert" className="bg-error-container border border-error/20 rounded-lg p-3 flex gap-2 items-center">
                     <AlertCircle className="w-4 h-4 text-error shrink-0" />
-                    <span className="text-sm font-medium text-on-error-container">{errorMsg}</span>
+                    <span className="text-sm font-medium text-on-error-container">{t(errorMsg, { phone: PHONE })}</span>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-home-fg/62">Full Name *</span>
+                    <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.name')}</span>
                     <input
                       type="text"
-                      placeholder="e.g. Alexandre Dubois"
+                      placeholder={t('home.contact.form.namePlaceholder')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className={FIELD}
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-home-fg/62">Email Address *</span>
+                    <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.email')}</span>
                     <input
                       type="email"
-                      placeholder="e.g. a.dubois@innovate.fr"
+                      placeholder={t('home.contact.form.emailPlaceholder')}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className={FIELD}
@@ -278,21 +273,19 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 </div>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-home-fg/62">Consultation Topic *</span>
+                  <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.topic')}</span>
                   <select value={subject} onChange={(e) => setSubject(e.target.value)} className={FIELD}>
-                    <option value="security_audit">Security audit / Penetration testing</option>
-                    <option value="cloud_migration">Hybrid Cloud Migration Planning</option>
-                    <option value="custom_development">Custom API / CRM Development</option>
-                    <option value="support_subscription">Support Subscription</option>
-                    <option value="other">Other Technology Request</option>
+                    {TOPICS.map((topic) => (
+                      <option key={topic} value={topic}>{t(`home.contact.form.topic.${topic}`)}</option>
+                    ))}
                   </select>
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-home-fg/62">Message / Technical Context *</span>
+                  <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.message')}</span>
                   <textarea
                     rows={5}
-                    placeholder="Briefly describe your company's existing infrastructure, performance goals, or specific regulatory requirements..."
+                    placeholder={t('home.contact.form.messagePlaceholder')}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     className={`${FIELD} resize-none`}
@@ -310,7 +303,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
 
                 <button type="submit" disabled={sending} className={`${LIME_CTA} self-start disabled:cursor-wait disabled:opacity-70`}>
                   <Send className="w-4 h-4" aria-hidden="true" />
-                  {sending ? 'Sending...' : 'Submit to Technical Team'}
+                  {sending ? t('home.contact.form.sending') : t('home.contact.form.submit')}
                 </button>
               </form>
             </div>
@@ -322,15 +315,15 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
               <div className="flex items-start gap-3">
                 <HelpCircle className="w-5 h-5 text-home-fg mt-1" />
                 <div>
-                  <h2 className="text-xl font-bold tracking-[-0.02em]">Frequently asked questions</h2>
-                  <p className="text-sm text-home-fg/62 mt-1">Search and filter our official answers instantly</p>
+                  <h2 className="text-xl font-bold tracking-[-0.02em]">{t('home.faq.title')}</h2>
+                  <p className="text-sm text-home-fg/62 mt-1">{t('home.faq.subtitle')}</p>
                 </div>
               </div>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-home-fg/62" />
                 <input
                   type="text"
-                  placeholder="Search (e.g. security, migration)..."
+                  placeholder={t('home.faq.search')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`${FIELD} pl-9`}
@@ -364,7 +357,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
                 })
               ) : (
                 <div className="text-center py-8 text-sm text-home-fg/62">
-                  No results for "{searchQuery}". Please broaden your search.
+                  {t('home.faq.noResults', { query: searchQuery })}
                 </div>
               )}
             </div>

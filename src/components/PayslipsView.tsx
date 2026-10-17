@@ -8,6 +8,7 @@ import { Field, Select } from './ui/Field';
 import { useDataStatus } from '../dataStatus';
 import { formatTND } from '../format';
 import Avatar from './ui/Avatar';
+import { useLocale, useT } from '../i18n';
 
 const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -20,6 +21,8 @@ interface PayslipsViewProps {
 export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) {
   const [selectedYear, setSelectedYear] = useState('');
   const status = useDataStatus();
+  const t = useT();
+  const locale = useLocale();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Pagination states
@@ -33,23 +36,24 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
     // Use print fallback to generate a simple PDF
     const win = window.open('', '_blank');
     if (!win) {
-      showToast('Please allow pop-ups to download the payslip.', 'error');
+      showToast(t('people.payslips.allowPopups'), 'error');
       return;
     }
 
     // The name is stored text written into a new document: escaped, never markup.
     const employee = escapeHtml(slip.employeeName || '-');
+    const period = escapeHtml(slip.period);
     const content = `
-      <html>
-        <head><title>Payslip ${slip.period} - ${employee}</title></head>
+      <html lang="${locale}">
+        <head><title>${escapeHtml(t('people.payslips.docTitle', { period: slip.period, employee: slip.employeeName || '-' }))}</title></head>
         <body style="font-family: Arial, sans-serif; padding: 40px;">
-          <h1>DI Xpertia payslip</h1>
-          <p><strong>Employee:</strong> ${employee}</p>
-          <p><strong>Period:</strong> ${slip.period}</p>
-          <p><strong>Gross pay:</strong> ${formatTND(slip.grossPay)}</p>
-          <p><strong>Net pay:</strong> ${formatTND(slip.netPay)}</p>
-          <p><strong>Issued on:</strong> ${slip.issuedOn ?? '-'}</p>
-          <p><em>Generated from DI Xpertia</em></p>
+          <h1>${t('people.payslips.docHeading')}</h1>
+          <p><strong>${t('people.payslips.docEmployee')}</strong> ${employee}</p>
+          <p><strong>${t('people.payslips.docPeriod')}</strong> ${period}</p>
+          <p><strong>${t('people.payslips.docGross')}</strong> ${formatTND(slip.grossPay)}</p>
+          <p><strong>${t('people.payslips.docNet')}</strong> ${formatTND(slip.netPay)}</p>
+          <p><strong>${t('people.payslips.docIssued')}</strong> ${escapeHtml(slip.issuedOn ?? '-')}</p>
+          <p><em>${t('people.payslips.docGenerated')}</em></p>
         </body>
       </html>
     `;
@@ -57,7 +61,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
     win.document.write(content);
     win.document.close();
     win.print();
-    showToast(`Payslip ${slip.period} opened for printing.`);
+    showToast(t('people.payslips.opened', { period: slip.period }));
   };
 
   // Years come from the payslips themselves, most recent first, and the most
@@ -90,12 +94,14 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
   const ytdGross = filteredPayslips.reduce((sum, p) => sum + p.grossPay, 0);
   const ytdNet = filteredPayslips.reduce((sum, p) => sum + p.netPay, 0);
   const countLabel = filteredPayslips.length === 0
-    ? 'No payslips yet'
-    : `${filteredPayslips.length} payslip${filteredPayslips.length === 1 ? '' : 's'}${selectedYear ? ` in ${selectedYear}` : ''}`;
+    ? t('people.payslips.none')
+    : selectedYear
+      ? t('people.payslips.countIn', { count: filteredPayslips.length, year: selectedYear })
+      : t('people.payslips.count', { count: filteredPayslips.length });
 
   // Only employees, accountants and admins can see payslips
   if (userRole !== 'employee' && userRole !== 'accountant' && userRole !== 'admin') {
-    return <div className="p-8 text-center text-on-surface-variant">Access Denied</div>;
+    return <div className="p-8 text-center text-on-surface-variant">{t('common.accessDenied')}</div>;
   }
 
   return (
@@ -105,18 +111,18 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">
-            {userRole === 'admin' || userRole === 'accountant' ? 'All Payslips' : 'My Payslips'}
+            {userRole === 'admin' || userRole === 'accountant' ? t('people.payslips.titleAll') : t('people.payslips.titleMine')}
           </h1>
           <p className="text-body-lg text-on-surface-variant mt-1">
             {userRole === 'admin' || userRole === 'accountant'
-              ? 'View and download all employee payslips.'
-              : 'View and download your monthly salary statements.'}
+              ? t('people.payslips.subtitleAll')
+              : t('people.payslips.subtitleMine')}
           </p>
         </div>
 
         {/* Period filter */}
         {years.length > 0 && (
-          <Field label="Year" className="w-full md:w-36">
+          <Field label={t('people.payslips.year')} className="w-full md:w-36">
             {({ id }) => (
               <Select
                 id={id}
@@ -144,7 +150,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
             <Wallet className="h-20 w-20" />
           </div>
           <span className="text-body-sm font-medium text-on-surface-variant">
-            {wholePayroll ? 'Payroll, gross' : 'Your gross pay'}{selectedYear ? `, ${selectedYear}` : ''}
+            {wholePayroll ? t('people.payslips.payrollGross') : t('people.payslips.yourGross')}{selectedYear ? `, ${selectedYear}` : ''}
           </span>
           <span className="font-mono text-h2 font-semibold tabular-nums text-on-surface">{formatTND(ytdGross)}</span>
           <div className="text-xs font-medium text-on-surface-variant">{countLabel}</div>
@@ -155,7 +161,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
             <Banknote className="h-20 w-20" />
           </div>
           <span className="text-body-sm font-medium text-on-surface-variant">
-            {wholePayroll ? 'Payroll, net' : 'Your net pay'}{selectedYear ? `, ${selectedYear}` : ''}
+            {wholePayroll ? t('people.payslips.payrollNet') : t('people.payslips.yourNet')}{selectedYear ? `, ${selectedYear}` : ''}
           </span>
           <span className="font-mono text-h2 font-semibold tabular-nums text-on-surface">{formatTND(ytdNet)}</span>
           <div className="text-xs font-medium text-on-surface-variant">{countLabel}</div>
@@ -164,7 +170,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
 
       {/* Payslips */}
       <Table
-        caption="Payslips"
+        caption={t('people.payslips.caption')}
         footer={
           filteredPayslips.length > 0 && (
             <Pagination
@@ -172,19 +178,19 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
               pageSize={itemsPerPage}
               total={filteredPayslips.length}
               onPageChange={setCurrentPage}
-              noun="payslips"
+              noun={t('people.payslips.noun')}
             />
           )
         }
       >
         <THead>
-          {wholePayroll && <Th>Employee</Th>}
-          <Th>Period</Th>
-          <Th numeric>Gross pay</Th>
-          <Th numeric>Net pay</Th>
-          <Th numeric>Issued</Th>
+          {wholePayroll && <Th>{t('people.col.employee')}</Th>}
+          <Th>{t('people.payslips.colPeriod')}</Th>
+          <Th numeric>{t('people.payslips.colGross')}</Th>
+          <Th numeric>{t('people.payslips.colNet')}</Th>
+          <Th numeric>{t('people.payslips.colIssued')}</Th>
           <Th numeric>
-            <span className="sr-only">Download</span>
+            <span className="sr-only">{t('people.payslips.download')}</span>
           </Th>
         </THead>
         <TBody>
@@ -195,7 +201,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
                   <Td>
                     <div className="flex items-center gap-3">
                       <Avatar name={slip.employeeName || '?'} size="sm" />
-                      <span className="font-semibold">{slip.employeeName || 'Unknown employee'}</span>
+                      <span className="font-semibold">{slip.employeeName || t('people.payslips.unknownEmployee')}</span>
                     </div>
                   </Td>
                 )}
@@ -214,7 +220,7 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
                   <button
                     type="button"
                     onClick={() => handleDownload(slip)}
-                    aria-label={`Download payslip ${slip.period}${wholePayroll && slip.employeeName ? `, ${slip.employeeName}` : ''}`}
+                    aria-label={`${t('people.payslips.downloadOne', { period: slip.period })}${wholePayroll && slip.employeeName ? `, ${slip.employeeName}` : ''}`}
                     className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                   >
                     <Download className="w-4 h-4" aria-hidden="true" />
@@ -223,14 +229,14 @@ export default function PayslipsView({ payslips, userRole }: PayslipsViewProps) 
               </Tr>
             ))
           ) : status.loading ? (
-            <TableState kind="loading" colSpan={columns} title="Loading payslips..." />
+            <TableState kind="loading" colSpan={columns} title={t('people.payslips.loading')} />
           ) : status.error && payslips.length === 0 ? (
             <TableState kind="error" colSpan={columns} message={status.error} />
           ) : (
             <TableState
               kind="empty"
               colSpan={columns}
-              title={payslips.length === 0 ? 'No payslips yet' : `No payslips in ${selectedYear}`}
+              title={payslips.length === 0 ? t('people.payslips.none') : t('people.payslips.noneIn', { year: selectedYear })}
             />
           )}
         </TBody>

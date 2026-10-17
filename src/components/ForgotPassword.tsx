@@ -3,12 +3,15 @@ import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import AuthLayout from './ui/AuthLayout';
 import Button from './ui/Button';
 import { Field, FormAlert, Input } from './ui/Field';
+import LanguageToggle from './LanguageToggle';
+import { useT } from '../i18n';
 
 interface ForgotPasswordProps {
   onBack: () => void;
 }
 
 export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -18,7 +21,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
     e.preventDefault();
     setError('');
     if (!email) {
-      setError('Please enter your email address.');
+      setError(t('auth.forgot.enterEmail'));
       return;
     }
     setLoading(true);
@@ -32,10 +35,10 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
       if (response.ok) {
         setSent(true);
       } else {
-        setError(data.detail || 'Something went wrong. Please try again.');
+        setError(data.detail || t('auth.somethingWrong'));
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError(t('auth.networkRetry'));
     } finally {
       setLoading(false);
     }
@@ -44,18 +47,19 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
   const backToLogin = (
     <Button variant="ghost" size="sm" onClick={onBack} className="-ml-3">
       <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-      Back to login
+      {t('auth.backToLogin')}
     </Button>
   );
 
   if (sent) {
     return (
-      <AuthLayout title="Check your email" footer={backToLogin}>
+      <AuthLayout title={t('auth.forgot.checkEmail')} footer={backToLogin} aside={<LanguageToggle />}>
         <div role="status" className="flex items-start gap-3 rounded-lg bg-success-container px-4 py-3 text-success">
           <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
           <p className="text-sm">
-            If an account exists for <span className="font-semibold break-all">{email}</span>, a password
-            reset link is on its way.
+            {t('auth.forgot.sentBefore')}
+            <span className="font-semibold break-all">{email}</span>
+            {t('auth.forgot.sentAfter')}
           </p>
         </div>
       </AuthLayout>
@@ -64,13 +68,14 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
   return (
     <AuthLayout
-      title="Reset your password"
-      subtitle="Enter your email address and we'll send you a reset link."
+      title={t('auth.forgot.title')}
+      subtitle={t('auth.forgot.subtitle')}
+      aside={<LanguageToggle />}
       footer={backToLogin}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
-        <Field label="Email address">
+        <Field label={t('auth.email')}>
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}
@@ -79,7 +84,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
               icon={Mail}
               type="email"
               autoComplete="email"
-              placeholder="name@dixpertia.com"
+              placeholder={t('auth.emailPlaceholder')}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +92,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
           )}
         </Field>
         <Button type="submit" size="lg" fullWidth loading={loading} className="mt-2">
-          {loading ? 'Sending...' : 'Send reset link'}
+          {loading ? t('auth.forgot.sending') : t('auth.forgot.submit')}
         </Button>
       </form>
     </AuthLayout>

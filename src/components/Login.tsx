@@ -3,6 +3,8 @@ import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import AuthLayout from './ui/AuthLayout';
 import Button from './ui/Button';
 import { Field, FormAlert, Input } from './ui/Field';
+import LanguageToggle from './LanguageToggle';
+import { useT } from '../i18n';
 
 interface LoginProps {
   /** Resolves to the error to show, or null once signed in. */
@@ -14,6 +16,7 @@ interface LoginProps {
 // The forgot-password flow lives in ForgotPassword.tsx. This component used to
 // carry a second, unreachable copy of it (App always passes onForgotPassword).
 export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginProps) {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,7 +27,7 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
     e.preventDefault();
     setError('');
     if (!email || !password) {
-      setError('Please fill in all fields.');
+      setError(t('auth.login.fillAll'));
       return;
     }
     // Do not guess the role here. It previously inferred 'admin' from the email
@@ -39,20 +42,21 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
 
   return (
     <AuthLayout
-      title="Welcome back"
-      subtitle="Sign in to your employee portal."
+      title={t('auth.login.title')}
+      subtitle={t('auth.login.subtitle')}
+      aside={<LanguageToggle />}
       footer={
         onBackHome && (
           <Button variant="ghost" size="sm" onClick={onBackHome} className="-ml-3">
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-            Back to Home
+            {t('auth.login.backHome')}
           </Button>
         )
       }
     >
       <form onSubmit={handleLogin} className="flex flex-col gap-4" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
-        <Field label="Email address">
+        <Field label={t('auth.email')}>
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}
@@ -61,7 +65,7 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
               icon={Mail}
               type="email"
               autoComplete="username"
-              placeholder="name@dixpertia.com"
+              placeholder={t('auth.emailPlaceholder')}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -69,14 +73,14 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
           )}
         </Field>
         <Field
-          label="Password"
+          label={t('auth.password')}
           labelAside={
             <button
               type="button"
               onClick={onForgotPassword}
               className="text-xs font-semibold text-secondary hover:underline cursor-pointer rounded"
             >
-              Forgot password?
+              {t('auth.login.forgot')}
             </button>
           }
         >
@@ -95,7 +99,7 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
           )}
         </Field>
         <Button type="submit" size="lg" fullWidth className="mt-2" loading={signingIn}>
-          Sign in
+          {t('auth.login.submit')}
           <ArrowRight className="w-4 h-4" aria-hidden="true" />
         </Button>
       </form>
