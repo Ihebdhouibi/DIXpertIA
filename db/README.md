@@ -292,6 +292,35 @@ wants a stricter forward-only progression, it belongs in the same trigger.
 The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
+### The commercial status: paid and cancelled (#126)
+
+`statut` is what the counterparty sees. Its moves, held by
+`trg_invoice_commercial_transitions` so a direct SQL write is refused too:
+
+| From | To | Who | Condition |
+|---|---|---|---|
+| draft | sent | admin | approved by the accountant (#118) |
+| draft | cancelled | admin | a reason; not while waiting for verification |
+| sent, overdue | paid | admin or accountant | a payment date, not in the future nor before the issue date |
+| sent, overdue | cancelled | admin | a reason; not once its month is closed |
+| paid, cancelled | - | - | final |
+
+- **Paid** means paid in full on `paid_on`. Partial payments are not modelled.
+  Payment stays possible after the month is closed: late payment is why the
+  archived seal leaves `statut` alone (#41).
+- **Cancelled** keeps the reason and time (`cancellation_reason`,
+  `cancelled_at`). A draft has no legal number, so it leaves no gap. An
+  approved or sent invoice keeps its number in the series, marked cancelled, so
+  the series stays gapless and the number justified; the accountants are
+  notified to book a credit note, a document not issued by the application yet.
+  A cancelled numbered invoice still counts in its month's figures until that
+  credit note exists.
+- An invoice waiting for verification cannot be cancelled: it is frozen until
+  the accountant approves or rejects it, as for edits, so it never sits in the
+  verification queue after it is gone.
+- CHECKs tie the columns to the status: `paid_on` is set exactly when paid, the
+  reason and time exactly when cancelled.
+
 
 ## Running the test suite
 
@@ -333,6 +362,7 @@ harness made that mistake and a policy test caught it.
 | `test_account_lifecycle.py` | inactive accounts refused; deactivation, role and password changes revoke sessions; reset and activation links hashed, single use, never a session; login timing |
 | `test_users_rls.py` | who reads which accounts; the password hash unreadable and unwritable by the application role; the auth functions pin search_path and are not PUBLIC |
 | `test_responses.py` | every JSON route declares a response model; no secret in any response; every closed-set column constrained by the database |
+| `test_invoice_status.py` | paid and cancelled: who, when, the payment date, the reason, the closed month, and the same rules enforced in SQL |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by

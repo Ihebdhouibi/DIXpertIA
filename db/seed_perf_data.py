@@ -167,9 +167,15 @@ def seed(conn, rng, scale):
         })
     conn.execute(text(
         "INSERT INTO invoices (numero, client_id, date_emission, date_echeance, "
-        "montant_ht, montant_ttc, statut, processing_status, cree_par_id) "
+        "montant_ht, montant_ttc, statut, processing_status, cree_par_id, "
+        "paid_on, cancelled_at, cancellation_reason) "
         "VALUES (:num, :c, :de, :dc, :ht, :ttc, CAST(:st AS invoicestatus), "
-        "CAST(:ps AS invoiceprocessingstatus), :by)"), invoices)
+        "CAST(:ps AS invoiceprocessingstatus), :by, "
+        # A paid invoice carries its payment date, a cancelled one its reason
+        # (#126): paid on the issue date, cancelled as seed data.
+        "CASE WHEN :st = 'PAYEE' THEN CAST(:de AS date) END, "
+        "CASE WHEN :st = 'ANNULEE' THEN now() END, "
+        "CASE WHEN :st = 'ANNULEE' THEN 'Seed data' END)"), invoices)
 
     invoice_ids = [r[0] for r in conn.execute(
         text("SELECT id FROM invoices WHERE numero LIKE :p"), {"p": f"{INVOICE_PREFIX}%"})]

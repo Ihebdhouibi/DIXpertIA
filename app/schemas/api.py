@@ -246,6 +246,13 @@ class InvoiceOut(BaseModel):
     dueDate: str
     # The due date as YYYY-MM-DD, for a date input; `dueDate` is for display.
     dueDateIso: Optional[str] = None
+    # The issue date as YYYY-MM-DD: the earliest a payment can be dated (#126).
+    dateIssuedIso: Optional[str] = None
+    # Set once paid (#126), for display like dateIssued.
+    paidOn: Optional[str] = None
+    # Set once cancelled (#126): when, and the admin's reason.
+    cancelledAt: Optional[str] = None
+    cancellationReason: Optional[str] = None
     # The commercial state the counterparty sees.
     status: str
     # The accountant's workflow state - a separate axis, not a spelling of the
@@ -292,6 +299,10 @@ class InvoiceOut(BaseModel):
             dateIssued=row.date_emission.strftime("%b %d, %Y") if row.date_emission else "-",
             dueDate=row.date_echeance.strftime("%b %d, %Y") if row.date_echeance else "-",
             dueDateIso=row.date_echeance.isoformat() if row.date_echeance else None,
+            dateIssuedIso=row.date_emission.isoformat() if row.date_emission else None,
+            paidOn=row.paid_on.strftime("%b %d, %Y") if row.paid_on else None,
+            cancelledAt=row.cancelled_at.isoformat() if row.cancelled_at else None,
+            cancellationReason=row.cancellation_reason,
             status=INVOICE_STATUS_TO_API.get(statut, "Sent"),
             processingStatus=INVOICE_PROCESSING_STATUS_TO_API.get(processing, "Pending"),
             items=[

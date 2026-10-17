@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
@@ -28,11 +28,13 @@ from app.services.notifications import notify, users_with_role
 # holds the ORM-shaped schemas used to validate input, while the API's
 # output contract is the translated one (#37 Option C). One response shape
 # for every invoice endpoint means the UI never sees French column names.
-from app.schemas.api import InvoiceOut
+from app.schemas.api import INVOICE_STATUS_TO_API, InvoiceOut
 from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
+    InvoiceCancellation,
     InvoiceCreate,
+    InvoicePayment,
     InvoiceRejection,
     InvoiceUpdate,
     ProcessingStatusUpdate,
@@ -547,8 +549,9 @@ def _outgoing_draft(db: Session, invoice_id: int) -> Invoice:
 
 
 def _counterparty(invoice: Invoice) -> str:
-    """The client's name, for a notification's message."""
-    return invoice.client.nom if invoice.client else "an unknown client"
+    """The client's or supplier's name, for a notification's message."""
+    party = invoice.supplier if invoice.direction == InvoiceDirection.INCOMING else invoice.client
+    return party.nom if party else "an unknown counterparty"
 
 
 def _commit_review(db: Session, invoice: Invoice) -> InvoiceOut:
@@ -704,6 +707,108 @@ def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
     record_event(db, "invoice.sent", "invoice", invoice.id,
                  before={"statut": invoice.statut}, after={"statut": InvoiceStatus.ENVOYEE})
     invoice.statut = InvoiceStatus.ENVOYEE
+    return _commit_review(db, invoice)
+
+
+# ---- Paid and cancelled (#126) ----
+#
+#   Draft     --cancel (admin, reason)--> Cancelled      (not while under verification)
+#   Sent      --pay (admin or accountant, date)--> Paid
+#   Sent      --cancel (admin, reason)--> Cancelled      (not once its month is closed)
+#
+# Paid and Cancelled are final. The checks below answer with a clear status
+# before touching anything; trg_invoice_commercial_transitions holds the same
+# rules for a direct SQL write, and a race is still caught there as a 409.
+
+AWAITING_PAYMENT = (InvoiceStatus.ENVOYEE, InvoiceStatus.EN_RETARD)
+
+
+def _status_label(invoice: Invoice) -> str:
+    """The status as the API shows it ("paid"), not the stored French value."""
+    return INVOICE_STATUS_TO_API.get(invoice.statut.value, invoice.statut.value).lower()
+
+
+def _any_invoice(db: Session, invoice_id: int) -> Invoice:
+    invoice = db.get(Invoice, invoice_id, options=[
+        selectinload(Invoice.items),
+        selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
+    ])
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    return invoice
+
+
+@router.post(
+    "/invoices/{invoice_id}/pay",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin", "accountant"))],
+)
+def pay_invoice(invoice_id: int, payload: InvoicePayment, db: Session = Depends(get_db)):
+    """Record that an invoice was paid in full on `paid_on` (#126).
+
+    Admin or accountant, for an invoice we issued or a bill we received. Also
+    after the month is closed: late payment is why the archived seal leaves
+    the commercial status alone (#41). Partial payments are not modelled.
+    """
+    invoice = _any_invoice(db, invoice_id)
+    if invoice.statut not in AWAITING_PAYMENT:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is {_status_label(invoice)} and cannot be marked paid; "
+            "only a sent invoice can"))
+    if payload.paid_on > date.today():
+        raise HTTPException(status_code=422, detail="the payment date cannot be in the future")
+    if payload.paid_on < invoice.date_emission:
+        raise HTTPException(status_code=422, detail=(
+            f"the payment date cannot be before the issue date, {invoice.date_emission.isoformat()}"))
+    record_event(db, "invoice.paid", "invoice", invoice.id,
+                 before={"statut": invoice.statut},
+                 after={"statut": InvoiceStatus.PAYEE, "paid_on": payload.paid_on})
+    invoice.statut = InvoiceStatus.PAYEE
+    invoice.paid_on = payload.paid_on
+    return _commit_review(db, invoice)
+
+
+@router.post(
+    "/invoices/{invoice_id}/cancel",
+    response_model=InvoiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
+def cancel_invoice(
+    invoice_id: int,
+    payload: InvoiceCancellation,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cancel an invoice, with a reason (#126). Admin only.
+
+    A draft has no legal number, so nothing is left in the series. An approved
+    or sent invoice keeps its number, now ANNULEE: the series stays gapless
+    and the number stays justified. Its credit note is a separate document,
+    so the accountants are told, to book it.
+    """
+    invoice = _any_invoice(db, invoice_id)
+    if invoice.statut not in (InvoiceStatus.BROUILLON, *AWAITING_PAYMENT):
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is {_status_label(invoice)} and cannot be cancelled"))
+    if invoice.review_status == InvoiceReviewStatus.SUBMITTED and invoice.statut == InvoiceStatus.BROUILLON:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} is waiting for verification; the accountant approves "
+            "or rejects it before it can be cancelled"))
+    if invoice.processing_status == InvoiceProcessingStatus.ARCHIVED:
+        raise HTTPException(status_code=409, detail=(
+            f"invoice {invoice.reference} belongs to a closed month and cannot be cancelled; "
+            "correct it with a credit note in the open month"))
+    record_event(db, "invoice.cancelled", "invoice", invoice.id,
+                 before={"statut": invoice.statut, "numero": invoice.numero},
+                 after={"statut": InvoiceStatus.ANNULEE, "reason": payload.reason})
+    invoice.statut = InvoiceStatus.ANNULEE
+    invoice.cancelled_at = datetime.now(timezone.utc)
+    invoice.cancellation_reason = payload.reason
+    if invoice.numero:
+        notify(db, users_with_role(db, "accountant"), kind="invoice_cancelled", tone="warning",
+               message=(f"Invoice {invoice.numero} for {_counterparty(invoice)} was cancelled: "
+                        f"{payload.reason}. It needs a credit note in the books."),
+               link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
 
