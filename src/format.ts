@@ -8,3 +8,11 @@ const TND = new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND',
 export function formatTND(value: number): string {
   return TND.format(value);
 }
+
+/**
+ * The word for a count: "invoice" for 1, "invoices" otherwise - 0 and 0.5
+ * included, as English has it (#155). The plural defaults to singular + "s".
+ */
+export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return count === 1 ? singular : pluralForm;
+}
