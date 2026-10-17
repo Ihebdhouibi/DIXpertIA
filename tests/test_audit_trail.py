@@ -1,7 +1,8 @@
 """The audit trail (#63): every sensitive action leaves exactly one event.
 
 Events are written in the action's own transaction, by the signed-in identity,
-and nobody can change or delete them afterwards. Only the admin reads them.
+and nobody can change or delete them afterwards. Only the admin reads them,
+except the invoice events, which the accountant reads as their history (#115).
 """
 
 import os

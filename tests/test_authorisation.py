@@ -81,6 +81,8 @@ ROUTES = [
     ("GET", "/api/invoices/1", BILLING),
     # By internal id since #86; the generic /api/invoices/1 normalisation below covers it.
     ("GET", "/api/invoices/1/download", BILLING),
+    # The invoice's history, from the audit trail (#115).
+    ("GET", "/api/invoices/1/history", BILLING),
 
     # --- bookkeeping ---------------------------------------------------------
     ("POST", "/api/invoices", ADMIN_ONLY),

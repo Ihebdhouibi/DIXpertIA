@@ -37,6 +37,7 @@ import InvoiceEditDialog from './InvoiceEditDialog';
 import InvoicePdfPreview from './InvoicePdfPreview';
 import { InvoiceReviewPanel, RejectInvoiceDialog } from './InvoiceReview';
 import { CancelInvoiceDialog, PayInvoiceDialog } from './InvoiceStatusDialogs';
+import InvoiceHistory from './InvoiceHistory';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useConfirm, useToast, ToastTone } from './ui/feedback';
@@ -747,6 +748,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
               </section>
 
               {selectedInvoice.direction === 'outgoing' && <InvoiceReviewPanel invoice={selectedInvoice} />}
+              <InvoiceHistory invoice={selectedInvoice} />
             </div>
 
             <div className="lg:col-span-2">

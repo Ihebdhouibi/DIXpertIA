@@ -21,6 +21,7 @@ from app.models.invoicing import (
     InvoiceStatus,
     Supplier,
 )
+from app.models.audit import AuditEvent
 from app.models.user import User
 from app.services.audit import record_event
 from app.services.notifications import notify, users_with_role
@@ -28,7 +29,8 @@ from app.services.notifications import notify, users_with_role
 # holds the ORM-shaped schemas used to validate input, while the API's
 # output contract is the translated one (#37 Option C). One response shape
 # for every invoice endpoint means the UI never sees French column names.
-from app.schemas.api import INVOICE_STATUS_TO_API, InvoiceOut
+from app.schemas.api import INVOICE_PROCESSING_STATUS_TO_API, INVOICE_STATUS_TO_API, InvoiceOut
+from app.schemas.audit import InvoiceHistoryEventOut
 from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
@@ -822,6 +824,70 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     return InvoiceOut.from_orm_row(invoice)
+
+
+def _history_label(event: AuditEvent) -> str:
+    """One audit event of an invoice, in words (#115)."""
+    before, after = event.before or {}, event.after or {}
+    if event.action == "invoice.created":
+        if after.get("direction") == InvoiceDirection.INCOMING.value:
+            return f"Supplier bill recorded as {after.get('numero') or 'a bill'}"
+        return "Draft created"
+    if event.action == "invoice.updated":
+        return "Draft corrected"
+    if event.action == "invoice.submitted":
+        return "Submitted for verification"
+    if event.action == "invoice.approved":
+        number = after.get("numero")
+        return f"Approved, numbered {number}" if number else "Approved"
+    if event.action == "invoice.rejected":
+        comment = after.get("comment")
+        return f"Rejected: {comment}" if comment else "Rejected"
+    if event.action == "invoice.sent":
+        return "Sent to the client"
+    if event.action == "invoice.paid":
+        paid_on = after.get("paid_on")
+        return f"Paid on {paid_on}" if paid_on else "Paid"
+    if event.action == "invoice.cancelled":
+        reason = after.get("reason")
+        return f"Cancelled: {reason}" if reason else "Cancelled"
+    if event.action == "invoice.processing_status_changed":
+        def label(value):
+            return INVOICE_PROCESSING_STATUS_TO_API.get(value, value or "?")
+        return (f"Books: {label(before.get('processing_status'))} "
+                f"to {label(after.get('processing_status'))}")
+    return event.action
+
+
+@router.get("/invoices/{invoice_id}/history", response_model=list[InvoiceHistoryEventOut])
+def invoice_history(invoice_id: int, db: Session = Depends(get_db)):
+    """Every recorded step of one invoice, newest first (#115).
+
+    Read from the audit trail of #63, the single record of what happened, so
+    the history and the trail can never disagree. Admin and accountant, like
+    the rest of this router; the policy audit_events_invoice_history_read_by_
+    accountant lets the accountant see invoice events and nothing else.
+    """
+    if not db.get(Invoice, invoice_id):
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    rows = (
+        db.query(AuditEvent, User.firstName, User.lastName)
+        .outerjoin(User, User.id == AuditEvent.actor_id)
+        .filter(AuditEvent.entity == "invoice", AuditEvent.entity_id == str(invoice_id))
+        .order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc())
+        .all()
+    )
+    return [
+        InvoiceHistoryEventOut(
+            id=str(event.id),
+            occurredAt=event.occurred_at,
+            action=event.action,
+            label=_history_label(event),
+            actorName=f"{first or ''} {last or ''}".strip() or "Unknown",
+            actorRole=event.actor_role,
+        )
+        for event, first, last in rows
+    ]
 
 
 def _pdf_data(invoice: Invoice) -> dict:
