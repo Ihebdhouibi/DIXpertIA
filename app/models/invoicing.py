@@ -233,6 +233,12 @@ class Invoice(Base):
         nullable=False,
         server_default=InvoiceReviewStatus.NOT_SUBMITTED.name,
     )
+    # #126: set exactly when statut is PAYEE (paid in full on that date), and
+    # the cancellation exactly when ANNULEE. Held by CHECKs and by
+    # trg_invoice_commercial_transitions; see that migration for the moves.
+    paid_on = Column(Date, nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
 
     client = relationship("Client", back_populates="invoices")
     supplier = relationship("Supplier", back_populates="invoices")
@@ -259,6 +265,13 @@ class Invoice(Base):
             "direction <> 'OUTGOING' OR numero IS NOT NULL "
             "OR (statut IN ('BROUILLON', 'ANNULEE') AND review_status <> 'APPROVED')",
             name="ck_invoices_numbered_once_approved",
+        ),
+        CheckConstraint("(statut = 'PAYEE') = (paid_on IS NOT NULL)", name="ck_invoices_paid_has_date"),
+        CheckConstraint("paid_on IS NULL OR paid_on >= date_emission", name="ck_invoices_paid_after_issue"),
+        CheckConstraint(
+            "(statut = 'ANNULEE') = (cancelled_at IS NOT NULL"
+            " AND btrim(coalesce(cancellation_reason, '')) <> '')",
+            name="ck_invoices_cancelled_has_reason",
         ),
         # The accountant's "to verify" queue.
         Index("ix_invoices_review_status", "review_status", "date_emission"),

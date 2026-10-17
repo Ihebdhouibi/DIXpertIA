@@ -93,6 +93,9 @@ ROUTES = [
     ("POST", "/api/invoices/1/approve", ACCOUNTANT_ONLY),
     ("POST", "/api/invoices/1/reject", ACCOUNTANT_ONLY),
     ("POST", "/api/invoices/1/send", ADMIN_ONLY),
+    # Paid and cancelled (#126): paying is bookkeeping, cancelling is the admin's.
+    ("POST", "/api/invoices/1/pay", BOOKKEEPING),
+    ("POST", "/api/invoices/1/cancel", ADMIN_ONLY),
     ("POST", "/api/supplier-invoices", BOOKKEEPING),
     ("PATCH", "/api/invoices/1/processing-status", BOOKKEEPING),
     ("GET", "/api/periods", BOOKKEEPING),

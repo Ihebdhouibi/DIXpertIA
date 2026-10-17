@@ -8,7 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, Download, ArrowRight, X, Pencil, Send, CheckCircle2, XCircle, SearchCheck } from 'lucide-react';
+import { Plus, Download, ArrowRight, X, Pencil, Send, CheckCircle2, XCircle, SearchCheck, Banknote, Ban } from 'lucide-react';
 import { Invoice, UserRole, Client } from '../types';
 import StatusBadge, { ProcessingBadge, ReviewBadge } from './StatusBadge';
 import Avatar from './ui/Avatar';
@@ -36,6 +36,7 @@ import InvoiceCreateDialog from './InvoiceCreateDialog';
 import InvoiceEditDialog from './InvoiceEditDialog';
 import InvoicePdfPreview from './InvoicePdfPreview';
 import { InvoiceReviewPanel, RejectInvoiceDialog } from './InvoiceReview';
+import { CancelInvoiceDialog, PayInvoiceDialog } from './InvoiceStatusDialogs';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useConfirm, useToast, ToastTone } from './ui/feedback';
@@ -69,6 +70,8 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const toast = useToast();
   const confirm = useConfirm();
   const [rejecting, setRejecting] = useState<Invoice | null>(null);
+  const [paying, setPaying] = useState<Invoice | null>(null);
+  const [cancelling, setCancelling] = useState<Invoice | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
@@ -657,6 +660,22 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 )}
               </>
             )}
+            {/* Paid and cancelled (#126). The server holds the same rules; these
+                only hide what it would refuse. */}
+            {selectedInvoice && (isAdmin || isAccountant)
+              && (selectedInvoice.status === 'Sent' || selectedInvoice.status === 'Overdue') && (
+              <Button size="sm" onClick={() => setPaying(selectedInvoice)} disabled={reviewing}>
+                <Banknote className="w-4 h-4" aria-hidden="true" /> Mark as paid
+              </Button>
+            )}
+            {selectedInvoice && isAdmin && selectedInvoice.processingStatus !== 'Archived' && (
+              (selectedInvoice.status === 'Draft' && selectedInvoice.reviewStatus !== 'Submitted')
+              || selectedInvoice.status === 'Sent' || selectedInvoice.status === 'Overdue'
+            ) && (
+              <Button variant="secondary" size="sm" onClick={() => setCancelling(selectedInvoice)} disabled={reviewing}>
+                <Ban className="w-4 h-4" aria-hidden="true" /> Cancel invoice
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => selectedInvoice && handleDownload(selectedInvoice)}>
               <Download className="w-4 h-4" aria-hidden="true" /> Download
             </Button>
@@ -687,7 +706,18 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                   </dd>
                   <dt className={DETAIL_LABEL}>Books</dt>
                   <dd className="text-right"><ProcessingBadge status={selectedInvoice.processingStatus} /></dd>
+                  {selectedInvoice.paidOn && (
+                    <>
+                      <dt className={DETAIL_LABEL}>Paid</dt>
+                      <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.paidOn}</dd>
+                    </>
+                  )}
                 </dl>
+                {selectedInvoice.status === 'Cancelled' && selectedInvoice.cancellationReason && (
+                  <p className="mt-4 rounded-lg bg-surface-container px-3 py-2 text-sm text-on-surface-variant">
+                    <span className="font-semibold text-on-surface">Cancelled:</span> {selectedInvoice.cancellationReason}
+                  </p>
+                )}
               </section>
 
               <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
@@ -736,6 +766,37 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
             setSelectedInvoice(updated);
             showToast(`Invoice ${updated.reference} sent back to the admin.`);
             reload();
+          }}
+        />
+      )}
+
+      {(isAdmin || isAccountant) && (
+        <PayInvoiceDialog
+          invoice={paying}
+          onClose={() => setPaying(null)}
+          onPay={async (invoice, paidOn) => {
+            const updated = await api.invoices.pay(invoice.id, paidOn);
+            setPaying(null);
+            setSelectedInvoice(updated);
+            showToast(`Invoice ${updated.reference} marked as paid.`);
+            reload();
+            onInvoiceCreated();
+          }}
+        />
+      )}
+
+      {isAdmin && (
+        <CancelInvoiceDialog
+          invoice={cancelling}
+          onClose={() => setCancelling(null)}
+          onCancelInvoice={async (invoice, reason) => {
+            const updated = await api.invoices.cancel(invoice.id, reason);
+            setCancelling(null);
+            setSelectedInvoice(updated);
+            setPdfVersion((v) => v + 1);
+            showToast(`Invoice ${updated.reference} cancelled.`);
+            reload();
+            onInvoiceCreated();
           }}
         />
       )}

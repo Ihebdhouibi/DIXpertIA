@@ -219,6 +219,12 @@ export const invoices = {
   reject: (id: string | number, comment: string) =>
     request<Invoice>(`/api/invoices/${id}/reject`, { method: 'POST', body: JSON.stringify({ comment }) }),
   send: (id: string | number) => request<Invoice>(`/api/invoices/${id}/send`, { method: 'POST' }),
+  /** Paid in full on `paidOn` (YYYY-MM-DD), by the admin or the accountant (#126). */
+  pay: (id: string | number, paidOn: string) =>
+    request<Invoice>(`/api/invoices/${id}/pay`, { method: 'POST', body: JSON.stringify({ paid_on: paidOn }) }),
+  /** Cancelled by the admin, with a reason (#126). */
+  cancel: (id: string | number, reason: string) =>
+    request<Invoice>(`/api/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   /**
    * The invoice PDF the server generates (#86), as a Blob. `inline` asks for a
    * copy to display rather than save; the invoice detail embeds it (#127).
