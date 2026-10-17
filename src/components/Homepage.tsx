@@ -3,6 +3,7 @@ import Wordmark from './ui/Wordmark';
 import HomeHeader, { type HomeTarget } from './home/HomeHeader';
 import Hero from './home/Hero';
 import HowWeWorkConsole from './home/HowWeWorkConsole';
+import Services from './home/Services';
 import {
   Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
   CheckCircle2, ChevronDown, ChevronUp, AlertCircle,
@@ -421,43 +422,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
         console={<HowWeWorkConsole />}
       />
 
-      {/* Services */}
-      <section id="services" className="py-20 scroll-mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className={`${EYEBROW} text-lime-deep`}>01 — Services</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-[-0.02em]">What we do</h2>
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {services.map(({ icon: Icon, title, text }) => (
-              <div key={title} className="p-6 rounded-2xl border border-hairline bg-white flex flex-col">
-                <div className="w-11 h-11 rounded-lg bg-surface-container flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-ink" />
-                </div>
-                <h3 className="mt-5 text-lg font-semibold">{title}</h3>
-                <p className="mt-2 text-sm text-ink-muted leading-relaxed flex-1">{text}</p>
-                <button
-                  onClick={() => handleNavClick('contact')}
-                  className="mt-6 inline-flex items-center gap-1.5 self-start text-sm font-semibold text-lime-deep hover:text-ink transition"
-                >
-                  Learn more <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Trusted */}
-      <section className="py-12 border-y border-hairline">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className={`${EYEBROW} text-ink-muted`}>Trusted by teams who value reliability</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-12 font-mono text-lg text-ink/40">
-            <span>LOGO1</span>
-            <span>LOGO2</span>
-            <span>LOGO3</span>
-            <span>LOGO4</span>
-          </div>
-        </div>
-      </section>
+      <Services onPick={() => handleNavClick('contact')} />
 
       {/* About / CTA: ink again, so the page closes the way it opens. */}
       <section id="about" className="bg-ink text-paper py-20 scroll-mt-16">

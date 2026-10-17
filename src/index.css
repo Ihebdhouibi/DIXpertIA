@@ -360,6 +360,11 @@
     transform 800ms var(--ease-home-out);
   transition-delay: calc(var(--reveal-index, 0) * 90ms);
 }
+/* The services rows' cursor spotlight: a lime disc at the pointer, set by
+   pointermove. Off by default (no --mx), and never under reduced motion. */
+.home-spotlight {
+  background-image: radial-gradient(420px circle at var(--mx, -999px) var(--my, -999px), var(--color-home-spotlight), transparent 65%);
+}
 .home-page :focus-visible {
   outline: 2px solid var(--color-home-fg);
   outline-offset: 3px;
@@ -378,6 +383,9 @@
   .home-reveal {
     opacity: 1;
     transform: none;
+  }
+  .home-spotlight {
+    background-image: none;
   }
 }
 
