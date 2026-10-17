@@ -11,6 +11,7 @@ from typing import Iterable
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
+from app.i18n import render_notification
 from app.models.notifications import Notification
 from app.models.user import User
 
@@ -28,7 +29,8 @@ def notify(
     user_ids: Iterable[str],
     *,
     kind: str,
-    message: str,
+    params: dict | None = None,
+    message: str | None = None,
     tone: str = "info",
     link: str = "",
     ref_type: str | None = None,
@@ -38,12 +40,18 @@ def notify(
 ) -> int:
     """Queue one notification per recipient in the current transaction.
 
+    `params` are the facts the text is made of (#135): each reader sees it in
+    their own language, rendered when read. `message` keeps an English copy for
+    SQL readers; it is rendered from `params` when not given.
+
     `exclude` leaves out the person who acted: nobody needs telling about what
     they just did themselves. `at` sets created_at, for the reminder job, which
     decides what is due from that time (#134). Returns how many were queued.
     """
     if tone not in TONES:
         raise ValueError(f"unknown notification tone {tone!r}")
+    if message is None:
+        message = render_notification(kind, params, "en") or kind
     recipients = sorted({u for u in user_ids if u and u != exclude})
     if recipients:
         # A Core INSERT without RETURNING, not db.add(): the ORM reads the new
@@ -51,7 +59,7 @@ def notify(
         # policy, under which the actor may not see a row addressed to someone
         # else. The admin's submit would fail on the accountant's notification.
         db.execute(insert(Notification.__table__).inline(), [
-            {"user_id": user_id, "kind": kind, "message": message, "tone": tone,
+            {"user_id": user_id, "kind": kind, "message": message, "params": params, "tone": tone,
              "link": link, "ref_type": ref_type, "ref_id": ref_id,
              **({"created_at": at} if at else {})}
             for user_id in recipients

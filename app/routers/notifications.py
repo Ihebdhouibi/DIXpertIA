@@ -12,11 +12,12 @@ notified of what.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.i18n import ApiError
 from app.models.notifications import Notification
 from app.models.user import User
 from app.schemas.api import NotificationsDismissedOut, NotificationsUpdatedOut
@@ -38,7 +39,7 @@ def _live(db: Session, user: User):
 def _own(db: Session, user: User, notification_id: int) -> Notification:
     notification = _live(db, user).filter(Notification.id == notification_id).first()
     if notification is None:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise ApiError(404, "notification.not_found")
     return notification
 
 

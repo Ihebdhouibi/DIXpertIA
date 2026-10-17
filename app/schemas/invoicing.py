@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.invoicing import (
@@ -12,6 +14,8 @@ class ClientBase(BaseModel):
     email: str = ""
     telephone: str = ""
     adresse: str = ""
+    # The language the client's invoices are printed in (#135).
+    locale: Literal["fr", "en"] = "fr"
 
 
 class ClientCreate(ClientBase):

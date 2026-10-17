@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.identity import get_identity, set_identity
+from app.i18n import render_notification, t
 from app.models.invoicing import (
     Invoice,
     InvoiceDirection,
@@ -80,7 +81,8 @@ class Reminder:
     invoice_id: int
     kind: str
     user_id: str
-    message: str
+    # The facts of the reminder (#135): rendered in each reader's language.
+    params: dict
 
 
 def _since(invoice: Invoice, step: Step) -> datetime | None:
@@ -93,17 +95,9 @@ def _since(invoice: Invoice, step: Step) -> datetime | None:
     return max(times) if times else None
 
 
-def _message(invoice: Invoice, step: Step, days: int) -> str:
-    who = invoice.client.nom if invoice.client else "an unknown client"
-    ref = invoice.reference
-    span = f"{days} day{'s' if days != 1 else ''}"
-    if step.kind == "reminder_draft":
-        return f"Invoice {ref} for {who} has been a draft for {span}. Submit it to the accountant when it is ready."
-    if step.kind == "reminder_review":
-        return f"Invoice {ref} for {who} has been waiting for your verification for {span}."
-    if step.kind == "reminder_rejected":
-        return f"Invoice {ref} for {who} was rejected {span} ago and has not been corrected. Correct and resubmit it."
-    return f"Invoice {ref} for {who} was approved {span} ago and has not been sent to the client."
+def _params(invoice: Invoice, days: int) -> dict:
+    """What a reminder says, as facts; the text is in app.i18n (#135)."""
+    return {"ref": invoice.reference, "party": invoice.client.nom if invoice.client else None, "days": days}
 
 
 def send_due_reminders(db: Session, now: datetime) -> list[Reminder]:
@@ -140,7 +134,7 @@ def send_due_reminders(db: Session, now: datetime) -> list[Reminder]:
         # this period is already covered.
         period_start = since + delay * (elapsed // delay)
         recipients = accountants if step.to_accountants else [invoice.cree_par_id]
-        message = _message(invoice, step, elapsed.days)
+        params = _params(invoice, elapsed.days)
         for user_id in recipients:
             if user_id not in active:
                 continue
@@ -153,21 +147,29 @@ def send_due_reminders(db: Session, now: datetime) -> list[Reminder]:
             ).first()
             if already:
                 continue
-            notify(db, [user_id], kind=step.kind, tone="warning", message=message,
+            notify(db, [user_id], kind=step.kind, tone="warning", params=params,
                    link="invoices", ref_type="invoice", ref_id=invoice.id, at=now)
-            written.append(Reminder(invoice.id, step.kind, user_id, message))
+            written.append(Reminder(invoice.id, step.kind, user_id, params))
     return written
 
 
 def _email(db: Session, reminders: list[Reminder]) -> int:
     if not reminders or not email_configured():
         return 0
-    emails = dict(db.query(User.id, User.email).filter(User.id.in_({r.user_id for r in reminders})))
+    # Each e-mail in its recipient's language (#135).
+    recipients = {
+        user_id: (email, locale)
+        for user_id, email, locale in db.query(User.id, User.email, User.locale)
+        .filter(User.id.in_({r.user_id for r in reminders}))
+    }
     sent = 0
     for r in reminders:
-        to = emails.get(r.user_id)
-        body = f"{r.message}\n\nOpen DI Xpertia: {settings.FRONTEND_URL}\n"
-        if to and send_email(to, "DI Xpertia - invoice reminder", body):
+        to, locale = recipients.get(r.user_id, (None, None))
+        if not to:
+            continue
+        body = t("email.reminder.body", locale,
+                 message=render_notification(r.kind, r.params, locale), url=settings.FRONTEND_URL)
+        if send_email(to, t("email.reminder.subject", locale), body):
             sent += 1
     return sent
 

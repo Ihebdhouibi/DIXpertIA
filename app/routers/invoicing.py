@@ -29,7 +29,8 @@ from app.services.notifications import notify, users_with_role
 # holds the ORM-shaped schemas used to validate input, while the API's
 # output contract is the translated one (#37 Option C). One response shape
 # for every invoice endpoint means the UI never sees French column names.
-from app.schemas.api import INVOICE_PROCESSING_STATUS_TO_API, INVOICE_STATUS_TO_API, InvoiceOut
+from app.i18n import CATALOG, ApiError, current_locale, format_date, status_word, t, translate_db_message
+from app.schemas.api import InvoiceOut
 from app.schemas.audit import InvoiceHistoryEventOut
 from app.schemas.invoicing import (
     ClientCreate,
@@ -109,15 +110,19 @@ def _trigger_message(exc: DatabaseError) -> str:
     first line is the message the trigger raised.
     """
     orig = getattr(exc, "orig", None)
-    text_ = str(orig) if orig else str(exc)
-    line = text_.strip().splitlines()[0].strip()
-    # PostgreSQL prefixes the severity in the server's own locale - "ERROR:" on
-    # an English server, "ERREUR:" on this one. Neither belongs in an API
-    # response, and which appears depends on the server's configuration.
-    for prefix in ("ERROR:", "ERREUR:", "FEHLER:"):
-        if line.startswith(prefix):
-            return line[len(prefix):].strip()
-    return line
+    # The primary message without the severity prefix, which PostgreSQL writes
+    # in the server's own locale ("ERROR:", "ERREUR:").
+    diag = getattr(orig, "diag", None)
+    line = getattr(diag, "message_primary", None)
+    if not line:
+        text_ = str(orig) if orig else str(exc)
+        line = text_.strip().splitlines()[0].strip()
+        for prefix in ("ERROR:", "ERREUR:", "FEHLER:"):
+            if line.startswith(prefix):
+                line = line[len(prefix):].strip()
+    # Our own triggers raise in English; answer in the request's language
+    # (#135). Anything else is shown as PostgreSQL wrote it.
+    return translate_db_message(line) or line
 
 
 # ---- Suppliers ----
@@ -142,10 +147,7 @@ def create_supplier(payload: SupplierCreate, db: Session = Depends(get_db)):
         db.rollback()
         # ux_suppliers_nom_ci. Two rows for one supplier would let the same bill
         # be entered once under each and so be paid twice.
-        raise HTTPException(
-            status_code=409,
-            detail=f"a supplier named '{payload.nom}' already exists",
-        ) from exc
+        raise ApiError(409, "supplier.name_taken", name=payload.nom) from exc
     db.refresh(supplier)
     return supplier
 
@@ -366,7 +368,7 @@ def create_supplier_invoice(
     by the period seal from #42 rather than quietly landing in the open one.
     """
     if not db.get(Supplier, payload.supplier_id):
-        raise HTTPException(status_code=404, detail="Fournisseur introuvable")
+        raise ApiError(404, "supplier.not_found")
 
     invoice = Invoice(
         numero=_allocate_invoice_number(db, "FF", payload.date_emission.year),
@@ -405,11 +407,7 @@ def create_supplier_invoice(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail=(f"invoice '{payload.supplier_reference}' from this supplier "
-                    "has already been recorded"),
-        ) from exc
+        raise ApiError(409, "supplier_invoice.duplicate", ref=payload.supplier_reference) from exc
     except DatabaseError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=_trigger_message(exc)) from exc
@@ -436,7 +434,7 @@ def set_processing_status(
     """
     invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
 
     record_event(db, "invoice.processing_status_changed", "invoice", invoice.id,
                  before={"processing_status": invoice.processing_status},
@@ -479,27 +477,17 @@ def update_invoice(
     """
     invoice = db.get(Invoice, invoice_id, options=[selectinload(Invoice.items)])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
     if invoice.direction != InvoiceDirection.OUTGOING:
-        raise HTTPException(
-            status_code=409,
-            detail=f"invoice {invoice.reference} is a supplier bill; only invoices we issue can be edited",
-        )
+        raise ApiError(409, "invoice.supplier_bill_not_editable", ref=invoice.reference)
     if invoice.statut != InvoiceStatus.BROUILLON:
-        raise HTTPException(
-            status_code=409,
-            detail=f"invoice {invoice.reference} is no longer a draft and cannot be edited; "
-                   "correct it with a new document",
-        )
+        raise ApiError(409, "invoice.not_a_draft", ref=invoice.reference)
     # Frozen while the accountant verifies it, and once approved (#118).
     if invoice.review_status in (InvoiceReviewStatus.SUBMITTED, InvoiceReviewStatus.APPROVED):
-        raise HTTPException(
-            status_code=409,
-            detail=f"invoice {invoice.reference} is under review and cannot be edited",
-        )
+        raise ApiError(409, "invoice.under_review", ref=invoice.reference)
     # Mirrors ck_invoices_dates with a field-level answer instead of a 500.
     if payload.date_echeance < invoice.date_emission:
-        raise HTTPException(status_code=422, detail="date_echeance cannot be before the issue date")
+        raise ApiError(422, "invoice.due_before_issue")
 
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
@@ -549,17 +537,17 @@ def _outgoing_draft(db: Session, invoice_id: int) -> Invoice:
         selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
     ])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
     if invoice.direction != InvoiceDirection.OUTGOING:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is a supplier bill; only invoices we issue are verified"))
+        raise ApiError(409, "invoice.supplier_bill_not_reviewed", ref=invoice.reference)
     return invoice
 
 
-def _counterparty(invoice: Invoice) -> str:
-    """The client's or supplier's name, for a notification's message."""
+def _counterparty(invoice: Invoice) -> str | None:
+    """The client's or supplier's name, for a notification; None if unknown,
+    which the notification text renders in the reader's language (#135)."""
     party = invoice.supplier if invoice.direction == InvoiceDirection.INCOMING else invoice.client
-    return party.nom if party else "an unknown counterparty"
+    return party.nom if party else None
 
 
 def _commit_review(db: Session, invoice: Invoice) -> InvoiceOut:
@@ -593,10 +581,9 @@ def submit_invoice(
     invoice = _outgoing_draft(db, invoice_id)
     if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status not in (
             InvoiceReviewStatus.NOT_SUBMITTED, InvoiceReviewStatus.REJECTED):
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is not a draft waiting to be submitted"))
+        raise ApiError(409, "invoice.not_submittable", ref=invoice.reference)
     if not invoice.items:
-        raise HTTPException(status_code=422, detail="an invoice needs at least one line before it is submitted")
+        raise ApiError(422, "invoice.needs_a_line")
     record_event(db, "invoice.submitted", "invoice", invoice.id,
                  before={"review_status": invoice.review_status},
                  after={"review_status": InvoiceReviewStatus.SUBMITTED})
@@ -605,7 +592,7 @@ def submit_invoice(
                          action=InvoiceReviewAction.SUBMITTED, comment=""))
     # Every accountant is told (#116): whoever is free picks it up.
     notify(db, users_with_role(db, "accountant"), kind="invoice_submitted", tone="info",
-           message=f"Invoice {invoice.reference} for {_counterparty(invoice)} is waiting for your verification.",
+           params={"ref": invoice.reference, "party": _counterparty(invoice)},
            link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
@@ -629,17 +616,14 @@ def approve_invoice(
     """
     invoice = _outgoing_draft(db, invoice_id)
     if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status != InvoiceReviewStatus.SUBMITTED:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is not waiting for verification"))
+        raise ApiError(409, "invoice.not_awaiting_review", ref=invoice.reference)
     if invoice.cree_par_id == current_user.id:
-        raise HTTPException(status_code=403, detail=(
-            "an invoice is never approved by the person who created it"))
+        raise ApiError(403, "invoice.no_self_approval")
     issued_on = date.today()
     # ck_invoices_dates would refuse it at the database; say what to do instead.
     if invoice.date_echeance < issued_on:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is due {invoice.date_echeance.isoformat()}, before today's "
-            "issue date; reject it so the due date can be corrected"))
+        raise ApiError(409, "invoice.due_before_today", ref=invoice.reference,
+                       due=format_date(invoice.date_echeance))
     before = {"review_status": invoice.review_status, "numero": invoice.numero,
               "date_emission": invoice.date_emission}
     invoice.review_status = InvoiceReviewStatus.APPROVED
@@ -654,7 +638,7 @@ def approve_invoice(
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.APPROVED, comment=""))
     notify(db, [invoice.cree_par_id], kind="invoice_approved", tone="success",
-           message=f"Invoice {invoice.numero} for {_counterparty(invoice)} was approved and can be sent.",
+           params={"ref": invoice.numero, "party": _counterparty(invoice)},
            link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
@@ -677,11 +661,9 @@ def reject_invoice(
     """
     invoice = _outgoing_draft(db, invoice_id)
     if invoice.statut != InvoiceStatus.BROUILLON or invoice.review_status != InvoiceReviewStatus.SUBMITTED:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is not waiting for verification"))
+        raise ApiError(409, "invoice.not_awaiting_review", ref=invoice.reference)
     if invoice.cree_par_id == current_user.id:
-        raise HTTPException(status_code=403, detail=(
-            "an invoice is never rejected by the person who created it"))
+        raise ApiError(403, "invoice.no_self_rejection")
     record_event(db, "invoice.rejected", "invoice", invoice.id,
                  before={"review_status": invoice.review_status},
                  after={"review_status": InvoiceReviewStatus.REJECTED, "comment": payload.comment})
@@ -689,7 +671,7 @@ def reject_invoice(
     db.add(InvoiceReview(invoice_id=invoice.id, actor_id=current_user.id,
                          action=InvoiceReviewAction.REJECTED, comment=payload.comment))
     notify(db, [invoice.cree_par_id], kind="invoice_rejected", tone="warning",
-           message=f"Invoice {invoice.reference} for {_counterparty(invoice)} was rejected: {payload.comment}",
+           params={"ref": invoice.reference, "party": _counterparty(invoice), "comment": payload.comment},
            link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
@@ -708,10 +690,9 @@ def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
     """
     invoice = _outgoing_draft(db, invoice_id)
     if invoice.statut != InvoiceStatus.BROUILLON:
-        raise HTTPException(status_code=409, detail=f"invoice {invoice.reference} has already left draft")
+        raise ApiError(409, "invoice.already_left_draft", ref=invoice.reference)
     if invoice.review_status != InvoiceReviewStatus.APPROVED:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} cannot be sent before the accountant approves it"))
+        raise ApiError(409, "invoice.send_before_approval", ref=invoice.reference)
     record_event(db, "invoice.sent", "invoice", invoice.id,
                  before={"statut": invoice.statut}, after={"statut": InvoiceStatus.ENVOYEE})
     invoice.statut = InvoiceStatus.ENVOYEE
@@ -732,18 +713,13 @@ def send_invoice(invoice_id: int, db: Session = Depends(get_db)):
 AWAITING_PAYMENT = (InvoiceStatus.ENVOYEE,)
 
 
-def _status_label(invoice: Invoice) -> str:
-    """The status as the API shows it ("paid"), not the stored French value."""
-    return INVOICE_STATUS_TO_API.get(invoice.statut.value, invoice.statut.value).lower()
-
-
 def _any_invoice(db: Session, invoice_id: int) -> Invoice:
     invoice = db.get(Invoice, invoice_id, options=[
         selectinload(Invoice.items),
         selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
     ])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
     return invoice
 
 
@@ -761,14 +737,11 @@ def pay_invoice(invoice_id: int, payload: InvoicePayment, db: Session = Depends(
     """
     invoice = _any_invoice(db, invoice_id)
     if invoice.statut not in AWAITING_PAYMENT:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is {_status_label(invoice)} and cannot be marked paid; "
-            "only a sent invoice can"))
+        raise ApiError(409, "invoice.not_payable", ref=invoice.reference, status=status_word(invoice.statut))
     if payload.paid_on > date.today():
-        raise HTTPException(status_code=422, detail="the payment date cannot be in the future")
+        raise ApiError(422, "payment.in_future")
     if payload.paid_on < invoice.date_emission:
-        raise HTTPException(status_code=422, detail=(
-            f"the payment date cannot be before the issue date, {invoice.date_emission.isoformat()}"))
+        raise ApiError(422, "payment.before_issue", date=format_date(invoice.date_emission))
     record_event(db, "invoice.paid", "invoice", invoice.id,
                  before={"statut": invoice.statut},
                  after={"statut": InvoiceStatus.PAYEE, "paid_on": payload.paid_on})
@@ -797,16 +770,11 @@ def cancel_invoice(
     """
     invoice = _any_invoice(db, invoice_id)
     if invoice.statut not in (InvoiceStatus.BROUILLON, *AWAITING_PAYMENT):
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is {_status_label(invoice)} and cannot be cancelled"))
+        raise ApiError(409, "invoice.not_cancellable", ref=invoice.reference, status=status_word(invoice.statut))
     if invoice.review_status == InvoiceReviewStatus.SUBMITTED and invoice.statut == InvoiceStatus.BROUILLON:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} is waiting for verification; the accountant approves "
-            "or rejects it before it can be cancelled"))
+        raise ApiError(409, "invoice.cancel_under_review", ref=invoice.reference)
     if invoice.processing_status == InvoiceProcessingStatus.ARCHIVED:
-        raise HTTPException(status_code=409, detail=(
-            f"invoice {invoice.reference} belongs to a closed month and cannot be cancelled; "
-            "correct it with a credit note in the open month"))
+        raise ApiError(409, "invoice.cancel_closed_month", ref=invoice.reference)
     record_event(db, "invoice.cancelled", "invoice", invoice.id,
                  before={"statut": invoice.statut, "numero": invoice.numero},
                  after={"statut": InvoiceStatus.ANNULEE, "reason": payload.reason})
@@ -815,8 +783,7 @@ def cancel_invoice(
     invoice.cancellation_reason = payload.reason
     if invoice.numero:
         notify(db, users_with_role(db, "accountant"), kind="invoice_cancelled", tone="warning",
-               message=(f"Invoice {invoice.numero} for {_counterparty(invoice)} was cancelled: "
-                        f"{payload.reason}. It needs a credit note in the books."),
+               params={"ref": invoice.numero, "party": _counterparty(invoice), "reason": payload.reason},
                link="invoices", ref_type="invoice", ref_id=invoice.id, exclude=current_user.id)
     return _commit_review(db, invoice)
 
@@ -829,40 +796,43 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
         selectinload(Invoice.reviews).selectinload(InvoiceReview.actor),
     ])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
     return InvoiceOut.from_orm_row(invoice)
 
 
 def _history_label(event: AuditEvent) -> str:
-    """One audit event of an invoice, in words (#115)."""
+    """One audit event of an invoice, in words (#115), in the request's language (#135)."""
     before, after = event.before or {}, event.after or {}
     if event.action == "invoice.created":
         if after.get("direction") == InvoiceDirection.INCOMING.value:
-            return f"Supplier bill recorded as {after.get('numero') or 'a bill'}"
-        return "Draft created"
+            return t("history.bill_recorded", ref=after.get("numero") or t("history.bill"))
+        return t("history.created")
     if event.action == "invoice.updated":
-        return "Draft corrected"
+        return t("history.updated")
     if event.action == "invoice.submitted":
-        return "Submitted for verification"
+        return t("history.submitted")
     if event.action == "invoice.approved":
         number = after.get("numero")
-        return f"Approved, numbered {number}" if number else "Approved"
+        return t("history.approved_numbered", number=number) if number else t("history.approved")
     if event.action == "invoice.rejected":
         comment = after.get("comment")
-        return f"Rejected: {comment}" if comment else "Rejected"
+        return t("history.rejected_because", comment=comment) if comment else t("history.rejected")
     if event.action == "invoice.sent":
-        return "Sent to the client"
+        return t("history.sent")
     if event.action == "invoice.paid":
         paid_on = after.get("paid_on")
-        return f"Paid on {paid_on}" if paid_on else "Paid"
+        if paid_on:
+            return t("history.paid_on", date=format_date(date.fromisoformat(paid_on)))
+        return t("history.paid")
     if event.action == "invoice.cancelled":
         reason = after.get("reason")
-        return f"Cancelled: {reason}" if reason else "Cancelled"
+        return t("history.cancelled_because", reason=reason) if reason else t("history.cancelled")
     if event.action == "invoice.processing_status_changed":
         def label(value):
-            return INVOICE_PROCESSING_STATUS_TO_API.get(value, value or "?")
-        return (f"Books: {label(before.get('processing_status'))} "
-                f"to {label(after.get('processing_status'))}")
+            key = f"processing.{value}"
+            return t(key) if value and key in CATALOG else (value or "?")
+        return t("history.books", from_=label(before.get("processing_status")),
+                 to=label(after.get("processing_status")))
     return event.action
 
 
@@ -876,7 +846,7 @@ def invoice_history(invoice_id: int, db: Session = Depends(get_db)):
     accountant lets the accountant see invoice events and nothing else.
     """
     if not db.get(Invoice, invoice_id):
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
     rows = (
         db.query(AuditEvent, User.firstName, User.lastName)
         .outerjoin(User, User.id == AuditEvent.actor_id)
@@ -890,7 +860,7 @@ def invoice_history(invoice_id: int, db: Session = Depends(get_db)):
             occurredAt=event.occurred_at,
             action=event.action,
             label=_history_label(event),
-            actorName=f"{first or ''} {last or ''}".strip() or "Unknown",
+            actorName=f"{first or ''} {last or ''}".strip() or t("history.unknown_actor"),
             actorRole=event.actor_role,
         )
         for event, first, last in rows
@@ -905,6 +875,8 @@ def _pdf_data(invoice: Invoice) -> dict:
     printed "Unknown" on every supplier bill (#86).
     """
     party = invoice.supplier if invoice.direction == InvoiceDirection.INCOMING else invoice.client
+    locale = (invoice.client.locale if invoice.direction == InvoiceDirection.OUTGOING and invoice.client
+              else current_locale())
     items = [
         {
             "description": item.designation,
@@ -921,8 +893,12 @@ def _pdf_data(invoice: Invoice) -> dict:
         "draft": invoice.numero is None,
         "client": party.nom if party else "",
         "client_address": party.adresse if party else "",
-        "date_issued": invoice.date_emission.strftime("%b %d, %Y"),
-        "due_date": invoice.date_echeance.strftime("%b %d, %Y"),
+        # The client's language (#135): the same invoice always prints the same
+        # way, whoever downloads it. A supplier bill is ours to read: the
+        # request's language.
+        "locale": locale,
+        "date_issued": format_date(invoice.date_emission, locale),
+        "due_date": format_date(invoice.date_echeance, locale),
         # As the API shows it: Overdue is derived from the due date (#117).
         "status": invoice.displayed_status().value,
         "items": items,
@@ -950,7 +926,7 @@ def download_invoice(
         selectinload(Invoice.items), selectinload(Invoice.client), selectinload(Invoice.supplier),
     ])
     if not invoice:
-        raise HTTPException(status_code=404, detail="Facture introuvable")
+        raise ApiError(404, "invoice.not_found")
 
     pdf_bytes = generate_invoice_pdf(_pdf_data(invoice))
     filename = f"Invoice_{invoice.reference}.pdf"

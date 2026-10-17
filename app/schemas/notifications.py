@@ -2,6 +2,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.i18n import render_notification
+
 
 class NotificationOut(BaseModel):
     """A notification as the UI reads it (#116).
@@ -28,7 +30,9 @@ class NotificationOut(BaseModel):
         return cls(
             id=str(row.id),
             kind=row.kind,
-            message=row.message,
+            # Rendered in the reader's language from the kind and its facts
+            # (#135); a row written before keeps the text it was written with.
+            message=render_notification(row.kind, row.params) or row.message,
             type=row.tone,
             read=row.read_at is not None,
             timestamp=int(row.created_at.timestamp() * 1000) if row.created_at else 0,

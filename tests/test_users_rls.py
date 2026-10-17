@@ -16,7 +16,7 @@ from account_flow import link_token, make_account
 from db_errors import INSUFFICIENT_PRIVILEGE, refused_with
 
 DOMAIN = "users-rls-test.tn"
-FUNCTIONS = ("auth_account_by_email", "auth_session", "auth_spend_account_token")
+FUNCTIONS = ("auth_account_by_email", "auth_session", "auth_spend_account_token", "auth_set_locale")
 
 
 @pytest.fixture(autouse=True)

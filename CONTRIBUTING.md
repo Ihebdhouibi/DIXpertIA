@@ -50,9 +50,13 @@ that ticket.
 
 - Issues, pull requests, commit messages, code comments and code identifiers
   are written in **English**.
-- The language of user-facing strings (UI labels, API error messages, PDFs) is
-  an open decision, tracked in #135. Until it is settled, follow the wording
-  already used around the code you change.
+- User-facing strings exist in **French and English** (#135). French is the
+  default (`dixpertia.tn`, and any host but `dixpertia.com`, which defaults to
+  English); users switch with the toggle. Never write a user-facing string in
+  place on the server: add it to `app/i18n.py` in both languages and use `t()`,
+  or raise `ApiError(status, "key")` for an API error. `tests/test_i18n.py`
+  fails for a key missing a language, and for a database trigger message the
+  catalog does not recognise. Trigger messages themselves stay in English.
 - Commit messages use the prefixes already in the history: `feat:`, `fix:`,
   `chore:`, `design:`.
 

@@ -26,12 +26,16 @@ class User(Base):
     createdAt = Column(DateTime, default=datetime.utcnow)
     # Carried in every access token; bumping it revokes them all (#62).
     token_version = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    # The language this account reads, "fr" or "en" (#135): its e-mails and
+    # notification texts follow it. Changed by its owner through auth_set_locale().
+    locale = Column(String(2), nullable=False, default="fr", server_default=text("'fr'"))
 
     employee = relationship("Employee", back_populates="user", uselist=False)
 
     __table_args__ = (
         # Roles are a closed set; the audit inserted 'superadmin' cleanly (#58).
         CheckConstraint("role IN ('admin', 'employee', 'accountant')", name="ck_users_role"),
+        CheckConstraint("locale IN ('fr', 'en')", name="ck_users_locale"),
         # Email is an identity, so uniqueness must ignore case: PROBE@x and
         # probe@x were both accepted. UNIQUE(email) cannot express this.
         Index("ux_users_email_ci", text("lower(email)"), unique=True),
