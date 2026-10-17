@@ -96,6 +96,18 @@ jobs:
         # existing database cannot pass here by accident.
         run: pytest -q
 
+  postgres-config:
+    name: postgres server config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The production server's PostgreSQL settings and pg_hba.conf (#158),
+      # parsed by the same major version: a typo fails here, not at the
+      # server's restart.
+      - name: Parse deploy/postgres with PostgreSQL 17
+        run: docker run --rm -v "$PWD/deploy/postgres:/conf:ro" postgres:17 bash /conf/ci-check.sh
+
   frontend:
     name: frontend (tsc)
     runs-on: ubuntu-latest
