@@ -400,9 +400,10 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.qty": {"en": "Qty", "fr": "Qté"},
     "pdf.price": {"en": "Unit price", "fr": "Prix unitaire"},
     "pdf.total": {"en": "Total", "fr": "Total"},
-    "pdf.subtotal": {"en": "Subtotal (excl. VAT)", "fr": "Total HT"},
+    # Short: the totals sit in a one-inch column, and a longer label wraps.
+    "pdf.subtotal": {"en": "Subtotal", "fr": "Total HT"},
     "pdf.vat": {"en": "VAT", "fr": "TVA"},
-    "pdf.grand_total": {"en": "Total (incl. VAT)", "fr": "Total TTC"},
+    "pdf.grand_total": {"en": "Total due", "fr": "Total TTC"},
     "pdf.draft_note": {
         "en": "Draft - number assigned on approval", "fr": "Brouillon - numéro attribué à l'approbation"},
     "pdf.no_items": {"en": "No items.", "fr": "Aucune ligne."},

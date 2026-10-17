@@ -193,8 +193,7 @@ def test_the_language_endpoint_changes_only_the_callers_row(client, identities, 
 
 @pytest.mark.parametrize("locale,words,absent", [
     ("fr", (b"FACTURE", b"Total TTC", b"TND"), b"INVOICE"),
-    # Not "Total (incl. VAT)": a PDF content stream escapes parentheses.
-    ("en", (b"INVOICE", b"incl. VAT", b"TND"), b"FACTURE"),
+    ("en", (b"INVOICE", b"Total due", b"TND"), b"FACTURE"),
 ])
 def test_the_pdf_is_printed_in_the_clients_language_whoever_downloads_it(
         client, admin, identities, locale, words, absent):
