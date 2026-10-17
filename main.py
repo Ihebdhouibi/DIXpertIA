@@ -268,8 +268,8 @@ def create_user(req: UserCreate, current_user: User = Depends(get_current_user),
     alphabet = string.ascii_letters + string.digits
     temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
     hashed = get_password_hash(temp_password)
+    # No id: the database allocates it from users_id_seq (#85).
     user = User(
-        id=f"USR-{db.query(User).count()+1:03d}",
         email=req.email,
         firstName=req.firstName,
         lastName=req.lastName,

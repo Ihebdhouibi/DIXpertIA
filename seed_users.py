@@ -35,22 +35,6 @@ def generate_password(length: int = 20) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def next_user_id(db) -> str:
-    """Allocate USR-NNN from the highest existing number.
-
-    Not from a row count: ids are sparse once anything is deleted, and a count
-    then collides with a live primary key. That is the open bug in main.py's
-    create_user (#59) which makes POST /api/users fail with a 500.
-    """
-    used = set()
-    for (existing,) in db.query(User.id).all():
-        if existing and existing.startswith("USR-"):
-            suffix = existing.split("-", 1)[1]
-            if suffix.isdigit():
-                used.add(int(suffix))
-    return f"USR-{(max(used) + 1) if used else 1:03d}"
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", required=True)
@@ -76,9 +60,10 @@ def main():
             existing.isActive = True
             user_id, action = existing.id, "updated (password reset)"
         else:
-            user_id = next_user_id(db)
-            db.add(User(
-                id=user_id,
+            # No id: the database allocates it from users_id_seq (#85). An id
+            # chosen here would not advance the sequence, and the next
+            # POST /api/users would collide with it.
+            user = User(
                 email=args.email,
                 firstName=args.first_name,
                 lastName=args.last_name,
@@ -87,8 +72,10 @@ def main():
                 isActive=True,
                 isVerified=True,
                 createdAt=datetime.now(),
-            ))
-            action = "created"
+            )
+            db.add(user)
+            db.flush()
+            user_id, action = user.id, "created"
         db.commit()
     finally:
         db.close()
