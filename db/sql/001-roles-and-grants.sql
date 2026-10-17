@@ -108,6 +108,37 @@ BEGIN
 END
 $$;
 
+-- The audit trail is append-only (#63): the blanket grant above gave it UPDATE,
+-- which re-running this script must not restore. Its trigger refuses UPDATE and
+-- DELETE anyway; the privilege is withdrawn as well so the app role cannot even
+-- attempt it. Guarded like the DELETE grants: the table arrives with migrations.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'audit_events') THEN
+        REVOKE UPDATE, DELETE ON TABLE public.audit_events FROM dixpertia_app;
+    END IF;
+END
+$$;
+
+-- users (#76): the application never reads the password hash, not even on its
+-- own row - sign-in reads it through auth_account_by_email() - and only the
+-- columns an admin edits are updatable; the password changes only through
+-- auth_spend_account_token(). The blanket grant above gave the whole table, so
+-- it is narrowed again here on every run.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
+        REVOKE SELECT, UPDATE ON TABLE public.users FROM dixpertia_app;
+        GRANT SELECT (id, email, "firstName", "lastName", role, department, "avatarUrl",
+                      "isActive", "isVerified", "createdAt", token_version, locale)
+            ON TABLE public.users TO dixpertia_app;
+        GRANT UPDATE ("firstName", "lastName", role, department, "avatarUrl",
+                      "isActive", "isVerified", token_version, locale)
+            ON TABLE public.users TO dixpertia_app;
+    END IF;
+END
+$$;
+
 -- Integer primary keys draw from sequences; UPDATE is required by nextval().
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO dixpertia_app;
 

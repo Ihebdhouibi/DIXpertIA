@@ -109,6 +109,8 @@ def _role_url(role: str, password: str) -> str:
 # Business data only. `users` and `employees` hold the fixture accounts every
 # test signs in as, and alembic_version must survive or the schema is rebuilt.
 TRUNCATED_BETWEEN_TESTS = (
+    # TRUNCATE, not DELETE, which the append-only trigger refuses (#63).
+    "audit_events",
     "notifications",
     "invoice_reviews",
     "invoice_items",
@@ -172,6 +174,7 @@ def database():
     os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-32-characters-long")
     # The application runs as the least-privileged role, as it does in
     # production. Migrations and fixtures run as the owner.
+    os.environ["REMINDERS_ENABLED"] = "false"  # tests call the job directly (#134)
     os.environ["DATABASE_URL"] = _role_url(APP_ROLE, APP_PASSWORD)
     os.environ["SCHEMA_DATABASE_URL"] = _role_url(OWNER_ROLE, OWNER_PASSWORD)
 
@@ -250,7 +253,29 @@ def client(app):
     from fastapi.testclient import TestClient
     # raise_server_exceptions=False so a 500 is asserted as a 500 rather than
     # blowing up the test: "this route returns 500" is a thing worth testing.
-    return TestClient(app, raise_server_exceptions=False)
+    # English by default: the suite's assertions read English messages. The
+    # API's own default, without the header, is French (#135); test_i18n.py
+    # covers both languages.
+    return TestClient(app, raise_server_exceptions=False, headers={"Accept-Language": "en"})
+
+
+@pytest.fixture
+def mailbox(app, monkeypatch):
+    """The e-mails the API sends, captured instead of sent: dicts of to, subject, body.
+
+    Activation and reset links travel only by e-mail, and only their hash is
+    stored (#62), so a test that follows a link has to read it from here.
+    """
+    import main
+
+    sent = []
+
+    def capture(to_email, subject, body):
+        sent.append({"to": to_email, "subject": subject, "body": body})
+        return True
+
+    monkeypatch.setattr(main, "send_email", capture)
+    return sent
 
 
 @pytest.fixture

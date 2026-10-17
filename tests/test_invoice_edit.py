@@ -122,7 +122,9 @@ def test_a_sent_invoice_can_still_be_paid(sent_invoice, database):
     """Leaving draft freezes the content, not the commercial state."""
     draft = sent_invoice
     with database.begin() as c:
-        c.execute(text("UPDATE invoices SET statut = 'PAYEE' WHERE id = :i"), {"i": int(draft["id"])})
+        # paid_on since #126: a paid invoice carries its payment date.
+        c.execute(text("UPDATE invoices SET statut = 'PAYEE', paid_on = current_date WHERE id = :i"),
+                  {"i": int(draft["id"])})
         statut = c.execute(text("SELECT statut FROM invoices WHERE id = :i"),
                            {"i": int(draft["id"])}).scalar()
     assert statut == "PAYEE"

@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.invoicing import (
@@ -12,6 +14,8 @@ class ClientBase(BaseModel):
     email: str = ""
     telephone: str = ""
     adresse: str = ""
+    # The language the client's invoices are printed in (#135).
+    locale: Literal["fr", "en"] = "fr"
 
 
 class ClientCreate(ClientBase):
@@ -65,6 +69,26 @@ class InvoiceCreate(BaseModel):
         # date_emission is always today for a new invoice.
         if value < date.today():
             raise ValueError("date_echeance cannot be before today")
+        return value
+
+
+class InvoicePayment(BaseModel):
+    """Marking an invoice paid (#126): paid in full, on this date."""
+
+    paid_on: date
+
+
+class InvoiceCancellation(BaseModel):
+    """Why an invoice is cancelled (#126). Mandatory, drafts included."""
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a cancellation needs a reason")
         return value
 
 

@@ -101,12 +101,44 @@ migrations and maintenance scripts keep working under `FORCE ROW LEVEL
 SECURITY`. It is scoped to that role by name rather than to a settable flag: a
 GUC-based escape hatch could be flipped by `dixpertia_app` itself.
 
-### `users` is not covered
+### `users` (#76)
 
-Login, forgot-password and reset-password all read `users` with no authenticated
-identity, so a policy there would break authentication outright. Covering it
-needs `SECURITY DEFINER` lookup functions owned by a `BYPASSRLS` role, exposing
-only the columns the auth path needs. Tracked separately.
+Rows: admin, accountant and the reminder job read every account, since payslips,
+the invoice review history and the reminder e-mails need other people's names
+and addresses; the rule matches `employees`. Everyone else reads only their own
+row. Only the admin creates or edits accounts.
+
+Columns: the application role cannot read `hashedPassword` at all, not even on
+its own row, and can update only the columns an admin edits. The ORM model
+defers the column with `raiseload`, so an accidental read fails in Python, by
+name. `db/sql/001-roles-and-grants.sql` narrows the blanket grant again on every
+run, and `setup_roles.py` fails its verification if the column is readable.
+
+Sign-in, forgot-password, the reset and activation links, and the per-request
+session check all read `users` before anyone is identified. They go through
+`SECURITY DEFINER` functions owned by the schema owner, with `search_path`
+pinned and `EXECUTE` granted to the application role only:
+
+| Function | Used by | Returns |
+|---|---|---|
+| `auth_account_by_email(email)` | sign-in, forgot-password | the account, with the hash for the one bcrypt comparison |
+| `auth_session(user_id)` | every request (#62) | role, `isActive`, `isVerified`, `token_version`; no hash |
+| `auth_spend_account_token(token, purpose, hash)` | reset and activation links | the account id, or NULL |
+
+`auth_spend_account_token` takes the token itself and hashes it inside, so
+reading `account_tokens` (which holds only hashes) is no way to set a password.
+In one statement it checks the link is live, spends it, sets the password,
+activates the account for an activation link and bumps `token_version`.
+
+The issue proposed a separate `BYPASSRLS` role to own the functions. The schema
+owner already passes the policies through `users_owner_all`, and a new role
+would need another superuser provisioning step for no narrower access to these
+two tables. If migrations ever run as a superuser instead of
+`dixpertia_owner`, the functions would be owned by that superuser: run them as
+the owner.
+
+`seed_users.py` connects as the owner too: there is no signed-in admin to
+create the first one.
 
 ## Business integrity constraints
 
@@ -260,6 +292,43 @@ wants a stricter forward-only progression, it belongs in the same trigger.
 The close itself -- which invoices get archived and when -- is owned separately
 and is not implemented here.
 
+### The commercial status: paid and cancelled (#126)
+
+`statut` is what the counterparty sees. Its moves, held by
+`trg_invoice_commercial_transitions` so a direct SQL write is refused too:
+
+| From | To | Who | Condition |
+|---|---|---|---|
+| draft | sent | admin | approved by the accountant (#118) |
+| draft | cancelled | admin | a reason; not while waiting for verification |
+| sent | paid | admin or accountant | a payment date, not in the future nor before the issue date |
+| sent | cancelled | admin | a reason; not once its month is closed |
+| paid, cancelled | - | - | final |
+
+- **Paid** means paid in full on `paid_on`. Partial payments are not modelled.
+  Payment stays possible after the month is closed: late payment is why the
+  archived seal leaves `statut` alone (#41).
+- **Cancelled** keeps the reason and time (`cancellation_reason`,
+  `cancelled_at`). A draft has no legal number, so it leaves no gap. An
+  approved or sent invoice keeps its number in the series, marked cancelled, so
+  the series stays gapless and the number justified; the accountants are
+  notified to book a credit note, a document not issued by the application yet.
+  A cancelled numbered invoice still counts in its month's figures until that
+  credit note exists.
+- An invoice waiting for verification cannot be cancelled: it is frozen until
+  the accountant approves or rejects it, as for edits, so it never sits in the
+  verification queue after it is gone.
+- CHECKs tie the columns to the status: `paid_on` is set exactly when paid, the
+  reason and time exactly when cancelled.
+- **Overdue is derived, never stored** (#117): a sent invoice whose due date
+  has passed reads as overdue (`Invoice.displayed_status()`); due today is not
+  yet. The list filter applies the same condition, and "sent" excludes overdue
+  invoices, so each invoice appears under one status.
+  `ck_invoices_overdue_is_derived` refuses storing `EN_RETARD`; the enum value
+  stays because PostgreSQL cannot drop one without rebuilding the type. Any
+  figure computed in SQL (the dashboard summary of #120) must use the same
+  condition: `statut = 'ENVOYEE' AND date_echeance < current_date`.
+
 
 ## Running the test suite
 
@@ -315,10 +384,24 @@ python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:54
 | `test_authorisation.py` | every route x {anonymous, employee, accountant, admin}, and a check that no route escapes the matrix |
 | `test_invoice_rules.py` | gapless numbering, chronological order, the two series, per-supplier references, the monthly close |
 | `test_row_level_security.py` | an employee cannot read another's payroll; no response carries a password hash |
+| `test_audit_trail.py` | one audit event per sensitive action, by the right actor; append-only; admin-only reads; no secret in the trail |
+| `test_account_lifecycle.py` | inactive accounts refused; deactivation, role and password changes revoke sessions; reset and activation links hashed, single use, never a session; login timing |
+| `test_users_rls.py` | who reads which accounts; the password hash unreadable and unwritable by the application role; the auth functions pin search_path and are not PUBLIC |
+| `test_responses.py` | every JSON route declares a response model; no secret in any response; every closed-set column constrained by the database |
+| `test_invoice_status.py` | paid and cancelled: who, when, the payment date, the reason, the closed month, and the same rules enforced in SQL |
+| `test_invoice_overdue.py` | overdue derived at read time, the due-today boundary, the filter, the PDF, nothing stored |
+| `test_i18n.py` | French and English: request language, account language for e-mails and notifications, client language for the PDF, every trigger message translated |
 
 The schema is built from an empty one by `alembic upgrade head` on every run, so
 a migration that only works against an existing database cannot pass by
 accident.
+
+A test that expects PostgreSQL to refuse something recognises the refusal by
+its SQLSTATE (`tests/db_errors.py`, `refused_with(INSUFFICIENT_PRIVILEGE)`), not
+by the message: the server writes its own messages in its configured language,
+so "permission denied" is "droit refusé" on a French server (#161). Matching
+text is fine for messages we write - a trigger's `RAISE EXCEPTION`, or a
+constraint's name, which PostgreSQL quotes untranslated.
 
 
 ## Income and expense: one table, two directions
@@ -725,3 +808,209 @@ that share a sort value have no defined order between queries, and a client
 paging through the list sees some rows twice and never sees others. Walking 40
 pages of the seeded invoices ordered by `date_emission` alone returned 123
 duplicated rows out of 1000; adding `id` returned zero.
+
+## Audit trail
+
+`audit_events` records who did what (#63, AUDIT-DB-017). One row per sensitive
+action, written by `app.services.audit.record_event()` inside the action's own
+transaction: an action that fails or rolls back records nothing, and one that
+commits is always recorded. An idempotent replay of an invoice creation creates
+nothing, so it records nothing.
+
+| Column | Meaning |
+|---|---|
+| `actor_id`, `actor_role` | the signed-in identity of the request, and its role at the time. NULL for an anonymous step (the two password-reset steps) |
+| `action` | `entity.verb`, e.g. `invoice.approved` |
+| `entity`, `entity_id` | the record acted on |
+| `before`, `after` | the fields the action changed. Amounts are strings, so they stay exact |
+
+### What is recorded
+
+| Action | Where |
+|---|---|
+| `invoice.created` (both directions), `invoice.updated` | `app/routers/invoicing.py` |
+| `invoice.submitted`, `.approved`, `.rejected`, `.sent` | the verification flow (#118) |
+| `invoice.processing_status_changed` | the accountant's workflow |
+| `accounting_period.closed` | `app/routers/accounting.py`; one event for the close, with the number of invoices archived |
+| `leave_request.approved`, `.rejected` | `main.py` |
+| `user.created`, `employee.created` | `main.py`; the role only |
+| `user.updated`, `.role_changed`, `.deactivated`, `.reactivated` | `PATCH /api/users/{id}`, `POST .../deactivate` (#62); the changed fields, before and after |
+| `user.activation_sent`, `user.activated` | the activation link (#62) |
+| `user.password_reset_requested`, `user.password_reset` | `main.py`; an unknown e-mail records nothing |
+
+Not recorded yet, because the endpoint does not exist: invoice cancellation
+(#126). That issue adds it and must call `record_event()`.
+
+**Never put a secret in `before`/`after`**: no password, hash, token or
+temporary password. The trail is kept for years and read by people who must not
+see them. `test_audit_trail.py` checks the account and reset flows for this.
+
+### Append-only
+
+- The application role holds `INSERT` and `SELECT` only. `UPDATE` and `DELETE`
+  are revoked in the migration and again in `db/sql/001-roles-and-grants.sql`,
+  whose blanket grant would otherwise restore `UPDATE` on every re-run.
+  `setup_roles.py` fails its verification if they come back.
+- `trg_audit_events_are_append_only` refuses `UPDATE` and `DELETE` from anyone,
+  the owner included.
+- `TRUNCATE` is never granted to the application role. The test suite empties
+  the table with it between tests, as the owner.
+
+### Who reads it, and who writes it
+
+Row-level security: only the `admin` role reads the trail, through
+`GET /api/audit-events` (filters `actorId`, `entity`, `entityId`, `action`,
+`since`, `until`; `X-Total-Count`). Any request may write, but only in its own
+name: the INSERT policy requires `actor_id` and `actor_role` to equal the
+request's identity, or both NULL when nobody is signed in.
+
+An actor is a foreign key with `ON DELETE RESTRICT`: an account that acted
+cannot be deleted from under its trail. Accounts are deactivated, not deleted
+(#62).
+
+### Retention
+
+**Proposed: 10 years, then purged**, aligned with the retention of the
+accounting records the events describe. This is a proposal, not a confirmed
+legal requirement: confirm the period with the business (and its accountant or
+legal adviser) before deployment. Until then nothing is purged. A purge, when it
+comes, runs as the owner with the append-only trigger disabled for that
+statement only, and is itself recorded.
+
+### Deferred from #63
+
+- `created_by` / `updated_by` columns on business tables: the trail already
+  answers "who" for every recorded action, and the invoice review history
+  (`invoice_reviews`) keeps its own actors.
+- `log_connections` and statement logging on the server: server configuration,
+  part of the deployment milestone with the rest of #77.
+
+## Accounts and sessions
+
+How an account is created, signs in, and loses access (#62; AUDIT-DB-004,
+-005, -009, -024).
+
+### A token is checked against the account on every request
+
+An access token is a JWT with `typ: "access"`, the account id and the
+account's `token_version` at sign-in. `require_authentication` (main.py) checks
+it before any route runs, and refuses it unless the account exists, is active,
+is activated, and still has that `token_version`. A route that never loads the
+current user is covered too. The role published to row-level security is the
+account's, not the token's claim.
+
+`token_version` goes up when the account is deactivated, when its role
+changes, and when its password is reset or set by activation. Every session
+issued before is then refused on its next request, instead of living out its
+60 minutes. Editing a name does not sign anyone out.
+
+### No delete; deactivation
+
+Payslips and leave requests reference the account and payroll must be kept,
+so an account is never deleted. `POST /api/users/{id}/deactivate` (or `PATCH`
+with `isActive: false`) blocks it at once; `PATCH` with `isActive: true`
+reactivates it. An admin cannot change their own role or deactivate
+themselves, which also guarantees an active admin remains.
+
+### Reset and activation links
+
+Both are opaque random tokens (`secrets.token_urlsafe(32)`) sent by e-mail.
+Only their SHA-256 is stored, in `account_tokens`; a database read hands out
+nothing usable. Each is single use (`used_at`), expires (reset 1 hour,
+activation 72 hours), and issuing a new one for the same purpose spends the
+previous one. A token for one purpose is refused by the other endpoint, and
+neither is ever accepted as a session.
+
+`POST /api/users` creates the account with an unusable password and e-mails an
+activation link: no password is chosen by the admin, returned in the response
+or sent by e-mail. The account cannot sign in until its owner sets a password
+through `POST /api/activate`. `activationEmailSent` in the response says
+whether the e-mail left; `POST /api/users/{id}/activation` sends a new link.
+Accounts that existed before #62 were marked activated by its migration.
+
+A new password must be 12 characters at least and 72 bytes at most (bcrypt
+reads no further, so a longer one would be silently truncated).
+
+### Sign-in does not reveal who has an account
+
+Every refusal is the same 401 `Invalid credentials`, whatever the reason:
+unknown e-mail, wrong password, inactive or not activated. An unknown e-mail
+still runs one bcrypt check against a dummy hash, so it takes as long as a
+known one; the audit measured 24 ms against 292 ms before. `forgot-password`
+answers the same for every e-mail.
+
+### Not covered yet
+
+- Rate limiting of `/api/login` and the reset endpoints. It belongs with the
+  attempt counter 2FA needs (#44), in the deployment milestone.
+- Changing one's own password from Settings: the form there is a placeholder.
+  When it is built it must check the current password, apply the same policy
+  and bump `token_version`.
+- A server-side sign-out of one session. Signing out clears the browser's
+  token; revoking every session is what deactivation and a reset do.
+
+## Values and responses (#77)
+
+### Closed sets are constrained by the database
+
+A column that holds one of a fixed set of values (a role, a status, a type) is
+never free text (AUDIT-DB-019). The rule, applied everywhere:
+
+- **A workflow state, mirrored by a Python enum** - invoice `statut`,
+  `processing_status`, `review_status`, review `action`, `direction`, leave
+  `type_conge` and `statut`, period `state`, `employment_status` - is a
+  PostgreSQL enum. Adding a state is a migration, which is the point: a new
+  state needs its transitions and triggers reviewed.
+- **A small set no workflow moves through** - `users.role`, notification
+  `tone`, token `purpose`, invoice `series` - is a string with a `CHECK`. It is
+  cheaper to change, and a PostgreSQL enum cannot drop a value.
+
+Open on purpose, and listed in `test_responses.py`: audit `action` and
+notification `kind` (event names that grow with features), notification
+`ref_type`, and audit `actor_role` (a snapshot the INSERT policy already holds
+to the caller's role). The test fails for any other closed-set column the
+database does not constrain.
+
+**Roles stay a fixed set**, not a table. Permissions are not configurable, and
+the row-level security policies name roles literally; a roles table would only
+move the list without making anything configurable. Revisit if per-role
+permissions ever become something an admin edits. The `rh` role that the
+invoice routes still listed was dropped: `ck_users_role` meant no account could
+hold it.
+
+### Every JSON response is an allowlist
+
+Every route that answers with JSON declares a response model, so a field
+reaches the client only if a schema names it (AUDIT-DB-020). The denylist
+serialisation the audit found (`obj.__dict__` minus private columns) exposed
+any column added later; it was removed with `GET /api/data` (#55) and must not
+come back. `test_responses.py` fails for a route without a response model
+(the PDF download, which returns a file, is the one exception) and for any
+response that carries a password hash, a token or a token hash.
+
+## Languages (#135)
+
+French and English, French by default. Everything the server writes for a
+person comes from `app/i18n.py`, where each French text sits next to its
+English one:
+
+| What | Language |
+|---|---|
+| API errors, dates and labels in responses | the request's `Accept-Language` (the UI sends its current language); French without it |
+| Notification texts | rendered when read, in the request's language, from `notifications.kind` and `params`; `message` keeps an English copy for SQL readers |
+| E-mails (activation, reset, reminders) | the recipient's `users.locale` |
+| Invoice PDF | the client's `clients.locale`, so an invoice prints the same way whoever downloads it; a supplier bill, the request's |
+
+`users.locale` is set by the admin at creation and edit, and by its owner
+through `PUT /api/me/locale`, which calls `auth_set_locale()`: that function
+changes only the caller's own row, because the UPDATE policy on `users` is
+the admin's (#76).
+
+Database triggers raise their messages in English; `translate_db_message()`
+recognises each one and answers in the request's language. A new trigger
+message needs its pattern and both texts in the catalog, or
+`test_every_trigger_message_is_recognised` fails. API errors are
+`ApiError(status, key, **params)`, returned as `{"detail": <text>, "code": <key>}`.
+
+Amounts are Tunisian dinars with three decimals in both languages
+(`1 234,500 TND`, `1,234.500 TND`); the invoice PDF printed `$` before.

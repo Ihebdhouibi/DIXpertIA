@@ -194,6 +194,17 @@ export const auth = {
 // Each list takes the limit/offset the API caps (#61). The defaults here are
 // the first page; screens that need more pass their own.
 
+/** One step in an invoice's life, from the audit trail (#115). */
+export interface InvoiceHistoryEvent {
+  id: string;
+  occurredAt: string;
+  action: string;
+  /** The step in words, written by the server. */
+  label: string;
+  actorName: string;
+  actorRole?: string | null;
+}
+
 export const invoices = {
   list: (params: Record<string, string | number> = {}) =>
     request<Invoice[]>(`/api/invoices?${new URLSearchParams(
@@ -213,12 +224,20 @@ export const invoices = {
       body: JSON.stringify({ processing_status: processingStatus }),
     }),
   get: (id: number) => request<Invoice>(`/api/invoices/${id}`),
+  /** Every recorded step of one invoice, newest first (#115). Admin and accountant. */
+  history: (id: string | number) => request<InvoiceHistoryEvent[]>(`/api/invoices/${id}/history`),
   /** Verification before sending (#118): the admin submits and sends, the accountant decides. */
   submit: (id: string | number) => request<Invoice>(`/api/invoices/${id}/submit`, { method: 'POST' }),
   approve: (id: string | number) => request<Invoice>(`/api/invoices/${id}/approve`, { method: 'POST' }),
   reject: (id: string | number, comment: string) =>
     request<Invoice>(`/api/invoices/${id}/reject`, { method: 'POST', body: JSON.stringify({ comment }) }),
   send: (id: string | number) => request<Invoice>(`/api/invoices/${id}/send`, { method: 'POST' }),
+  /** Paid in full on `paidOn` (YYYY-MM-DD), by the admin or the accountant (#126). */
+  pay: (id: string | number, paidOn: string) =>
+    request<Invoice>(`/api/invoices/${id}/pay`, { method: 'POST', body: JSON.stringify({ paid_on: paidOn }) }),
+  /** Cancelled by the admin, with a reason (#126). */
+  cancel: (id: string | number, reason: string) =>
+    request<Invoice>(`/api/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   /**
    * The invoice PDF the server generates (#86), as a Blob. `inline` asks for a
    * copy to display rather than save; the invoice detail embeds it (#127).
@@ -271,10 +290,30 @@ export const employees = {
   list: () => request<Employee[]>('/api/employees'),
 };
 
+/**
+ * What POST /api/users answers (#62). No password: the owner chooses one
+ * through the activation link, and `activationEmailSent` says whether it left.
+ */
+export interface UserCreated {
+  id: string;
+  email: string;
+  activationEmailSent: boolean;
+}
+
+export type UserUpdate = Partial<Pick<User, 'firstName' | 'lastName' | 'role' | 'isActive'>>;
+
+const userPath = (id: string) => `/api/users/${encodeURIComponent(id)}`;
+
 export const users = {
   list: () => request<User[]>('/api/users'),
-  create: (body: unknown) =>
-    request<User>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body: { email: string; firstName: string; lastName: string; role: User['role'] }) =>
+    request<UserCreated>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: UserUpdate) =>
+    request<User>(userPath(id), { method: 'PATCH', body: JSON.stringify(body) }),
+  /** Blocks the account and every session it holds. There is no delete. */
+  deactivate: (id: string) => request<User>(`${userPath(id)}/deactivate`, { method: 'POST' }),
+  resendActivation: (id: string) =>
+    request<{ id: string; activationEmailSent: boolean }>(`${userPath(id)}/activation`, { method: 'POST' }),
 };
 
 /** A notification as the server keeps it (#116); the shape the bell already used. */

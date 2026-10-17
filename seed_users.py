@@ -23,7 +23,10 @@ from datetime import datetime
 
 import bcrypt
 
-from app.core.database import SessionLocal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.models.user import User
 
 MIN_PASSWORD_LENGTH = 12
@@ -51,13 +54,19 @@ def main():
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    db = SessionLocal()
+    # As the schema owner, not the application role: there is no signed-in
+    # admin to create the first one, and users is under row-level security
+    # with the password column closed to the application (#76).
+    db = Session(create_engine(settings.SCHEMA_DATABASE_URL))
     try:
         existing = db.query(User).filter(User.email == args.email).first()
         if existing:
             existing.hashedPassword = hashed
             existing.role = args.role
             existing.isActive = True
+            existing.isVerified = True
+            # A new password revokes the sessions issued under the old one (#62).
+            existing.token_version += 1
             user_id, action = existing.id, "updated (password reset)"
         else:
             # No id: the database allocates it from users_id_seq (#85). An id

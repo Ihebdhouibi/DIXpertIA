@@ -23,7 +23,9 @@ BOOKKEEPING = "admin or accountant"
 # The accountant's verification decisions (#118): not even the admin, who
 # creates the invoices and must not approve their own.
 ACCOUNTANT_ONLY = "accountant"
-BILLING = "admin, accountant or rh"
+# The invoice routes. An "rh" role was listed with them until #77, though no
+# account could hold it; the set is now the same as BOOKKEEPING.
+BILLING = "admin or accountant (invoice routes)"
 EMPLOYEE_SELF = "any signed-in user, scoped to their own rows"
 
 # (method, path, who may reach it)
@@ -36,9 +38,11 @@ ROUTES = [
     ("POST", "/api/login", PUBLIC),
     ("POST", "/api/forgot-password", PUBLIC),
     ("POST", "/api/reset-password", PUBLIC),
+    ("POST", "/api/activate", PUBLIC),
 
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
+    ("PUT", "/api/me/locale", AUTHENTICATED),
 
     # --- notifications (#116): everyone has a list, scoped to their own rows -
     ("GET", "/api/notifications", EMPLOYEE_SELF),
@@ -46,6 +50,9 @@ ROUTES = [
     ("POST", "/api/notifications/read-all", EMPLOYEE_SELF),
     ("POST", "/api/notifications/1/dismiss", EMPLOYEE_SELF),
     ("POST", "/api/notifications/dismiss-all", EMPLOYEE_SELF),
+
+    # --- audit trail (#63): read by the admin only, written by the server ---
+    ("GET", "/api/audit-events", ADMIN_ONLY),
 
     # --- payroll and leave: scoped by row-level security, not by role -------
     ("GET", "/api/payslips", EMPLOYEE_SELF),
@@ -60,6 +67,10 @@ ROUTES = [
     # --- accounts ----------------------------------------------------------
     ("GET", "/api/users", ADMIN_ONLY),
     ("POST", "/api/users", ADMIN_ONLY),
+    # Account lifecycle (#62): edit, deactivate, resend the activation link.
+    ("PATCH", "/api/users/USR-999", ADMIN_ONLY),
+    ("POST", "/api/users/USR-999/deactivate", ADMIN_ONLY),
+    ("POST", "/api/users/USR-999/activation", ADMIN_ONLY),
     ("POST", "/api/employees", ADMIN_ONLY),
 
     # --- billing -----------------------------------------------------------
@@ -71,8 +82,10 @@ ROUTES = [
     ("GET", "/api/invoices/1", BILLING),
     # By internal id since #86; the generic /api/invoices/1 normalisation below covers it.
     ("GET", "/api/invoices/1/download", BILLING),
+    # The invoice's history, from the audit trail (#115).
+    ("GET", "/api/invoices/1/history", BILLING),
 
-    # --- bookkeeping: narrower than billing, rh excluded --------------------
+    # --- bookkeeping ---------------------------------------------------------
     ("POST", "/api/invoices", ADMIN_ONLY),
     # Correcting a draft (#125): admin only, like creation - the accountant
     # reviews invoices and must not edit what she reviews.
@@ -83,6 +96,9 @@ ROUTES = [
     ("POST", "/api/invoices/1/approve", ACCOUNTANT_ONLY),
     ("POST", "/api/invoices/1/reject", ACCOUNTANT_ONLY),
     ("POST", "/api/invoices/1/send", ADMIN_ONLY),
+    # Paid and cancelled (#126): paying is bookkeeping, cancelling is the admin's.
+    ("POST", "/api/invoices/1/pay", BOOKKEEPING),
+    ("POST", "/api/invoices/1/cancel", ADMIN_ONLY),
     ("POST", "/api/supplier-invoices", BOOKKEEPING),
     ("PATCH", "/api/invoices/1/processing-status", BOOKKEEPING),
     ("GET", "/api/periods", BOOKKEEPING),
@@ -110,7 +126,7 @@ def _may_reach(rule: str, role: str) -> bool:
     if rule == ACCOUNTANT_ONLY:
         return role == "accountant"
     if rule == BILLING:
-        return role in ("admin", "accountant")  # 'rh' has no fixture account
+        return role in ("admin", "accountant")
     raise AssertionError(f"unknown rule {rule!r}")
 
 
@@ -161,7 +177,8 @@ def test_every_route_is_covered(app):
                                "/api/invoices/{invoice_id}/processing-status")
                       .replace("/api/invoices/1", "/api/invoices/{invoice_id}")
                       .replace("/api/periods/2026-01/close", "/api/periods/{month}/close")
-                      .replace("/api/periods/2026-01", "/api/periods/{month}"))
+                      .replace("/api/periods/2026-01", "/api/periods/{month}")
+                      .replace("/api/users/USR-999", "/api/users/{user_id}"))
         declared.add((method, normalised))
 
     actual = set()

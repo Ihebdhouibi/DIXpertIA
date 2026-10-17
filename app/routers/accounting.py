@@ -8,7 +8,7 @@ blocking it rather than reporting a count.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, Path, Response
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
@@ -23,10 +23,11 @@ from app.models.invoicing import (
 )
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
+from app.i18n import ApiError
+from app.services.audit import record_event
 
 # Keeping the books is the accountant's job, and the admin's by virtue of
-# running the company. `rh` is excluded, as it is for an invoice's processing
-# status: this is bookkeeping, not a commercial act.
+# running the company: this is bookkeeping, not a commercial act.
 router = APIRouter(dependencies=[Depends(require_roles("admin", "accountant"))])
 
 MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
@@ -153,10 +154,7 @@ def close_period(
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.periode == start).with_for_update().first()
     if period and period.state == PeriodState.CLOSED:
-        raise HTTPException(
-            status_code=409,
-            detail=f"the accounting period {month} is already closed and cannot be reopened",
-        )
+        raise ApiError(409, "period.already_closed", month=month)
 
     blocking = _blocking(db, start, end)
     if blocking:
@@ -176,7 +174,7 @@ def close_period(
     # completely or nothing changed. The order is not load-bearing - the
     # period trigger watches INSERT and date_emission, which this update does
     # not touch - but it reads in the order the accountant thinks in.
-    db.query(Invoice).filter(
+    archived = db.query(Invoice).filter(
         Invoice.date_emission >= start,
         Invoice.date_emission < end,
         _in_the_books(),
@@ -191,6 +189,11 @@ def close_period(
     period.closed_by_id = current_user.id
     for field, value in totals.items():
         setattr(period, field, value)
+    # One event for the close, not one per archived invoice: the invoices did
+    # not each decide anything, and the count says how many were sealed.
+    record_event(db, "accounting_period.closed", "accounting_period", month,
+                 before={"state": PeriodState.OPEN},
+                 after={"state": PeriodState.CLOSED, "archived_invoices": archived, **totals})
 
     db.commit()
     return PeriodSummary(periode=start, state=PeriodState.CLOSED,

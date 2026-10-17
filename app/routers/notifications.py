@@ -12,13 +12,15 @@ notified of what.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.i18n import ApiError
 from app.models.notifications import Notification
 from app.models.user import User
+from app.schemas.api import NotificationsDismissedOut, NotificationsUpdatedOut
 from app.schemas.notifications import NotificationOut
 
 router = APIRouter()
@@ -37,7 +39,7 @@ def _live(db: Session, user: User):
 def _own(db: Session, user: User, notification_id: int) -> Notification:
     notification = _live(db, user).filter(Notification.id == notification_id).first()
     if notification is None:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise ApiError(404, "notification.not_found")
     return notification
 
 
@@ -78,7 +80,7 @@ def mark_read(notification_id: int, db: Session = Depends(get_db),
     return NotificationOut.from_orm_row(notification)
 
 
-@router.post("/notifications/read-all")
+@router.post("/notifications/read-all", response_model=NotificationsUpdatedOut)
 def mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     updated = (
         _live(db, current_user)
@@ -86,7 +88,7 @@ def mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(ge
         .update({Notification.read_at: datetime.now(timezone.utc)}, synchronize_session=False)
     )
     db.commit()
-    return {"updated": updated}
+    return NotificationsUpdatedOut(updated=updated)
 
 
 @router.post("/notifications/{notification_id}/dismiss", status_code=204)
@@ -99,9 +101,9 @@ def dismiss(notification_id: int, db: Session = Depends(get_db),
     return Response(status_code=204)
 
 
-@router.post("/notifications/dismiss-all")
+@router.post("/notifications/dismiss-all", response_model=NotificationsDismissedOut)
 def dismiss_all(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     dismissed = _live(db, current_user).update(
         {Notification.dismissed_at: datetime.now(timezone.utc)}, synchronize_session=False)
     db.commit()
-    return {"dismissed": dismissed}
+    return NotificationsDismissedOut(dismissed=dismissed)

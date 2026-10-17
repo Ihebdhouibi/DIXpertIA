@@ -15,6 +15,7 @@ relationships happen to mention.
 """
 
 from app.models.accounting import AccountingPeriod, PeriodState  # noqa: F401
+from app.models.audit import AuditEvent  # noqa: F401
 from app.models.employee import Employee, EmploymentStatus  # noqa: F401
 from app.models.invoicing import (  # noqa: F401
     Client,
@@ -37,4 +38,4 @@ from app.models.notifications import Notification  # noqa: F401
 from app.models.numbering import InvoiceSequence  # noqa: F401
 from app.models.payroll import Payslip  # noqa: F401
 from app.models.service import Service  # noqa: F401
-from app.models.user import User  # noqa: F401
+from app.models.user import AccountToken, User  # noqa: F401

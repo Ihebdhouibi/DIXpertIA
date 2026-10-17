@@ -96,6 +96,29 @@ def verify(cur) -> list[str]:
     if cur.fetchone()[0]:
         failures.append(f"{APP_ROLE} holds TRUNCATE on at least one table")
 
+    # The audit trail is append-only (#63).
+    cur.execute(
+        "SELECT privilege_type FROM information_schema.role_table_grants "
+        "WHERE grantee = %s AND table_name = 'audit_events' "
+        "AND privilege_type IN ('UPDATE', 'DELETE')",
+        (APP_ROLE,),
+    )
+    changes = sorted(r[0] for r in cur.fetchall())
+    if changes:
+        failures.append(f"{APP_ROLE} can {' and '.join(changes)} audit_events")
+
+    # The password hash is closed to the application role (#76). column_privileges
+    # also lists what a table-wide grant implies, so this catches both.
+    cur.execute(
+        "SELECT privilege_type FROM information_schema.column_privileges "
+        "WHERE grantee = %s AND table_name = 'users' AND column_name = 'hashedPassword' "
+        "AND privilege_type IN ('SELECT', 'UPDATE')",
+        (APP_ROLE,),
+    )
+    exposed = sorted(r[0] for r in cur.fetchall())
+    if exposed:
+        failures.append(f"{APP_ROLE} can {' and '.join(exposed)} users.hashedPassword")
+
     return failures
 
 
@@ -132,7 +155,7 @@ def main():
         sys.exit(1)
 
     print("Verified: app role is NOSUPERUSER / NOBYPASSRLS, DELETE limited to "
-          "services and invoice_items, no TRUNCATE.")
+          "services and invoice_items, no TRUNCATE, audit trail append-only, password hash unreadable.")
 
     parsed = psycopg2.extensions.parse_dsn(args.superuser_url)
     host = parsed.get("host", "localhost")

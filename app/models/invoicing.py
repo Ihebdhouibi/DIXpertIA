@@ -1,4 +1,5 @@
 import enum
+from datetime import date
 
 from sqlalchemy import (
     CheckConstraint,
@@ -160,11 +161,15 @@ class Client(Base):
     email = Column(String(100), default="", server_default=text("''"), nullable=False)
     telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
     adresse = Column(Text, default="", server_default=text("''"), nullable=False)
+    # The language this client's invoices are printed in (#135), French by default:
+    # the same invoice always prints the same way, whoever downloads it.
+    locale = Column(String(2), nullable=False, default="fr", server_default=text("'fr'"))
 
     invoices = relationship("Invoice", back_populates="client")
 
     __table_args__ = (
         # Stops "Acme Corp" and "ACME CORP" becoming two customers.
+        CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
         Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
     )
 
@@ -233,12 +238,31 @@ class Invoice(Base):
         nullable=False,
         server_default=InvoiceReviewStatus.NOT_SUBMITTED.name,
     )
+    # #126: set exactly when statut is PAYEE (paid in full on that date), and
+    # the cancellation exactly when ANNULEE. Held by CHECKs and by
+    # trg_invoice_commercial_transitions; see that migration for the moves.
+    paid_on = Column(Date, nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
 
     client = relationship("Client", back_populates="invoices")
     supplier = relationship("Supplier", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     reviews = relationship("InvoiceReview", back_populates="invoice",
                            order_by="InvoiceReview.created_at")
+
+    def displayed_status(self, today: date | None = None) -> "InvoiceStatus":
+        """The commercial status as shown: Overdue is derived, never stored (#117).
+
+        A sent invoice whose due date has passed is overdue - due today is not
+        yet. A stored "overdue" went stale the day after it was written and
+        nothing ever set it, so a late invoice showed as merely sent. The list
+        filter in the invoicing router applies the same rule in SQL.
+        """
+        today = today or date.today()
+        if self.statut == InvoiceStatus.ENVOYEE and self.date_echeance and self.date_echeance < today:
+            return InvoiceStatus.EN_RETARD
+        return self.statut
 
     @property
     def reference(self) -> str:
@@ -259,6 +283,15 @@ class Invoice(Base):
             "direction <> 'OUTGOING' OR numero IS NOT NULL "
             "OR (statut IN ('BROUILLON', 'ANNULEE') AND review_status <> 'APPROVED')",
             name="ck_invoices_numbered_once_approved",
+        ),
+        CheckConstraint("(statut = 'PAYEE') = (paid_on IS NOT NULL)", name="ck_invoices_paid_has_date"),
+        # Overdue is derived from the due date at read time (#117), never stored.
+        CheckConstraint("statut <> 'EN_RETARD'", name="ck_invoices_overdue_is_derived"),
+        CheckConstraint("paid_on IS NULL OR paid_on >= date_emission", name="ck_invoices_paid_after_issue"),
+        CheckConstraint(
+            "(statut = 'ANNULEE') = (cancelled_at IS NOT NULL"
+            " AND btrim(coalesce(cancellation_reason, '')) <> '')",
+            name="ck_invoices_cancelled_has_reason",
         ),
         # The accountant's "to verify" queue.
         Index("ix_invoices_review_status", "review_status", "date_emission"),

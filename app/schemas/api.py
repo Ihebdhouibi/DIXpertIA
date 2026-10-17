@@ -22,6 +22,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.i18n import format_date, format_date_range as _format_date_range, format_month
 from app.models.leaves import LeaveStatus, LeaveType
 
 # --- Vocabulary -------------------------------------------------------------
@@ -47,14 +48,8 @@ LEAVE_STATUS_FROM_API = {v: k for k, v in LEAVE_STATUS_TO_API.items()}
 
 
 def format_date_range(start: date, end: date) -> str:
-    """Render a range the way the UI displays it today."""
-    if start == end:
-        return start.strftime("%b %d, %Y")
-    if (start.year, start.month) == (end.year, end.month):
-        return f"{start.strftime('%b %d')} - {end.strftime('%d, %Y')}"
-    if start.year == end.year:
-        return f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
-    return f"{start.strftime('%b %d, %Y')} - {end.strftime('%b %d, %Y')}"
+    """Render a range the way the UI displays it, in the request's language (#135)."""
+    return _format_date_range(start, end)
 
 
 # --- Leave requests ---------------------------------------------------------
@@ -151,10 +146,10 @@ class PayslipOut(BaseModel):
             id=str(row.id),
             employeeId=row.employee_id,
             employeeName=employee_name(row.employee),
-            period=row.periode.strftime("%B %Y"),
+            period=format_month(row.periode),
             grossPay=float(row.montant_brut or 0),
             netPay=float(row.montant_net or 0),
-            issuedOn=issued.strftime("%b %d, %Y") if issued else None,
+            issuedOn=format_date(issued),
             pdfUrl=row.fichier_pdf,
         )
 
@@ -246,6 +241,13 @@ class InvoiceOut(BaseModel):
     dueDate: str
     # The due date as YYYY-MM-DD, for a date input; `dueDate` is for display.
     dueDateIso: Optional[str] = None
+    # The issue date as YYYY-MM-DD: the earliest a payment can be dated (#126).
+    dateIssuedIso: Optional[str] = None
+    # Set once paid (#126), for display like dateIssued.
+    paidOn: Optional[str] = None
+    # Set once cancelled (#126): when, and the admin's reason.
+    cancelledAt: Optional[str] = None
+    cancellationReason: Optional[str] = None
     # The commercial state the counterparty sees.
     status: str
     # The accountant's workflow state - a separate axis, not a spelling of the
@@ -263,7 +265,9 @@ class InvoiceOut(BaseModel):
         party = row.supplier if direction == "incoming" else row.client
         name = getattr(party, "nom", None) or "Unknown"
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "?"
-        statut = getattr(row.statut, "value", row.statut) or "envoyee"
+        # Overdue is derived from the due date, never stored (#117).
+        shown = row.displayed_status() if hasattr(row, "displayed_status") else row.statut
+        statut = getattr(shown, "value", shown) or "envoyee"
         processing = getattr(row.processing_status, "value", row.processing_status) or "pending"
         review = getattr(row.review_status, "value", row.review_status) or "not_submitted"
         return cls(
@@ -289,9 +293,14 @@ class InvoiceOut(BaseModel):
             supplierReference=row.supplier_reference,
             amountHT=float(row.montant_ht or Decimal(0)),
             amountTTC=float(row.montant_ttc or Decimal(0)),
-            dateIssued=row.date_emission.strftime("%b %d, %Y") if row.date_emission else "-",
-            dueDate=row.date_echeance.strftime("%b %d, %Y") if row.date_echeance else "-",
+            # In the request's language (#135); the ISO forms below are for inputs.
+            dateIssued=format_date(row.date_emission) or "-",
+            dueDate=format_date(row.date_echeance) or "-",
             dueDateIso=row.date_echeance.isoformat() if row.date_echeance else None,
+            dateIssuedIso=row.date_emission.isoformat() if row.date_emission else None,
+            paidOn=format_date(row.paid_on),
+            cancelledAt=row.cancelled_at.isoformat() if row.cancelled_at else None,
+            cancellationReason=row.cancellation_reason,
             status=INVOICE_STATUS_TO_API.get(statut, "Sent"),
             processingStatus=INVOICE_PROCESSING_STATUS_TO_API.get(processing, "Pending"),
             items=[
@@ -349,7 +358,8 @@ class EmployeeOut(BaseModel):
 class UserOut(BaseModel):
     """A login account.
 
-    hashedPassword, resetToken and resetTokenExpiry are deliberately absent.
+    hashedPassword and token_version are deliberately absent; reset and
+    activation tokens live in account_tokens, never on the user (#62).
     The audit found the removed GET /api/data returning whole user rows, hashes
     included, to any authenticated caller; an explicit output schema is what
     stops that happening again by accident.
@@ -367,6 +377,8 @@ class UserOut(BaseModel):
     isActive: bool
     isVerified: bool
     createdAt: Optional[str] = None
+    # The account's language, "fr" or "en" (#135).
+    locale: str = "fr"
 
     @classmethod
     def from_orm_row(cls, row) -> "UserOut":
@@ -381,4 +393,41 @@ class UserOut(BaseModel):
             isActive=bool(row.isActive),
             isVerified=bool(row.isVerified),
             createdAt=row.createdAt.isoformat() if row.createdAt else None,
+            locale=getattr(row, "locale", None) or "fr",
         )
+
+
+# --- Small responses (#77) ---------------------------------------------------
+# Every JSON route declares a response model, so what leaves the API is an
+# allowlist: a field reaches the client only if it is named here.
+# tests/test_responses.py fails for a route that declares none.
+
+class LoginOut(BaseModel):
+    access_token: str
+    # The OAuth 2 token type, always "bearer".
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class UserCreatedOut(BaseModel):
+    """POST /api/users (#62). No password: the owner sets one through the link."""
+    id: str
+    email: str
+    activationEmailSent: bool
+
+
+class ActivationSentOut(BaseModel):
+    id: str
+    activationEmailSent: bool
+
+
+class MessageOut(BaseModel):
+    message: str
+
+
+class NotificationsUpdatedOut(BaseModel):
+    updated: int
+
+
+class NotificationsDismissedOut(BaseModel):
+    dismissed: int

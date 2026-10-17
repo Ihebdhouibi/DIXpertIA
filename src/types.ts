@@ -120,6 +120,13 @@ export interface Invoice {
   dueDate: string;
   /** The due date as YYYY-MM-DD, for a date input; `dueDate` is for display. */
   dueDateIso?: string | null;
+  /** The issue date as YYYY-MM-DD: the earliest a payment can be dated (#126). */
+  dateIssuedIso?: string | null;
+  /** Set once paid (#126), for display. */
+  paidOn?: string | null;
+  /** Set once cancelled (#126): when (ISO), and the admin's reason. */
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   /** The commercial state the counterparty sees. */
   status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
   /**
