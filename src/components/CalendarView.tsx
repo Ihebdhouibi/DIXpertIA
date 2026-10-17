@@ -74,7 +74,9 @@ export default function CalendarView({ leaveRequests, userRole, currentEmployeeI
 
         return {
           id: req.id,
-          title: `${req.employeeName} - ${req.type}`,
+          // The status in words as well as in colour (#31, WCAG 1.4.1): a hover
+          // tooltip alone reached neither keyboard, touch nor colour-blind users.
+          title: `${req.employeeName} - ${req.type} · ${req.status}`,
           start,
           end,
           allDay: true,
