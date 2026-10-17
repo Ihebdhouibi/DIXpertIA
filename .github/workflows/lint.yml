@@ -203,9 +203,6 @@ jobs:
           python seed_users.py --email admin@ci.dixpertia.tn --password "$ADMIN_PASSWORD" --role admin
           python seed_users.py --email accountant@ci.dixpertia.tn --password "$ACCOUNTANT_PASSWORD" --role accountant
           python seed_users.py --email employee@ci.dixpertia.tn --password "$EMPLOYEE_PASSWORD" --role employee
-          # Tables with rows: the overflow #130 fixed only showed with data.
-          # After the accounts: the invoices it creates need an admin as author.
-          python db/seed_perf_data.py
           # Each account its employee record, as a real one has.
           python -c "import os, psycopg2; c = psycopg2.connect(os.environ['SUPERUSER_URL']); c.autocommit = True; c.cursor().execute(\"INSERT INTO employees (user_id, job_title, hired_on, annual_entitlement_days) SELECT id, 'Consultant', '2024-01-01', 21 FROM users WHERE email LIKE '%@ci.dixpertia.tn' ON CONFLICT (user_id) DO NOTHING\")"
 
@@ -220,6 +217,11 @@ jobs:
             sleep 1
           done
           echo "The app did not start"; cat api.log web.log; exit 1
+
+      - name: Seed screens with data, through the API
+        # Tables with rows: the sideways scroll #130 fixed only showed with data.
+        run: |
+          python scripts/seed_ui_data.py --api http://127.0.0.1:8000             --admin "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --accountant "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --employee "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
 
       - name: Accessibility (axe-core and keyboard, light and dark)
         run: |
