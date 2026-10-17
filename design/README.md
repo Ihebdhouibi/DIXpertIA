@@ -24,3 +24,21 @@ built from are versioned here; `.gitignore` allowlists them one by one.
 The rest of the kit (business card, sign, e-mail signature, LinkedIn cover,
 palette swatch page) is kept outside the repository: the print files carry
 personal contact details.
+
+## The invoice PDF (#81)
+
+`invoice-pdf/` holds two reference renders of the PDF the server sends to
+clients (`app/services/invoice_generator.py`): an issued invoice in French and
+a draft in English, with the same sample lines. Regenerate them when the
+generator changes, so a review can compare.
+
+- Space Grotesk and JetBrains Mono are embedded from `app/assets/fonts/`
+  (SIL Open Font License 1.1, licences beside the files). JetBrains Mono for
+  references, dates and amounts.
+- Ink for text and rules; Lime Deep `#526B08` for the status; Signal Lime only
+  as the rule under the header and above the total due.
+- The logo is `public/brand/lockup-horizontal.png`, cropped to its drawn
+  content when the server starts.
+- French amounts separate thousands with a no-break space (U+00A0), not the
+  narrow one (U+202F): neither font has that glyph.
+

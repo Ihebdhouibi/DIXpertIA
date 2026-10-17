@@ -6,9 +6,6 @@ Tests that need a numbered or a sent invoice go through the real endpoints,
 so they exercise the same path as the app.
 """
 
-import base64
-import re
-import zlib
 
 DUE = "2027-12-31"
 
@@ -52,11 +49,15 @@ def sent(client, identities, client_id, amount=1000):
 
 
 def pdf_text(pdf: bytes) -> bytes:
-    """The content streams of a ReportLab PDF, decoded, to search its text."""
-    out = b""
-    for match in re.finditer(rb"/ASCII85Decode /FlateDecode \].*?stream\r?\n(.*?)endstream", pdf, re.S):
-        data = match.group(1).strip()
-        if data.endswith(b"~>"):
-            data = data[:-2]
-        out += zlib.decompress(base64.a85decode(data))
-    return out
+    """The text of a PDF, as UTF-8 bytes, to search it.
+
+    Extracted through the fonts' Unicode maps (pypdf), not read from the raw
+    content streams: since #81 the fonts are embedded TrueType subsets, whose
+    codes are not the characters they draw.
+    """
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    pages = PdfReader(BytesIO(pdf)).pages
+    return "\n".join(page.extract_text() or "" for page in pages).encode("utf-8")

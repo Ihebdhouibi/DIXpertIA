@@ -165,3 +165,27 @@ def test_an_invoice_carries_its_counterparty_contact_details(client, admin):
 def test_missing_contact_details_read_as_empty(client, admin):
     invoice = issue(client, admin, make_client(client, admin, adresse=""))
     assert client.get(f"/api/invoices/{invoice['id']}", headers=admin).json()["counterpartyAddress"] == ""
+
+
+def test_the_pdf_is_in_the_brand_identity():
+    """#81: brand fonts embedded, nothing in Helvetica, none of the old navy."""
+    import re
+
+    from app.services.invoice_generator import generate_invoice_pdf
+
+    for draft in (False, True):
+        pdf = generate_invoice_pdf({
+            "locale": "fr", "invoice_id": "FA-2026-0001", "client": "Acme", "client_address": "Tunis",
+            "date_issued": "17 oct. 2026", "due_date": "16 nov. 2026", "status": "envoyee", "draft": draft,
+            "items": [{"description": "Conseil", "qty": 1, "price": 100, "total": 100}],
+            "subtotal": 100, "total": 119,
+        })
+        fonts = set(re.findall(rb"/BaseFont /(?:[A-Z]{6}\+)?([A-Za-z-]+)", pdf))
+        assert fonts == {b"SpaceGrotesk-Regular", b"SpaceGrotesk-Bold",
+                         b"JetBrainsMono-Regular", b"JetBrainsMono-Bold"}, fonts
+        # Embedded, so the PDF looks the same on any machine.
+        assert pdf.count(b"/FontFile2") == 4
+        assert b"Helvetica" not in pdf
+        # The old identity's navy (#1a2a6c) and slate (#2c3e50) as PDF fill colours.
+        assert b".101961 .164706 .423529" not in pdf and b".172549 .243137 .313725" not in pdf
+        assert b"/Subtype /Image" in pdf, "the logo is on the page"
