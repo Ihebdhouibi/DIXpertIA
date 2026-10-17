@@ -25,8 +25,6 @@ What it allows
   documentation, not styling.
 - Scrims: bg-black/NN behind modals and drawers. They dim whatever is beneath
   and read correctly in both themes.
-- The public homepage (src/components/Homepage.tsx) may use white surfaces:
-  it keeps a fixed ink/paper composition and is not themed (#30, #80).
 - Any line containing the marker `raw-color-ok:` followed by a reason, or the
   line just below such a marker. Use it sparingly and say why.
 
@@ -41,7 +39,6 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import PurePosixPath
 
 PALETTE = (
     "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|"
@@ -68,10 +65,6 @@ MARKER = re.compile(r"raw-color-ok:\s*\S")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/")
 LINE_COMMENT = re.compile(r"(?<![:\w])//.*$")
 
-# Files that may use white surfaces because they are deliberately not themed.
-UNTHEMED = {"src/components/Homepage.tsx"}
-
-
 def strip_comments(line: str, in_block: bool) -> tuple[str, bool]:
     """Drop // and /* */ comments; carry an open block comment to the next line."""
     if in_block:
@@ -87,7 +80,6 @@ def strip_comments(line: str, in_block: bool) -> tuple[str, bool]:
 
 
 def check(path: str) -> list[str]:
-    posix = PurePosixPath(path.replace("\\", "/")).as_posix()
     try:
         lines = open(path, encoding="utf-8").read().splitlines()
     except (OSError, UnicodeDecodeError) as exc:
@@ -103,8 +95,6 @@ def check(path: str) -> list[str]:
         for label, pattern in RULES:
             for match in pattern.finditer(line):
                 problems.append(f"{path}:{number}: {label} {match.group(0)!r}")
-        if posix.endswith(tuple(UNTHEMED)):
-            continue
         for match in WHITE_BLACK.finditer(line):
             if SCRIM.fullmatch(match.group(0)):
                 continue
