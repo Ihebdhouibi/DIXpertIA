@@ -200,11 +200,12 @@ jobs:
           alembic upgrade head
           python db/setup_roles.py --superuser-url "$SUPERUSER_URL" \
             --app-password "$APP_PASSWORD" --owner-password "$OWNER_PASSWORD" > /dev/null
-          # Tables with rows: the overflow #130 fixed only showed with data.
-          python db/seed_perf_data.py
           python seed_users.py --email admin@ci.dixpertia.tn --password "$ADMIN_PASSWORD" --role admin
           python seed_users.py --email accountant@ci.dixpertia.tn --password "$ACCOUNTANT_PASSWORD" --role accountant
           python seed_users.py --email employee@ci.dixpertia.tn --password "$EMPLOYEE_PASSWORD" --role employee
+          # Tables with rows: the overflow #130 fixed only showed with data.
+          # After the accounts: the invoices it creates need an admin as author.
+          python db/seed_perf_data.py
           # Each account its employee record, as a real one has.
           python -c "import os, psycopg2; c = psycopg2.connect(os.environ['SUPERUSER_URL']); c.autocommit = True; c.cursor().execute(\"INSERT INTO employees (user_id, job_title, hired_on, annual_entitlement_days) SELECT id, 'Consultant', '2024-01-01', 21 FROM users WHERE email LIKE '%@ci.dixpertia.tn' ON CONFLICT (user_id) DO NOTHING\")"
 
