@@ -17,6 +17,10 @@ application itself is pointed at the `dixpertia_app` role, exactly as in
 production - which matters more than it looks. A superuser bypasses row-level
 security entirely, so a suite that let the app connect as one would report
 every policy test as passing while proving nothing at all.
+
+On the same server as the development database, the roles keep the passwords
+from .env, so a run does not lock the development database out (#150; see
+_dev_passwords and db/README.md).
 """
 
 import os
@@ -26,32 +30,81 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import dotenv_values
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
-# Credentials for the two application roles on the throw-away database.
-# Generated per run rather than written down: they only have to be stable for
+APP_ROLE = "dixpertia_app"
+OWNER_ROLE = "dixpertia_owner"
+_LOCAL_HOSTS = {None, "", "localhost", "127.0.0.1", "::1"}
+
+
+def _server(url) -> tuple:
+    """(host, port) with the spellings of "this machine" folded together."""
+    host = "localhost" if url.host in _LOCAL_HOSTS else url.host
+    return host, url.port or 5432
+
+
+def _dev_passwords() -> dict:
+    """The development roles' passwords, when the test database shares their server.
+
+    PostgreSQL roles belong to the server, not to a database. Provisioning the
+    test database resets the passwords of dixpertia_app and dixpertia_owner,
+    so on the documented setup (dixpertia_test next to dixpertia on the same
+    server) a run with fresh passwords locked the development database out
+    until a superuser set them back (#150). Reusing the passwords from
+    DATABASE_URL / SCHEMA_DATABASE_URL makes that reset a no-op.
+
+    Only for the same server: a separate test server (CI, Docker) has nothing
+    to protect and keeps per-run passwords. Read here, at import, because the
+    database fixture points DATABASE_URL at the test database.
+    """
+    if not TEST_DATABASE_URL:
+        return {}
+    dev = dotenv_values(ROOT / ".env", encoding="utf-8-sig")
+    dev.update({k: os.environ[k] for k in ("DATABASE_URL", "SCHEMA_DATABASE_URL")
+                if k in os.environ})
+    test_server = _server(make_url(TEST_DATABASE_URL))
+    found = {}
+    for key in ("DATABASE_URL", "SCHEMA_DATABASE_URL"):
+        if not dev.get(key):
+            continue
+        url = make_url(dev[key])
+        if (url.username in (APP_ROLE, OWNER_ROLE) and url.password
+                and _server(url) == test_server):
+            found[url.username] = url.password
+    return found
+
+
+_DEV_PASSWORDS = _dev_passwords()
+
+# Credentials for the two application roles on the throw-away database. On a
+# separate server they are generated per run: they only have to be stable for
 # the length of one session, long enough to provision the roles and build the
-# two URLs from them. Nothing reads them afterwards.
+# two URLs from them.
 #
 # token_hex, not token_urlsafe: the latter draws from a base64url alphabet that
 # includes "-", so roughly one run in thirty produced a password starting with
 # a dash, which argparse then read as a flag and the whole suite errored at
 # setup with "expected one argument". Hex has no character that is special to
 # argparse, a shell or a URL.
-APP_PASSWORD = secrets.token_hex(16)
-OWNER_PASSWORD = secrets.token_hex(16)
+APP_PASSWORD = _DEV_PASSWORDS.get(APP_ROLE) or secrets.token_hex(16)
+OWNER_PASSWORD = _DEV_PASSWORDS.get(OWNER_ROLE) or secrets.token_hex(16)
 
 
 def _role_url(role: str, password: str) -> str:
-    """The superuser URL with its credentials swapped for a role's."""
-    _, _, tail = TEST_DATABASE_URL.partition("://")
-    _, _, hostpart = tail.partition("@")
-    return f"postgresql://{role}:{password}@{hostpart}"
+    """The superuser URL with its credentials swapped for a role's.
+
+    Built with make_url so a reused development password containing URL
+    characters is encoded rather than splitting the URL.
+    """
+    url = make_url(TEST_DATABASE_URL).set(username=role, password=password)
+    return url.render_as_string(hide_password=False)
 
 # Business data only. `users` and `employees` hold the fixture accounts every
 # test signs in as, and alembic_version must survive or the schema is rebuilt.
@@ -122,8 +175,8 @@ def database():
     # The application runs as the least-privileged role, as it does in
     # production. Migrations and fixtures run as the owner.
     os.environ["REMINDERS_ENABLED"] = "false"  # tests call the job directly (#134)
-    os.environ["DATABASE_URL"] = _role_url("dixpertia_app", APP_PASSWORD)
-    os.environ["SCHEMA_DATABASE_URL"] = _role_url("dixpertia_owner", OWNER_PASSWORD)
+    os.environ["DATABASE_URL"] = _role_url(APP_ROLE, APP_PASSWORD)
+    os.environ["SCHEMA_DATABASE_URL"] = _role_url(OWNER_ROLE, OWNER_PASSWORD)
 
     superuser = create_engine(url, isolation_level="AUTOCOMMIT")
     with superuser.connect() as c:
@@ -145,7 +198,7 @@ def database():
     # Tests that assert directly in SQL use the owner: it is subject to the
     # same triggers and CHECKs, so a rule cannot pass here by privilege, but
     # its *_owner_all policies let a fixture see every row.
-    owner = create_engine(_role_url("dixpertia_owner", OWNER_PASSWORD),
+    owner = create_engine(_role_url(OWNER_ROLE, OWNER_PASSWORD),
                           isolation_level="AUTOCOMMIT")
     yield owner
     superuser.dispose()
