@@ -40,6 +40,13 @@ ROUTES = [
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
 
+    # --- notifications (#116): everyone has a list, scoped to their own rows -
+    ("GET", "/api/notifications", EMPLOYEE_SELF),
+    ("POST", "/api/notifications/1/read", EMPLOYEE_SELF),
+    ("POST", "/api/notifications/read-all", EMPLOYEE_SELF),
+    ("POST", "/api/notifications/1/dismiss", EMPLOYEE_SELF),
+    ("POST", "/api/notifications/dismiss-all", EMPLOYEE_SELF),
+
     # --- payroll and leave: scoped by row-level security, not by role -------
     ("GET", "/api/payslips", EMPLOYEE_SELF),
     ("GET", "/api/leave-requests", EMPLOYEE_SELF),
@@ -149,6 +156,7 @@ def test_every_route_is_covered(app):
         # Normalise the sample ids back to their templates.
         normalised = (path
                       .replace("/api/leave-requests/1/", "/api/leave-requests/{req_id}/")
+                      .replace("/api/notifications/1/", "/api/notifications/{notification_id}/")
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")
                       .replace("/api/invoices/1", "/api/invoices/{invoice_id}")

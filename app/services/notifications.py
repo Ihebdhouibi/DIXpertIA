@@ -7,6 +7,7 @@ rolls back tells nobody, and one that commits always does.
 
 from typing import Iterable
 
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from app.models.notifications import Notification
@@ -41,7 +42,14 @@ def notify(
     if tone not in TONES:
         raise ValueError(f"unknown notification tone {tone!r}")
     recipients = sorted({u for u in user_ids if u and u != exclude})
-    for user_id in recipients:
-        db.add(Notification(user_id=user_id, kind=kind, message=message, tone=tone,
-                            link=link, ref_type=ref_type, ref_id=ref_id))
+    if recipients:
+        # A Core INSERT without RETURNING, not db.add(): the ORM reads the new
+        # row back (RETURNING id), and PostgreSQL holds RETURNING to the SELECT
+        # policy, under which the actor may not see a row addressed to someone
+        # else. The admin's submit would fail on the accountant's notification.
+        db.execute(insert(Notification.__table__).inline(), [
+            {"user_id": user_id, "kind": kind, "message": message, "tone": tone,
+             "link": link, "ref_type": ref_type, "ref_id": ref_id}
+            for user_id in recipients
+        ])
     return len(recipients)

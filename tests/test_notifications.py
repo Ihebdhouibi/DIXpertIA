@@ -11,14 +11,6 @@ from sqlalchemy import text
 pytestmark = pytest.mark.identity("admin")
 
 
-@pytest.fixture(autouse=True)
-def no_notifications(database):
-    # Self-contained on purpose: this table is emptied here rather than in
-    # conftest's shared list.
-    with database.begin() as c:
-        c.execute(text("TRUNCATE notifications RESTART IDENTITY"))
-
-
 def seed(database, user_id, message, read=False, minutes_ago=0, tone="info"):
     with database.begin() as c:
         return c.execute(text(
@@ -124,3 +116,61 @@ def test_a_failed_event_notifies_nobody(identities, database):
         db.rollback()
     with database.connect() as c:
         assert c.execute(text("SELECT count(*) FROM notifications")).scalar() == 0
+
+
+# --- The events: the verification flow tells the next person (#118) ---------
+
+def _client(client, admin):
+    return client.post("/api/clients", headers=admin, json={
+        "nom": "Acme Corporation", "email": "a@acme.tn", "telephone": "", "adresse": ""}).json()["id"]
+
+
+def _mine(client, identity):
+    return client.get("/api/notifications", headers=identity["headers"]).json()
+
+
+def test_submitting_tells_the_accountant_and_not_the_admin(client, identities):
+    from invoice_flow import draft, submit
+
+    admin = identities["admin"]
+    invoice = draft(client, admin["headers"], _client(client, admin["headers"])).json()
+    assert submit(client, identities, invoice["id"]).status_code == 200
+
+    [n] = _mine(client, identities["accountant"])
+    assert invoice["reference"] in n["message"] and "Acme Corporation" in n["message"]
+    assert (n["link"], n["refType"], n["refId"]) == ("invoices", "invoice", invoice["id"])
+    assert _mine(client, admin) == []
+    assert _mine(client, identities["employee"]) == []
+
+
+def test_approving_tells_the_creator_with_the_legal_number(client, identities):
+    from invoice_flow import numbered
+
+    approved = numbered(client, identities, _client(client, identities["admin"]["headers"]))
+    [n] = _mine(client, identities["admin"])
+    assert n["type"] == "success" and approved["numero"] in n["message"]
+
+
+def test_rejecting_tells_the_creator_why(client, identities):
+    from invoice_flow import draft, submit
+
+    admin = identities["admin"]
+    invoice = draft(client, admin["headers"], _client(client, admin["headers"])).json()
+    submit(client, identities, invoice["id"])
+    rejected = client.post(f"/api/invoices/{invoice['id']}/reject", headers=identities["accountant"]["headers"],
+                           json={"comment": "Wrong VAT rate on line 1"})
+    assert rejected.status_code == 200, rejected.text
+
+    [n] = _mine(client, admin)
+    assert n["type"] == "warning" and "Wrong VAT rate on line 1" in n["message"]
+
+
+def test_a_refused_transition_notifies_nobody(client, identities):
+    """Approving a draft that was never submitted is a 409, and tells no one."""
+    from invoice_flow import draft
+
+    admin = identities["admin"]
+    invoice = draft(client, admin["headers"], _client(client, admin["headers"])).json()
+    refused = client.post(f"/api/invoices/{invoice['id']}/approve", headers=identities["accountant"]["headers"])
+    assert refused.status_code == 409
+    assert _mine(client, admin) == [] and _mine(client, identities["accountant"]) == []
