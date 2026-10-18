@@ -154,3 +154,16 @@ def test_the_database_refuses_an_export_client_in_dinars(database):
     with pytest.raises(DBAPIError, match="ck_clients_export_in_foreign_currency"):
         with database.begin() as c:
             c.execute(text("INSERT INTO clients (nom, export, devise) VALUES ('Raw export', true, 'TND')"))
+
+
+# --- The PDF ----------------------------------------------------------------------------
+
+def test_the_export_invoice_pdf_is_in_dollars_without_vat(client, admin):
+    from invoice_flow import pdf_text
+
+    abroad = make_client(client, admin, **ABROAD)
+    draft = invoice(client, admin, abroad["id"]).json()
+    pdf = pdf_text(client.get(f"/api/invoices/{draft['id']}/download", headers=admin).content)
+    assert b"TOTAL DUE 2,000.00 USD" in pdf
+    assert b"Export of services" in pdf and b"VAT No. GB 123456789" in pdf
+    assert b"two thousand dollars" in pdf

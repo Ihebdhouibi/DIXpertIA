@@ -422,6 +422,7 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.meta.status": {"en": "Status", "fr": "Statut"},
     "pdf.meta.currency": {"en": "Currency", "fr": "Devise"},
     "pdf.tax_id": {"en": "Tax ID", "fr": "MF"},
+    "pdf.client_vat": {"en": "VAT No.", "fr": "N° TVA"},
     "pdf.rne": {"en": "RNE", "fr": "RNE"},
     "pdf.country": {"en": "Tunisia", "fr": "Tunisie"},
     "pdf.col.description": {"en": "Description", "fr": "Désignation"},

@@ -983,8 +983,11 @@ def _pdf_data(invoice: Invoice) -> dict:
         # The amounts the books hold: the PDF never computes a total of its own.
         "subtotal": invoice.montant_ht,
         "total": invoice.montant_ttc,
-        # Every invoice is in dinars until #195 brings the client's currency.
-        "currency": "TND",
+        # Fixed on the invoice when it was created (#195): it reprints as issued.
+        "currency": invoice.devise or "TND",
+        "export": bool(invoice.export),
+        # A foreign VAT number or a matricule fiscal, printed only when filled.
+        "client_tax_id": getattr(party, "identifiant_fiscal", None) if party else None,
         # A supplier's bill: the supplier issued it, DI Xpertia is billed (#40).
         "incoming": invoice.direction == InvoiceDirection.INCOMING,
     }

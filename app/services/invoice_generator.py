@@ -151,6 +151,7 @@ TOTAL_AMT_HT = _style("TotalAmtHT", MONO_MEDIUM, 8, leading=10.4, align=TA_RIGHT
 NET_AMT = _style("NetAmt", MONO_BOLD, 15, WHITE, leading=15, align=TA_RIGHT)
 IN_WORDS = _style("InWords", SANS, 8, leading=12)
 SMALL = _style("Small", SANS, 7.5, SECONDARY, leading=11.25)
+EXPORT_MENTION = _style("ExportMention", SANS, 7, SECONDARY, leading=10.5)
 BANK_KEY = _style("BankKey", SANS, 7, SECONDARY, leading=9.45)
 BANK_VAL = _style("BankVal", MONO, 7.5, leading=10.1)
 
@@ -327,10 +328,13 @@ def _seller_block(seller: dict, locale: str) -> list:
     return block
 
 
-def _party_block(name, address) -> list:
+def _party_block(name, address, tax_id=None, tax_label="") -> list:
     block = [Paragraph(_text(name), PARTY_NAME)]
     if address:
         block.append(Paragraph(_lines(address), BODY))
+    if tax_id:
+        # §3.3 1 mm below the address; printed only when filled (#195).
+        block += [Spacer(1, 1 * mm), Paragraph(_text(f"{tax_label} {tax_id}"), BODY_MONO)]
     return block
 
 
@@ -498,11 +502,20 @@ def _lines_table(rows, header: bool) -> Table:
     return table
 
 
-def _totals(items, subtotal, total, locale, currency, decimals) -> list:
-    """§3.5 Total HT, VAT per rate, the lime bar, the amount due."""
+def _totals(items, subtotal, total, locale, currency, decimals, export_mention=None) -> list:
+    """§3.5 Total HT, VAT per rate, the lime bar, the amount due.
+
+    An export of services (§3.8, #195) has one VAT row at zero instead, with
+    the exemption mention under it, and no stamp duty.
+    """
     rows = [[Paragraph(_text(t("pdf.total_ht", locale)), TOTAL_LABEL_HT),
              Paragraph(_number(subtotal, locale, decimals), TOTAL_AMT_HT)]]
-    for rate, base, vat in _vat_rows(items, subtotal, total, decimals):
+    if export_mention is not None:
+        vat_cell = [Paragraph(_text(t("pdf.col.vat", locale)), TOTAL_LABEL)]
+        if export_mention:
+            vat_cell += [Spacer(1, 1.2 * mm), Paragraph(_text(export_mention), EXPORT_MENTION)]
+        rows.append([vat_cell, Paragraph(_number(0, locale, decimals), TOTAL_AMT)])
+    for rate, base, vat in ([] if export_mention is not None else _vat_rows(items, subtotal, total, decimals)):
         label = (f"{_text(t('pdf.vat_row', locale, rate=_rate(rate, locale)))}&nbsp;&nbsp;"
                  f"<font name='{MONO}' size='7' color='{SECONDARY.hexval()}'>"
                  f"{_text(t('pdf.vat_base', locale, base=_number(base, locale, decimals)))}</font>")
@@ -558,6 +571,15 @@ def _payment(seller, due_date, locale) -> Table:
     return table
 
 
+def _export_mention(invoice_data: dict, locale: str) -> str:
+    """The VAT exemption mention of an export invoice, from the settings (#195)."""
+    if "export_mention" in invoice_data:
+        return invoice_data["export_mention"] or ""
+    from app.core.config import settings
+
+    return settings.EXPORT_MENTION_FR if locale == "fr" else settings.EXPORT_MENTION_EN
+
+
 def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     """Build the invoice PDF; returns its bytes, or writes it to `output_path`."""
     locale = invoice_data.get("locale") or DEFAULT_LOCALE
@@ -587,7 +609,10 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
 
     # §3.3 Parties. A bill a supplier sent us (#40) reads the other way round:
     # the supplier is the issuer and DI Xpertia the one billed.
-    counterparty = _party_block(invoice_data.get("client"), invoice_data.get("client_address"))
+    export = bool(invoice_data.get("export"))
+    tax_label = t("pdf.client_vat" if export else "pdf.tax_id", locale)
+    counterparty = _party_block(invoice_data.get("client"), invoice_data.get("client_address"),
+                                invoice_data.get("client_tax_id"), tax_label)
     us = _seller_block(seller, locale)
     issuer, billed = (counterparty, us) if invoice_data.get("incoming") else (us, counterparty)
     meta = [(t("pdf.meta.number", locale), number),
@@ -620,7 +645,8 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     # §3.5-3.7 Totals, amount in words and payment: the last page only, together.
     story.append(KeepTogether([
         tail, Spacer(1, 5 * mm),
-        *_totals(items, subtotal, total, locale, currency, decimals),
+        *_totals(items, subtotal, total, locale, currency, decimals,
+                 export_mention=_export_mention(invoice_data, locale) if export else None),
         Spacer(1, 4 * mm), _in_words(total, currency, locale),
         Spacer(1, 7 * mm), _payment(seller, invoice_data.get("due_date"), locale),
     ]))
