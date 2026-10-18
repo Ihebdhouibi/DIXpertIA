@@ -112,6 +112,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "A client named '{name}' already exists.",
         "fr": "Un client nommé « {name} » existe déjà."},
     "client.not_found": {"en": "Client not found", "fr": "Client introuvable"},
+    "client.export_needs_foreign_currency": {
+        "en": "An export client pays in a foreign currency (EUR, USD or GBP), not in TND.",
+        "fr": "Un client export paie en devise (EUR, USD ou GBP), pas en TND."},
+    "invoice.export_line_vat": {
+        "en": "Line {n}: an export of services carries no VAT; set its rate to 0%.",
+        "fr": "Ligne {n} : une exportation de services ne porte pas de TVA ; mettez son taux à 0 %."},
     "supplier_invoice.duplicate": {
         "en": "Invoice '{ref}' from this supplier has already been recorded.",
         "fr": "La facture « {ref} » de ce fournisseur est déjà enregistrée."},
