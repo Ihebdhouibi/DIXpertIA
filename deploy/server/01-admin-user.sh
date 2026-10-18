@@ -13,7 +13,9 @@ ADMIN_USER="${ADMIN_USER:-dixadmin}"
 KEY_FILE="${1:-}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Run as root."; exit 1; }
-[ -n "$KEY_FILE" ] && [ -f "$KEY_FILE" ] || { echo "Usage: bash $0 /path/to/admin_key.pub"; exit 1; }
+if [ -z "$KEY_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+  echo "Usage: bash $0 /path/to/admin_key.pub"; exit 1
+fi
 
 # A public key, one line, of a type we accept. A private key pasted by mistake
 # is refused rather than installed.
