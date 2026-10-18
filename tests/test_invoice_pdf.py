@@ -181,10 +181,11 @@ def test_the_pdf_is_in_the_brand_identity():
             "subtotal": 100, "total": 119,
         })
         fonts = set(re.findall(rb"/BaseFont /(?:[A-Z]{6}\+)?([A-Za-z-]+)", pdf))
-        assert fonts == {b"SpaceGrotesk-Regular", b"SpaceGrotesk-Bold",
-                         b"JetBrainsMono-Regular", b"JetBrainsMono-Bold"}, fonts
+        # The weights of the #194 layout: 400, 500 and 700 of each family.
+        assert fonts == {b"SpaceGrotesk-Regular", b"SpaceGrotesk-Medium", b"SpaceGrotesk-Bold",
+                         b"JetBrainsMono-Regular", b"JetBrainsMono-Medium", b"JetBrainsMono-Bold"}, fonts
         # Embedded, so the PDF looks the same on any machine.
-        assert pdf.count(b"/FontFile2") == 4
+        assert pdf.count(b"/FontFile2") == 6
         assert b"Helvetica" not in pdf
         # The old identity's navy (#1a2a6c) and slate (#2c3e50) as PDF fill colours.
         assert b".101961 .164706 .423529" not in pdf and b".172549 .243137 .313725" not in pdf

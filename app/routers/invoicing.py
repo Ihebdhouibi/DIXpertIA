@@ -924,9 +924,14 @@ def _pdf_data(invoice: Invoice) -> dict:
     items = [
         {
             "description": item.designation,
-            "qty": float(item.quantite),
-            "price": float(item.prix_unitaire),
-            "total": float(item.quantite * item.prix_unitaire),
+            # Printed under the description and the quantity (#194).
+            "detail": item.detail,
+            "unit": item.unite,
+            "qty": item.quantite,
+            "price": item.prix_unitaire,
+            "total": item.quantite * item.prix_unitaire,
+            # One VAT row per rate on the PDF (#194).
+            "vat_rate": item.taux_tva if item.taux_tva is not None else 0,
         }
         for item in invoice.items
     ]
@@ -946,8 +951,13 @@ def _pdf_data(invoice: Invoice) -> dict:
         # As the API shows it: Overdue is derived from the due date (#117).
         "status": invoice.displayed_status().value,
         "items": items,
-        "subtotal": float(invoice.montant_ht),
-        "total": float(invoice.montant_ttc),
+        # The amounts the books hold: the PDF never computes a total of its own.
+        "subtotal": invoice.montant_ht,
+        "total": invoice.montant_ttc,
+        # Every invoice is in dinars until #195 brings the client's currency.
+        "currency": "TND",
+        # A supplier's bill: the supplier issued it, DI Xpertia is billed (#40).
+        "incoming": invoice.direction == InvoiceDirection.INCOMING,
     }
 
 
