@@ -29,7 +29,7 @@ from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.user import User
 from app.schemas.api import INVOICE_PROCESSING_STATUS_TO_API, INVOICE_STATUS_TO_API
 from app.schemas.dashboard import (
-    DashboardSummary, DirectionTotal, InvoiceFigures, LeaveFigures, StatusFigure, TeamFigures,
+    CurrencyAmount, DashboardSummary, DirectionTotal, InvoiceFigures, LeaveFigures, StatusFigure, TeamFigures,
 )
 
 router = APIRouter()
@@ -39,6 +39,22 @@ MONTH = r"^\d{4}-(0[1-9]|1[0-2])$"
 # In the order the dashboard shows them.
 COMMERCIAL = (InvoiceStatus.BROUILLON, InvoiceStatus.ENVOYEE, InvoiceStatus.PAYEE,
               InvoiceStatus.EN_RETARD, InvoiceStatus.ANNULEE)
+
+
+def _per_currency(rows) -> dict:
+    """(key, currency, count, amount) rows into {key: (count, {currency: amount})}."""
+    out: dict = {}
+    for key, currency, count, amount in rows:
+        total, amounts = out.get(key, (0, {}))
+        amounts[currency or "TND"] = round(amounts.get(currency or "TND", 0.0) + float(amount or 0), 3)
+        out[key] = (total + count, amounts)
+    return out
+
+
+def _amounts(amounts: dict) -> list[CurrencyAmount]:
+    """TND first, then the other currencies in a fixed order."""
+    return [CurrencyAmount(currency=c, amount=a)
+            for c, a in sorted(amounts.items(), key=lambda item: (item[0] != "TND", item[0]))]
 
 
 def _invoice_figures(db: Session, month: Optional[str]) -> InvoiceFigures:
@@ -61,25 +77,26 @@ def _invoice_figures(db: Session, month: Optional[str]) -> InvoiceFigures:
     # groups, so a count and its amount always come from the same rows.
     # GROUP BY 1, not the expression: `today` would be a second bind
     # parameter there, and PostgreSQL would not see the two as the same.
-    first = literal_column("1")
-    by_status = {
-        name: (count, float(amount or 0))
-        for name, count, amount in db.query(shown, func.count(), func.sum(rows.c.montant_ttc)).group_by(first).all()
-    }
+    first, second = literal_column("1"), literal_column("2")
+    # Amounts are summed per currency (#195): dollars added to dinars mean nothing.
+    by_status = _per_currency(db.query(shown, rows.c.devise, func.count(), func.sum(rows.c.montant_ttc))
+                              .group_by(first, second).all())
     processing = cast(rows.c.processing_status, Text)
     by_processing = dict(db.query(processing, func.count()).group_by(first).all())
     direction = cast(rows.c.direction, Text)
     by_direction = {
-        name: DirectionTotal(count=count, amount=round(float(amount or 0), 3))
-        for name, count, amount in db.query(direction, func.count(), func.sum(rows.c.montant_ttc)).group_by(first).all()
+        name: DirectionTotal(count=count, amount=amounts.get("TND", 0.0), amounts=_amounts(amounts))
+        for name, (count, amounts) in _per_currency(
+            db.query(direction, rows.c.devise, func.count(), func.sum(rows.c.montant_ttc))
+            .group_by(first, second).all()).items()
     }
     none = DirectionTotal(count=0, amount=0.0)
 
-    statuses = [
-        StatusFigure(status=INVOICE_STATUS_TO_API[s.value],
-                     count=by_status.get(s.name, (0, 0.0))[0], amount=by_status.get(s.name, (0, 0.0))[1])
-        for s in COMMERCIAL
-    ]
+    statuses = []
+    for s in COMMERCIAL:
+        count, amounts = by_status.get(s.name, (0, {}))
+        statuses.append(StatusFigure(status=INVOICE_STATUS_TO_API[s.value], count=count,
+                                     amount=amounts.get("TND", 0.0), amounts=_amounts(amounts)))
     states = [
         StatusFigure(status=INVOICE_PROCESSING_STATUS_TO_API[p.value], count=by_processing.get(p.name, 0))
         for p in InvoiceProcessingStatus

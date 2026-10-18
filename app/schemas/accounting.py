@@ -24,6 +24,16 @@ class BlockingInvoice(BaseModel):
     processing_status: InvoiceProcessingStatus
 
 
+class CurrencyTotals(BaseModel):
+    """One currency's totals for a month (#195): never added to another's."""
+
+    currency: str
+    total_ht_outgoing: Decimal
+    total_ttc_outgoing: Decimal
+    total_ht_incoming: Decimal
+    total_ttc_incoming: Decimal
+
+
 class PeriodOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,6 +48,8 @@ class PeriodOut(BaseModel):
     total_ttc_outgoing: Decimal | None = None
     total_ht_incoming: Decimal | None = None
     total_ttc_incoming: Decimal | None = None
+    # Every currency of the month (#195); the four totals above are its TND part.
+    totals_by_currency: list[CurrencyTotals] | None = None
 
 
 class PeriodSummary(BaseModel):
@@ -55,6 +67,9 @@ class PeriodSummary(BaseModel):
     total_ttc_outgoing: Decimal
     total_ht_incoming: Decimal
     total_ttc_incoming: Decimal
+    # One entry per currency the month used, TND first (#195). The four
+    # totals above are the TND entry.
+    totals_by_currency: list[CurrencyTotals] = []
     blocking: list[BlockingInvoice] = []
 
     @property

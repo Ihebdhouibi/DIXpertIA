@@ -7,6 +7,7 @@ blocking it rather than reporting a count.
 """
 
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Path, Response
 from sqlalchemy import and_, func, or_
@@ -24,7 +25,7 @@ from app.models.invoicing import (
 from app.models.user import User
 from app.schemas.accounting import BlockingInvoice, PeriodOut, PeriodSummary
 from app.i18n import ApiError
-from app.services.audit import record_event
+from app.services.audit import _jsonable, record_event
 
 # Keeping the books is the accountant's job, and the admin's by virtue of
 # running the company: this is bookkeeping, not a commercial act.
@@ -55,33 +56,46 @@ def _in_the_books():
 
 
 def _summarise(db: Session, start: date, end: date) -> dict:
-    """Count the month's invoices and total them, income apart from cost.
+    """Count the month's invoices and total them, income apart from cost, per currency.
 
-    Adding the two together would produce a figure meaning nothing. Kept apart,
-    these also give the VAT return: ttc - ht is VAT collected on the outgoing
-    side and VAT deductible on the incoming one (#40).
+    Adding income to cost would produce a figure meaning nothing, and so would
+    adding dollars to dinars (#195). Kept apart, these also give the VAT
+    return: ttc - ht is VAT collected on the outgoing side and VAT deductible
+    on the incoming one (#40). The flat total_* keys are the TND part.
     """
-    def totals(direction):
-        row = db.query(
-            func.count(Invoice.id),
-            func.coalesce(func.sum(Invoice.montant_ht), 0),
-            func.coalesce(func.sum(Invoice.montant_ttc), 0),
-        ).filter(
-            Invoice.date_emission >= start,
-            Invoice.date_emission < end,
-            Invoice.direction == direction,
-            _in_the_books(),
-        ).one()
-        return row
+    rows = db.query(
+        Invoice.devise,
+        Invoice.direction,
+        func.count(Invoice.id),
+        func.coalesce(func.sum(Invoice.montant_ht), 0),
+        func.coalesce(func.sum(Invoice.montant_ttc), 0),
+    ).filter(
+        Invoice.date_emission >= start,
+        Invoice.date_emission < end,
+        _in_the_books(),
+    ).group_by(Invoice.devise, Invoice.direction).all()
 
-    out = totals(InvoiceDirection.OUTGOING)
-    inc = totals(InvoiceDirection.INCOMING)
+    zero = Decimal(0)
+    by_currency = {"TND": {"currency": "TND", "total_ht_outgoing": zero, "total_ttc_outgoing": zero,
+                           "total_ht_incoming": zero, "total_ttc_incoming": zero}}
+    count = 0
+    for currency, direction, n, ht, ttc in rows:
+        side = "outgoing" if direction == InvoiceDirection.OUTGOING else "incoming"
+        entry = by_currency.setdefault(currency, {
+            "currency": currency, "total_ht_outgoing": zero, "total_ttc_outgoing": zero,
+            "total_ht_incoming": zero, "total_ttc_incoming": zero})
+        entry[f"total_ht_{side}"] += Decimal(ht)
+        entry[f"total_ttc_{side}"] += Decimal(ttc)
+        count += n
+    tnd = by_currency["TND"]
     return {
-        "invoice_count": out[0] + inc[0],
-        "total_ht_outgoing": out[1],
-        "total_ttc_outgoing": out[2],
-        "total_ht_incoming": inc[1],
-        "total_ttc_incoming": inc[2],
+        "invoice_count": count,
+        "total_ht_outgoing": tnd["total_ht_outgoing"],
+        "total_ttc_outgoing": tnd["total_ttc_outgoing"],
+        "total_ht_incoming": tnd["total_ht_incoming"],
+        "total_ttc_incoming": tnd["total_ttc_incoming"],
+        # TND first, then the others in a fixed order.
+        "totals_by_currency": sorted(by_currency.values(), key=lambda e: (e["currency"] != "TND", e["currency"])),
     }
 
 
@@ -188,7 +202,8 @@ def close_period(
     period.closed_at = func.now()
     period.closed_by_id = current_user.id
     for field, value in totals.items():
-        setattr(period, field, value)
+        # Amounts as strings in the JSON column, so they stay exact.
+        setattr(period, field, _jsonable(value) if field == "totals_by_currency" else value)
     # One event for the close, not one per archived invoice: the invoices did
     # not each decide anything, and the count says how many were sealed.
     record_event(db, "accounting_period.closed", "accounting_period", month,

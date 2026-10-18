@@ -167,3 +167,70 @@ def test_the_export_invoice_pdf_is_in_dollars_without_vat(client, admin):
     assert b"TOTAL DUE 2,000.00 USD" in pdf
     assert b"Export of services" in pdf and b"VAT No. GB 123456789" in pdf
     assert b"two thousand dollars" in pdf
+
+
+# --- Totals are never summed across currencies -----------------------------------------
+
+def sent_invoice(client, identities, client_id, rate):
+    """Created, approved by the accountant and sent: in the books (#118)."""
+    from invoice_flow import approve
+
+    admin = identities["admin"]["headers"]
+    created = invoice(client, admin, client_id, rate=rate)
+    assert created.status_code == 200, created.text
+    approve(client, identities, created.json()["id"])
+    response = client.post(f"/api/invoices/{created.json()['id']}/send", headers=admin)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.fixture
+def one_of_each(client, admin, identities):
+    """This month: one invoice in TND (2 380 TTC) and one in USD (2 000, no VAT)."""
+    local = make_client(client, admin, **LOCAL)
+    abroad = make_client(client, admin, **ABROAD)
+    return sent_invoice(client, identities, local["id"], 19), sent_invoice(client, identities, abroad["id"], 0)
+
+
+def test_the_dashboard_keeps_each_currency_apart(client, admin, one_of_each):
+    figures = client.get("/api/dashboard/summary", headers=admin).json()["invoices"]
+    clients = figures["clients"]
+    assert clients["count"] == 2
+    assert clients["amounts"] == [{"currency": "TND", "amount": pytest.approx(2380)},
+                                  {"currency": "USD", "amount": pytest.approx(2000)}]
+    # `amount` is the TND part only: never 4 380.
+    assert clients["amount"] == pytest.approx(2380)
+    sent = {s["status"]: s for s in figures["byStatus"]}["Sent"]
+    assert {a["currency"] for a in sent["amounts"]} == {"TND", "USD"}
+
+
+def test_the_month_preview_totals_each_currency(client, admin, one_of_each):
+    from datetime import date
+
+    month = date.today().strftime("%Y-%m")
+    body = client.get(f"/api/periods/{month}", headers=admin).json()
+    totals = {t["currency"]: t for t in body["totals_by_currency"]}
+    assert float(totals["TND"]["total_ttc_outgoing"]) == pytest.approx(2380)
+    assert float(totals["USD"]["total_ttc_outgoing"]) == pytest.approx(2000)
+    assert float(totals["USD"]["total_ht_outgoing"]) == pytest.approx(2000)
+    assert float(body["total_ttc_outgoing"]) == pytest.approx(2380), "the flat totals are the TND part"
+    assert body["invoice_count"] == 2
+
+
+def test_the_month_close_records_each_currency(client, admin, identities, one_of_each, database):
+    from datetime import date
+
+    for inv in one_of_each:
+        for step in ("processed", "completed"):
+            moved = client.patch(f"/api/invoices/{inv['id']}/processing-status", headers=admin,
+                                 json={"processing_status": step})
+            assert moved.status_code == 200, moved.text
+    month = date.today().strftime("%Y-%m")
+    closed = client.post(f"/api/periods/{month}/close", headers=admin)
+    assert closed.status_code == 200, closed.text
+    with database.connect() as c:
+        stored = c.execute(text("SELECT totals_by_currency, total_ttc_outgoing FROM accounting_periods"
+                                " WHERE periode = date_trunc('month', current_date)")).one()
+    by_currency = {t["currency"]: t for t in stored[0]}
+    assert by_currency["USD"]["total_ttc_outgoing"] == "2000.00"
+    assert float(stored[1]) == pytest.approx(2380)
