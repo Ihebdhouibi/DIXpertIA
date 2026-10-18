@@ -81,6 +81,8 @@ export interface Client {
   email?: string;
   telephone?: string;
   adresse?: string;
+  /** The language this client's invoices print in (#135, #192). */
+  locale?: 'fr' | 'en';
 }
 
 export interface InvoiceItem {

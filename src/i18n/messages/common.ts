@@ -77,6 +77,7 @@ export default defineMessages('common', {
   'common.nav.teamManagement': { fr: "Gestion de l'équipe", en: 'Team Management' },
   'common.nav.users': { fr: 'Utilisateurs', en: 'Users' },
   'common.nav.enquiries': { fr: 'Demandes de contact', en: 'Enquiries' },
+  'common.nav.clients': { fr: 'Clients', en: 'Clients' },
   'common.nav.notifications': { fr: 'Notifications', en: 'Notifications' },
   'common.nav.settings': { fr: 'Paramètres', en: 'Settings' },
   'common.nav.main': { fr: 'Navigation principale', en: 'Main' },

@@ -1,4 +1,4 @@
-import { Bell, Calendar, FileText, Home, Inbox, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
+import { Bell, Building2, Calendar, FileText, Home, Inbox, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { UserRole } from './types';
 import type { MessageKey, Params } from './i18n';
@@ -22,6 +22,8 @@ const ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'common.nav.dashboard', icon: LayoutDashboard },
   // Invoices: admin and accountant.
   { id: 'invoices', label: 'common.nav.invoices', icon: FileText, showFor: ['admin', 'accountant'] },
+  // Clients and the language their invoices print in (#192): the billing roles.
+  { id: 'clients', label: 'common.nav.clients', icon: Building2, showFor: ['admin', 'accountant'] },
   // Leave Requests: employees only. Accountants are deliberately excluded -
   // they do not manage HR processes (see #10).
   { id: 'leave-requests', label: 'common.nav.leaveRequests', icon: Calendar, showFor: ['employee'] },

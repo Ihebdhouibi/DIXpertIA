@@ -268,10 +268,22 @@ export const invoices = {
     }),
 };
 
+/** What the client form sends (#192); the server trims and validates it. */
+export interface ClientInput {
+  nom: string;
+  email: string;
+  telephone: string;
+  adresse: string;
+  locale: 'fr' | 'en';
+}
+
 export const clients = {
   list: () => request<Client[]>('/api/clients?limit=200'),
-  create: (body: unknown) =>
+  create: (body: ClientInput) =>
     request<Client>('/api/clients', { method: 'POST', body: JSON.stringify(body) }),
+  /** Correct a client; only the fields sent change (#192). */
+  update: (id: number, body: Partial<ClientInput>) =>
+    request<Client>(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 };
 
 export const leaveRequests = {
