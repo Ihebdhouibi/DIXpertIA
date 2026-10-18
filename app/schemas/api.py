@@ -200,6 +200,9 @@ class InvoiceItemOut(BaseModel):
     total: float
     # The VAT rate, so a draft can be edited without losing it (#125).
     vatRate: float
+    # Optional, printed on the PDF under the description and the quantity (#194).
+    detail: str | None = None
+    unit: str | None = None
 
 
 class InvoiceOut(BaseModel):
@@ -310,6 +313,8 @@ class InvoiceOut(BaseModel):
                     price=float(i.prix_unitaire or 0),
                     total=float((i.quantite or 0) * (i.prix_unitaire or 0)),
                     vatRate=float(i.taux_tva if i.taux_tva is not None else 0),
+                    detail=i.detail,
+                    unit=i.unite,
                 )
                 for i in row.items
             ],

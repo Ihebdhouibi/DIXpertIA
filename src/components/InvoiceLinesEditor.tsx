@@ -5,7 +5,7 @@ import { formatTND } from '../format';
 import { t as translate, useT } from '../i18n';
 import type { InvoiceItem } from '../types';
 import Button from './ui/Button';
-import { Input, Select } from './ui/Field';
+import { Input, Select, Textarea } from './ui/Field';
 
 /**
  * The lines of an invoice, as one editor shared by creation (#128) and
@@ -22,11 +22,13 @@ export interface LineDraft {
   quantite: string;
   prix_unitaire: string;
   taux_tva: string;
+  detail: string;
+  unite: string;
 }
 
 let nextKey = 0;
 export const blankLine = (): LineDraft => ({
-  key: nextKey++, designation: '', quantite: '1', prix_unitaire: '', taux_tva: '19',
+  key: nextKey++, designation: '', quantite: '1', prix_unitaire: '', taux_tva: '19', detail: '', unite: '',
 });
 
 /** Lines to edit from an invoice's items; one blank line when it has none. */
@@ -38,6 +40,8 @@ export function linesOf(items: InvoiceItem[] | undefined): LineDraft[] {
     quantite: String(item.qty),
     prix_unitaire: String(item.price),
     taux_tva: String(item.vatRate ?? 19),
+    detail: item.detail ?? '',
+    unite: item.unit ?? '',
   }));
 }
 
@@ -48,6 +52,9 @@ export function toLineInputs(lines: LineDraft[]): InvoiceLineInput[] {
     quantite: Number(l.quantite),
     prix_unitaire: Number(l.prix_unitaire),
     taux_tva: Number(l.taux_tva),
+    // The server trims and stores blank as nothing (#194).
+    detail: l.detail,
+    unite: l.unite,
   }));
 }
 
@@ -99,14 +106,14 @@ export function InvoiceLinesEditor({ lines, onChange }: InvoiceLinesEditorProps)
         return (
           <div
             key={line.key}
-            className="grid grid-cols-2 gap-2 rounded-lg border border-outline-variant p-3 md:grid-cols-[1fr_5rem_8rem_6rem_2.5rem] md:items-center md:border-0 md:p-0"
+            className="grid grid-cols-2 gap-2 rounded-lg border border-outline-variant p-3 md:grid-cols-[6rem_8rem_1fr_6rem_2.5rem] md:items-center"
           >
             <Input
               aria-label={t('invoices.line.descriptionLabel', { n })}
               placeholder={t('invoices.line.description')}
               value={line.designation}
               onChange={(e) => update(line.key, { designation: e.target.value })}
-              className="col-span-2 md:col-span-1"
+              className="col-span-2 md:order-1 md:col-span-4"
             />
             <Input
               aria-label={t('invoices.line.quantityLabel', { n })}
@@ -115,7 +122,15 @@ export function InvoiceLinesEditor({ lines, onChange }: InvoiceLinesEditorProps)
               step="0.01"
               value={line.quantite}
               onChange={(e) => update(line.key, { quantite: e.target.value })}
-              className="font-mono"
+              className="font-mono md:order-3"
+            />
+            <Input
+              aria-label={t('invoices.line.unitLabel', { n })}
+              placeholder={t('invoices.line.unit')}
+              maxLength={30}
+              value={line.unite}
+              onChange={(e) => update(line.key, { unite: e.target.value })}
+              className="md:order-4"
             />
             <Input
               aria-label={t('invoices.line.unitPriceLabel', { n })}
@@ -125,13 +140,13 @@ export function InvoiceLinesEditor({ lines, onChange }: InvoiceLinesEditorProps)
               placeholder={t('invoices.line.unitPrice')}
               value={line.prix_unitaire}
               onChange={(e) => update(line.key, { prix_unitaire: e.target.value })}
-              className="font-mono"
+              className="font-mono md:order-5"
             />
             <Select
               aria-label={t('invoices.line.vatLabel', { n })}
               value={line.taux_tva}
               onChange={(e) => update(line.key, { taux_tva: e.target.value })}
-              className="font-mono"
+              className="font-mono md:order-6"
             >
               {rates.map((r) => (
                 <option key={r} value={String(r)}>{r}%</option>
@@ -143,10 +158,20 @@ export function InvoiceLinesEditor({ lines, onChange }: InvoiceLinesEditorProps)
               aria-label={t('invoices.line.removeLabel', { n })}
               title={t('invoices.line.remove')}
               disabled={lines.length === 1}
+              className="order-last justify-self-start md:order-2 md:justify-self-auto"
               onClick={() => onChange(lines.filter((l) => l.key !== line.key))}
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </Button>
+            <Textarea
+              aria-label={t('invoices.line.detailLabel', { n })}
+              placeholder={t('invoices.line.detail')}
+              rows={2}
+              maxLength={1000}
+              value={line.detail}
+              onChange={(e) => update(line.key, { detail: e.target.value })}
+              className="col-span-2 md:order-7 md:col-span-4"
+            />
           </div>
         );
       })}

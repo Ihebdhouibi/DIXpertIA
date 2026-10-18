@@ -69,6 +69,12 @@ def _flag(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _text(name: str, default: str = "") -> str:
+    """An optional text setting, trimmed; unset gives the default, set to "" gives ""."""
+    raw = os.getenv(name)
+    return default if raw is None else raw.strip()
+
+
 class Settings:
     # No fallbacks. Both of these are required and the process will not start
     # without them.
@@ -123,6 +129,23 @@ class Settings:
     # Requests to the public routes (sign-in, password reset, activation,
     # contact) from one address per minute.
     PUBLIC_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_REQUESTS_PER_MINUTE", 20)
+
+
+    # The seller on every invoice PDF (#194). Empty means not printed: no
+    # placeholder ever reaches a real invoice. The tax ID (matricule fiscal),
+    # RNE and bank details wait for the company's official details (#189).
+    SELLER_NAME: str = _text("SELLER_NAME", "DI Xpertia SUARL")
+    SELLER_ADDRESS: str = _text("SELLER_ADDRESS", "Rue de Pasteur, Dar Chaabane El Fehri")
+    SELLER_CITY: str = _text("SELLER_CITY", "8011 Nabeul")
+    SELLER_PHONE: str = _text("SELLER_PHONE", "+216 28 814 729")
+    SELLER_EMAIL: str = _text("SELLER_EMAIL", "contact@dixpertia.com")
+    SELLER_TAX_ID: str = _text("SELLER_TAX_ID")
+    SELLER_RNE: str = _text("SELLER_RNE")
+    SELLER_BANK_NAME: str = _text("SELLER_BANK_NAME")
+    SELLER_BANK_HOLDER: str = _text("SELLER_BANK_HOLDER")
+    SELLER_RIB: str = _text("SELLER_RIB")
+    SELLER_IBAN: str = _text("SELLER_IBAN")
+    SELLER_BIC: str = _text("SELLER_BIC")
 
 
 settings = Settings()

@@ -184,6 +184,13 @@ export default defineMessages('invoices', {
     fr: 'Ligne {n}, prix unitaire HT en TND',
     en: 'Line {n} unit price, TND excl. VAT',
   },
+  'invoices.line.unit': { fr: 'Unité', en: 'Unit' },
+  'invoices.line.unitLabel': { fr: 'Ligne {n}, unité (jours, forfait…)', en: 'Line {n} unit (days, flat fee...)' },
+  'invoices.line.detail': {
+    fr: 'Détail (facultatif), imprimé sous la désignation',
+    en: 'Detail (optional), printed under the description',
+  },
+  'invoices.line.detailLabel': { fr: 'Ligne {n}, détail', en: 'Line {n} detail' },
   'invoices.line.vatLabel': { fr: 'Ligne {n}, taux de TVA', en: 'Line {n} VAT rate' },
   'invoices.line.removeLabel': { fr: 'Supprimer la ligne {n}', en: 'Remove line {n}' },
   'invoices.line.remove': { fr: 'Supprimer la ligne', en: 'Remove line' },

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#DEDCD5;font-family:'Space Grotesk',system-ui,sans-serif;color:#101314}
+a{color:#526B08;text-decoration:none}
+a:hover{color:#101314}
+</style>
+</helmet>
+
+<section style="padding:{{ pad }};display:flex;flex-direction:column;gap:28px">
+  <sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:900px">
+    <span style="font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#526B08">Facture · invoice · A4 · 210 × 297 mm</span>
+    <h1 style="margin:0;font:700 30px/1.15 'Space Grotesk',sans-serif;letter-spacing:-.01em">One layout, four states — plus the client-abroad variant</h1>
+    <p style="margin:0;font:400 15px/1.5 'Space Grotesk',sans-serif;color:#3C4144;text-wrap:pretty">Dashed “À confirmer / To confirm” tags mark every placeholder that waits on #189 and the foreign-client answer. Use the Tweaks to hide them or preview in grayscale.</p>
+  </div>
+  </sc-if>
+
+  <div style="display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+    <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="6">
+      <div id="{{ pg.id }}" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font:700 12px/1 'JetBrains Mono',monospace;background:#101314;color:#F3F2EE;padding:6px 9px;border-radius:4px">{{ pg.id }}</span>
+          <span style="font:500 14px/1.2 'Space Grotesk',sans-serif;color:#101314">{{ pg.caption }}</span>
+        </div>
+
+        <div data-screen-label="{{ pg.caption }}" style="position:relative;width:210mm;height:297mm;background:#FFFFFF;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08),0 18px 50px rgba(0,0,0,.12);filter:{{ pageFilter }}">
+
+          <sc-if value="{{ pg.draft }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:0;top:0;width:210mm;height:297mm;display:flex;align-items:center;justify-content:center;pointer-events:none">
+              <span style="transform:rotate(-35deg);font:700 104pt/1 'Space Grotesk',sans-serif;letter-spacing:.06em;color:#ECEAE4;white-space:nowrap">{{ pg.L.watermark }}</span>
+            </div>
+          </sc-if>
+
+          <div style="position:absolute;left:15mm;right:15mm;top:15mm;bottom:15mm;display:flex;flex-direction:column">
+
+            <sc-if value="{{ pg.isFirst }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8mm">
+                <div style="width:52mm;height:11.4mm;overflow:hidden;flex:none">
+                  <img src="assets/dixpertia-lockup.png" alt="DI Xpertia" style="display:block;width:73.4mm;height:auto;margin:-4.9mm 0 0 -10.8mm">
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2mm">
+                  <div style="display:flex;align-items:center;gap:2.2mm">
+                    <span style="font:700 22pt/1 'Space Grotesk',sans-serif;letter-spacing:.1em;color:#101314">{{ pg.L.title }}</span>
+                    <span style="display:block;width:3mm;height:6.4mm;background:#C6F24E"></span>
+                  </div>
+                  <span style="font:500 10.5pt/1 'JetBrains Mono',monospace;color:#101314">{{ pg.docNo }}</span>
+                  <sc-if value="{{ pg.draft }}" hint-placeholder-val="{{ false }}">
+                    <span style="font:500 7pt/1 'JetBrains Mono',monospace;letter-spacing:.04em;color:#526B08">{{ pg.L.draftNote }}</span>
+                  </sc-if>
+                </div>
+              </div>
+
+              <div style="height:0;border-top:0.75pt solid #101314;margin:7mm 0 6mm"></div>
+
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50mm;gap:7mm">
+                <div style="display:flex;flex-direction:column;gap:1.8mm">
+                  <span style="font:500 6.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08">{{ pg.L.seller }}</span>
+                  <div style="display:flex;flex-direction:column;font:400 8pt/1.5 'Space Grotesk',sans-serif;color:#101314">
+                    <span style="font-weight:700;font-size:9pt">DI Xpertia SUARL</span>
+                    <span>Rue de Pasteur, Dar Chaabane El Fehri</span>
+                    <span>{{ pg.L.sellerCity }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:7.5pt">+216 28 814 729</span>
+                    <span style="display:flex;align-items:center;gap:1.5mm;font-family:'JetBrains Mono',monospace;font-size:7.5pt">contact@dixpertia.tn<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                    <span style="display:flex;align-items:center;gap:1.5mm;font-family:'JetBrains Mono',monospace;font-size:7.5pt">{{ pg.L.mf }} 1997239T/A/M/000<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                    <span style="display:flex;align-items:center;gap:1.5mm;font-family:'JetBrains Mono',monospace;font-size:7.5pt">RNE 1997239T<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:1.8mm">
+                  <span style="font:500 6.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08">{{ pg.L.client }}</span>
+                  <div style="display:flex;flex-direction:column;font:400 8pt/1.5 'Space Grotesk',sans-serif;color:#101314">
+                    <span style="font-weight:700;font-size:9pt">{{ pg.client.name }}</span>
+                    <sc-for list="{{ pg.client.lines }}" as="ln" hint-placeholder-count="2"><span>{{ ln }}</span></sc-for>
+                    <span style="display:flex;align-items:center;gap:1.5mm;font-family:'JetBrains Mono',monospace;font-size:7.5pt;margin-top:1mm">{{ pg.client.taxLabel }} {{ pg.client.taxId }}<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:1.8mm">
+                  <span style="font:500 6.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08">{{ pg.L.docLabel }}</span>
+                  <div style="display:flex;flex-direction:column">
+                    <sc-for list="{{ pg.meta }}" as="m" hint-placeholder-count="4">
+                      <div style="display:flex;justify-content:space-between;gap:3mm;padding:1.3mm 0;border-bottom:0.25pt solid #C4C2BB">
+                        <span style="font:400 7.5pt/1.3 'Space Grotesk',sans-serif;color:#4A4F52">{{ m.k }}</span>
+                        <span style="font:500 7.5pt/1.3 'JetBrains Mono',monospace;color:#101314;text-align:right">{{ m.v }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pg.isCont }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8mm">
+                <div style="width:38mm;height:8.35mm;overflow:hidden;flex:none">
+                  <img src="assets/dixpertia-lockup.png" alt="DI Xpertia" style="display:block;width:53.6mm;height:auto;margin:-3.58mm 0 0 -7.9mm">
+                </div>
+                <span style="font:500 8.5pt/1 'JetBrains Mono',monospace;color:#101314">{{ pg.L.title }} {{ pg.docNo }} · {{ pg.L.cont }}</span>
+              </div>
+              <div style="height:0;border-top:0.75pt solid #101314;margin:5mm 0 0"></div>
+            </sc-if>
+
+            <div style="margin-top:{{ pg.tableTop }};display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:8mm minmax(0,1fr) 15mm 26mm 13mm 28mm;column-gap:2mm;padding:2mm 0;border-top:1.5pt solid #101314;border-bottom:0.5pt solid #101314;font:500 6.5pt/1.2 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#101314">
+                <span>#</span><span>{{ pg.L.cDesc }}</span><span style="text-align:right">{{ pg.L.cQty }}</span><span style="text-align:right">{{ pg.L.cPu }}</span><span style="text-align:right">{{ pg.L.cVat }}</span><span style="text-align:right">{{ pg.L.cTotal }}</span>
+              </div>
+              <sc-for list="{{ pg.rows }}" as="r" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:8mm minmax(0,1fr) 15mm 26mm 13mm 28mm;column-gap:2mm;padding:2.2mm 0;border-bottom:0.25pt solid #C4C2BB;align-items:baseline">
+                  <span style="font:400 7.5pt/1.35 'JetBrains Mono',monospace;color:#4A4F52">{{ r.n }}</span>
+                  <div style="display:flex;flex-direction:column;gap:0.6mm">
+                    <span style="font:500 8.5pt/1.35 'Space Grotesk',sans-serif;color:#101314;text-wrap:pretty">{{ r.title }}</span>
+                    <span style="font:400 7.5pt/1.4 'Space Grotesk',sans-serif;color:#4A4F52;text-wrap:pretty">{{ r.detail }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.6mm">
+                    <span style="font:400 8pt/1.35 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#101314">{{ r.qty }}</span>
+                    <span style="font:400 6.5pt/1.2 'JetBrains Mono',monospace;color:#4A4F52">{{ r.unit }}</span>
+                  </div>
+                  <span style="font:400 8pt/1.35 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#101314;text-align:right">{{ r.pu }}</span>
+                  <span style="font:400 8pt/1.35 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#101314;text-align:right">{{ r.rate }}</span>
+                  <span style="font:500 8pt/1.35 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#101314;text-align:right">{{ r.total }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ pg.carry }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;justify-content:flex-end;padding-top:2mm;font:500 7pt/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#4A4F52">{{ pg.carry }}</div>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ pg.showTotals }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;justify-content:flex-end;margin-top:5mm">
+                <div style="width:86mm;display:flex;flex-direction:column">
+                  <div style="display:flex;justify-content:space-between;gap:4mm;padding:1.6mm 0;border-bottom:0.25pt solid #C4C2BB">
+                    <span style="font:500 8pt/1.3 'Space Grotesk',sans-serif">{{ pg.L.totalHT }}</span>
+                    <span style="font:500 8pt/1.3 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">{{ pg.t.ht }}</span>
+                  </div>
+                  <sc-for list="{{ pg.t.vat }}" as="v" hint-placeholder-count="2">
+                    <div style="display:flex;justify-content:space-between;gap:4mm;padding:1.6mm 0;border-bottom:0.25pt solid #C4C2BB">
+                      <span style="display:flex;gap:2mm;align-items:baseline;font:400 8pt/1.3 'Space Grotesk',sans-serif">{{ v.label }}<span style="font:400 7pt/1.3 'JetBrains Mono',monospace;color:#4A4F52">{{ v.base }}</span></span>
+                      <span style="font:400 8pt/1.3 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">{{ v.amount }}</span>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ pg.exempt }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:1.2mm;padding:1.6mm 0;border-bottom:0.25pt solid #C4C2BB">
+                      <div style="display:flex;justify-content:space-between;gap:4mm">
+                        <span style="font:400 8pt/1.3 'Space Grotesk',sans-serif">{{ pg.L.vatExempt }}</span>
+                        <span style="font:400 8pt/1.3 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">{{ pg.t.zero }}</span>
+                      </div>
+                      <span style="display:flex;flex-wrap:wrap;align-items:center;gap:1.5mm;font:400 7pt/1.4 'Space Grotesk',sans-serif;color:#4A4F52">{{ pg.L.exemptNote }}<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ pg.t.stamp }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;justify-content:space-between;gap:4mm;padding:1.6mm 0;border-bottom:0.25pt solid #C4C2BB">
+                      <span style="display:flex;align-items:center;gap:1.5mm;font:400 8pt/1.3 'Space Grotesk',sans-serif">{{ pg.L.stamp }}<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                      <span style="font:400 8pt/1.3 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">{{ pg.t.stamp }}</span>
+                    </div>
+                  </sc-if>
+
+                  <div style="margin-top:3mm;height:1.2mm;background:#C6F24E"></div>
+                  <sc-if value="{{ netInk }}" hint-placeholder-val="{{ true }}">
+                    <div style="background:#101314;padding:3.5mm 4mm;display:flex;justify-content:space-between;align-items:baseline;gap:4mm">
+                      <span style="font:500 7.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#F3F2EE">{{ pg.L.net }}</span>
+                      <span style="font:700 15pt/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#FFFFFF;white-space:nowrap">{{ pg.t.net }}</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ netOutline }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1.5pt solid #101314;border-top:0;padding:3.5mm 4mm;display:flex;justify-content:space-between;align-items:baseline;gap:4mm">
+                      <span style="font:500 7.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#101314">{{ pg.L.net }}</span>
+                      <span style="font:700 15pt/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:#101314;white-space:nowrap">{{ pg.t.net }}</span>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <div style="margin-top:4mm;padding:2.5mm 0;border-top:0.25pt solid #C4C2BB;border-bottom:0.25pt solid #C4C2BB;font:400 8pt/1.5 'Space Grotesk',sans-serif;color:#101314;text-wrap:pretty">{{ pg.L.wordsPrefix }} <strong style="font-weight:600">{{ pg.t.words }}</strong>.</div>
+
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8mm;margin-top:7mm">
+                <div style="display:flex;flex-direction:column;gap:1.8mm">
+                  <span style="font:500 6.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08">{{ pg.L.payTerms }}</span>
+                  <span style="font:400 8pt/1.5 'Space Grotesk',sans-serif;color:#101314;text-wrap:pretty">{{ pg.terms }}</span>
+                  <span style="display:flex;flex-wrap:wrap;align-items:center;gap:1.5mm;font:400 7.5pt/1.5 'Space Grotesk',sans-serif;color:#4A4F52;text-wrap:pretty">{{ pg.L.late }}<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:1.8mm">
+                  <span style="display:flex;align-items:center;gap:1.5mm;font:500 6.5pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08">{{ pg.L.bank }}<sc-if value="{{ showTags }}" hint-placeholder-val="{{ true }}"><span style="font:500 5.5pt/1 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;border:0.5pt dashed #101314;padding:0.5mm 1mm;color:#101314;white-space:nowrap">{{ pg.L.tbc }}</span></sc-if></span>
+                  <div style="display:flex;flex-direction:column">
+                    <sc-for list="{{ pg.bankRows }}" as="b" hint-placeholder-count="5">
+                      <div style="display:grid;grid-template-columns:16mm minmax(0,1fr);gap:2mm;padding:1mm 0;border-bottom:0.25pt solid #C4C2BB">
+                        <span style="font:400 7pt/1.35 'Space Grotesk',sans-serif;color:#4A4F52">{{ b.k }}</span>
+                        <span style="font:400 7.5pt/1.35 'JetBrains Mono',monospace;color:#101314">{{ b.v }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="margin-top:auto;display:flex;flex-direction:column;gap:2mm">
+              <div style="height:0;border-top:0.5pt solid #101314"></div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6mm;font:400 6.5pt/1.4 'JetBrains Mono',monospace;color:#4A4F52">
+                <span>DI Xpertia SUARL · {{ pg.L.mf }} 1997239T/A/M/000 · Rue de Pasteur, Dar Chaabane El Fehri, {{ pg.L.sellerCity }}</span>
+                <span style="color:#101314;white-space:nowrap">{{ pg.pageLabel }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+
+    <sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+    <div id="spec" style="width:210mm;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font:700 12px/1 'JetBrains Mono',monospace;background:#101314;color:#F3F2EE;padding:6px 9px;border-radius:4px">spec</span>
+        <span style="font:500 14px/1.2 'Space Grotesk',sans-serif">Sizes, spacing, colours — for ReportLab</span>
+      </div>
+      <div style="background:#FFFFFF;padding:12mm;display:flex;flex-direction:column;gap:7mm;font:400 9pt/1.5 'Space Grotesk',sans-serif;color:#101314;box-shadow:0 2px 6px rgba(0,0,0,.08),0 18px 50px rgba(0,0,0,.12)">
+        <sc-for list="{{ spec }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:2mm">
+            <span style="font:500 7pt/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#526B08;padding-bottom:1.5mm;border-bottom:0.75pt solid #101314">{{ s.h }}</span>
+            <sc-for list="{{ s.rows }}" as="x" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:44mm minmax(0,1fr);gap:4mm;padding:0.6mm 0;border-bottom:0.25pt solid #E2E0DA">
+                <span style="font:500 8pt/1.45 'Space Grotesk',sans-serif">{{ x.k }}</span>
+                <span style="font:400 7.5pt/1.5 'JetBrains Mono',monospace;color:#3C4144;text-wrap:pretty">{{ x.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+        <div style="display:flex;gap:3mm;flex-wrap:wrap">
+          <sc-for list="{{ swatches }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;flex-direction:column;gap:1.2mm;width:24mm">
+              <div style="height:12mm;background:{{ c.hex }};border:0.25pt solid #C4C2BB"></div>
+              <span style="font:500 7pt/1.2 'Space Grotesk',sans-serif">{{ c.name }}</span>
+              <span style="font:400 6.5pt/1.2 'JetBrains Mono',monospace;color:#4A4F52">{{ c.hex }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;only&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;showPlaceholders&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;grayscale&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;totalStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Ink fill&quot;,&quot;Outline&quot;],&quot;default&quot;:&quot;Ink fill&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+class Component extends DCLogic {
+  fmt(n, lang, dec) {
+    const [i, d] = Math.abs(n).toFixed(dec).split(".");
+    const g = i.replace(/\B(?=(\d{3})+(?!\d))/g, lang === "fr" ? "\u00A0" : ",");
+    return (n < 0 ? "-" : "") + g + (d ? (lang === "fr" ? "," : ".") + d : "");
+  }
+  qty(n, lang) { return String(n).replace(".", lang === "fr" ? "," : "."); }
+  frWords(n) {
+    const u = ["zéro","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix","onze","douze","treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf"];
+    const t = { 2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante" };
+    const b100 = n => {
+      if (n < 20) return u[n];
+      const d = Math.floor(n / 10), r = n % 10;
+      if (d === 7 || d === 9) { const base = d === 7 ? "soixante" : "quatre-vingt", rest = n - (d === 7 ? 60 : 80); return base + (rest === 11 && d === 7 ? " et onze" : "-" + u[rest]); }
+      if (d === 8) return r ? "quatre-vingt-" + u[r] : "quatre-vingts";
+      return t[d] + (r === 0 ? "" : r === 1 ? " et un" : "-" + u[r]);
+    };
+    const b1000 = (n, plural) => {
+      const h = Math.floor(n / 100), r = n % 100;
+      const hs = h === 0 ? "" : (h === 1 ? "cent" : u[h] + " cent" + (r === 0 && plural ? "s" : ""));
+      let rs = r ? b100(r) : "";
+      if (!plural && r === 80) rs = "quatre-vingt";
+      return [hs, rs].filter(Boolean).join(" ");
+    };
+    if (n === 0) return "zéro";
+    const m = Math.floor(n / 1e6), th = Math.floor(n / 1000) % 1000, r = n % 1000, out = [];
+    if (m) out.push(b1000(m, true) + " million" + (m > 1 ? "s" : ""));
+    if (th) out.push(th === 1 ? "mille" : b1000(th, false) + " mille");
+    if (r) out.push(b1000(r, true));
+    return out.join(" ");
+  }
+  enWords(n) {
+    const u = ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+    const t = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+    const b100 = n => n < 20 ? u[n] : t[Math.floor(n / 10)] + (n % 10 ? "-" + u[n % 10] : "");
+    const b1000 = n => { const h = Math.floor(n / 100), r = n % 100; return [h ? u[h] + " hundred" : "", r ? b100(r) : ""].filter(Boolean).join(" "); };
+    if (n === 0) return "zero";
+    const m = Math.floor(n / 1e6), th = Math.floor(n / 1000) % 1000, r = n % 1000, out = [];
+    if (m) out.push(b1000(m) + " million");
+    if (th) out.push(b1000(th) + " thousand");
+    if (r) out.push(b1000(r));
+    return out.join(" ");
+  }
+  words(total, lang, cur) {
+    const dec = cur === "TND" ? 3 : 2, f = Math.pow(10, dec);
+    const whole = Math.floor(total + 1e-9), frac = Math.round((total - whole) * f);
+    const W = lang === "fr" ? this.frWords.bind(this) : this.enWords.bind(this);
+    const names = cur === "TND" ? (lang === "fr" ? ["dinar", "dinars", "millime", "millimes"] : ["dinar", "dinars", "millime", "millimes"]) : ["euro", "euros", "cent", "cents"];
+    let s = W(whole) + " " + (whole > 1 ? names[1] : names[0]);
+    if (frac) s += (lang === "fr" ? " et " : " and ") + W(frac) + " " + (frac > 1 ? names[3] : names[2]);
+    return s;
+  }
+  L(lang) {
+    return lang === "fr" ? {
+      title: "FACTURE", watermark: "BROUILLON", draftNote: "Numéro attribué à la validation", seller: "Émetteur", client: "Facturé à", docLabel: "Facture",
+      sellerCity: "8011 Nabeul, Tunisie", mf: "MF", tbc: "À confirmer",
+      cDesc: "Désignation", cQty: "Qté", cPu: "PU HT", cVat: "TVA", cTotal: "Total HT",
+      totalHT: "Total HT", stamp: "Droit de timbre", net: "Net à payer", vatExempt: "TVA", exemptNote: "Exonération de TVA — exportation de services (art. [X] du Code de la TVA)",
+      wordsPrefix: "Arrêtée la présente facture à la somme de", payTerms: "Conditions de paiement", bank: "Coordonnées bancaires",
+      late: "Tout retard de paiement entraîne des pénalités au taux de [X] % par mois de retard.", cont: "suite", page: "Page",
+      kNo: "Numéro", kIssue: "Date d’émission", kDue: "Échéance", kStatus: "Statut", kCur: "Devise", draftStatus: "Brouillon",
+      bank1: "Banque", bank2: "Titulaire", carry: "Suite page"
+    } : {
+      title: "INVOICE", watermark: "DRAFT", draftNote: "Number assigned on approval", seller: "From", client: "Bill to", docLabel: "Invoice",
+      sellerCity: "8011 Nabeul, Tunisia", mf: "Tax ID", tbc: "To confirm",
+      cDesc: "Description", cQty: "Qty", cPu: "Unit excl. VAT", cVat: "VAT", cTotal: "Total excl. VAT",
+      totalHT: "Total excl. VAT", stamp: "Stamp duty", net: "Total due", vatExempt: "VAT", exemptNote: "VAT exempt — export of services (art. [X], Tunisian VAT Code)",
+      wordsPrefix: "Amount due:", payTerms: "Payment terms", bank: "Bank details",
+      late: "Late payments incur a penalty of [X]% per month of delay.", cont: "continued", page: "Page",
+      kNo: "Number", kIssue: "Issue date", kDue: "Due date", kStatus: "Status", kCur: "Currency", draftStatus: "Draft",
+      bank1: "Bank", bank2: "Account holder", carry: "Continued on page"
+    };
+  }
+  build(o) {
+    const L = this.L(o.lang), lang = o.lang, cur = o.cur, dec = cur === "TND" ? 3 : 2;
+    const F = n => this.fmt(n, lang, dec);
+    const all = o.lines.map((l, i) => ({ ...l, n: String(i + 1).padStart(2, "0"), sum: l.q * l.p }));
+    const toRow = l => ({ n: l.n, title: l[lang][0], detail: l[lang][1], qty: this.qty(l.q, lang), unit: l[lang][2], pu: F(l.p), rate: l.r + (lang === "fr" ? " %" : "%"), total: F(l.sum) });
+    const ht = all.reduce((a, l) => a + l.sum, 0);
+    const rates = [...new Set(all.map(l => l.r))].sort((a, b) => b - a);
+    const vat = o.exempt ? [] : rates.map(r => {
+      const base = all.filter(l => l.r === r).reduce((a, l) => a + l.sum, 0);
+      return { r, label: (lang === "fr" ? "TVA " + r + " %" : "VAT " + r + "%"), base: (lang === "fr" ? "sur " : "on ") + F(base), amount: F(Math.round(base * r) / 100) };
+    });
+    const vatSum = o.exempt ? 0 : rates.reduce((a, r) => a + Math.round(all.filter(l => l.r === r).reduce((s, l) => s + l.sum, 0) * r) / 100, 0);
+    const stamp = o.stamp ? 1 : 0;
+    const net = ht + vatSum + stamp;
+    const t = { ht: F(ht), vat, stamp: o.stamp ? F(stamp) : "", net: F(net) + "\u00A0" + cur, zero: F(0), words: this.words(net, lang, cur) };
+    const meta = [{ k: L.kNo, v: o.no }, { k: L.kIssue, v: o.issue }, { k: L.kDue, v: o.due }];
+    if (o.draft) meta.push({ k: L.kStatus, v: L.draftStatus });
+    meta.push({ k: L.kCur, v: cur });
+    const terms = lang === "fr" ? `Virement bancaire à 30 jours date de facture, au plus tard le ${o.due}.` : `Bank transfer within 30 days of the invoice date, by ${o.due} at the latest.`;
+    const bankRows = [{ k: L.bank1, v: "[Nom de la banque]" }, { k: L.bank2, v: "DI Xpertia SUARL" }, { k: "RIB", v: "00 000 0000000000000 00" }, { k: "IBAN", v: "TN59 0000 0000 0000 0000 0000" }, { k: "BIC", v: "XXXXTNTT" }];
+    if (lang === "en") bankRows[0].v = "[Bank name]";
+    const splits = o.split || [all.length];
+    const pc = splits.length;
+    let start = 0;
+    return splits.map((cnt, pi) => {
+      const rows = all.slice(start, start + cnt).map(toRow); start += cnt;
+      const last = pi === pc - 1;
+      return {
+        id: o.ids[pi], caption: o.captions[pi], L, draft: o.draft, isFirst: pi === 0, isCont: pi > 0,
+        tableTop: pi === 0 ? "9mm" : "5mm", docNo: o.no, meta, client: o.client, rows,
+        carry: last ? "" : `${L.carry} ${pi + 2} →`, showTotals: last, exempt: !!o.exempt, t, terms, bankRows,
+        pageLabel: `${L.page} ${pi + 1} / ${pc}`
+      };
+    });
+  }
+  renderVals() {
+    const p = this.props;
+    const tnClientFr = { name: "Exemple Logistique SARL", lines: ["Zone industrielle, lot 14", "8000 Nabeul, Tunisie"], taxLabel: "MF", taxId: "0000000X/A/M/000" };
+    const tnClientEn = { ...tnClientFr, lines: ["Zone industrielle, lot 14", "8000 Nabeul, Tunisia"], taxLabel: "Tax ID" };
+    const main = [
+      { q: 1, p: 1800, r: 19, fr: ["Audit de sécurité de l’infrastructure cloud", "Revue des accès, de la configuration réseau et des sauvegardes ; rapport et plan de remédiation.", "forfait"], en: ["Cloud infrastructure security audit", "Review of access, network configuration and backups; report and remediation plan.", "fixed"] },
+      { q: 4, p: 450, r: 19, fr: ["Mise en place d’une chaîne d’intégration et de déploiement continus", "Pipelines de build et de déploiement, environnements de recette et de production.", "jours"], en: ["Continuous integration and deployment pipeline setup", "Build and deployment pipelines, staging and production environments.", "days"] },
+      { q: 2, p: 300, r: 7, fr: ["Formation DevOps de l’équipe client", "Deux sessions d’une journée, supports inclus.", "sessions"], en: ["DevOps training for the client team", "Two one-day sessions, materials included.", "sessions"] }
+    ];
+    const L2 = (t, d, un, q, pr, r) => ({ q, p: pr, r, fr: [t, d, un], en: [t, d, un] });
+    const long = [
+      L2("Supervision et astreinte — octobre 2026", "Surveillance 24/7, gestion des alertes et rapport mensuel.", "mois", 1, 1200, 19),
+      L2("Maintenance corrective", "Tickets #412 à #431, détail en annexe.", "heures", 6, 85, 19),
+      L2("Mise à jour de sécurité des serveurs applicatifs", "12 serveurs, fenêtre de maintenance du 8 oct. 2026.", "forfait", 1, 640, 19),
+      L2("Migration de la base de données PostgreSQL 14 vers 16", "Tests de restauration, répétition et bascule planifiée.", "jours", 3, 450, 19),
+      L2("Hébergement cloud — refacturation", "Instances, stockage et sauvegardes, du 1er au 31 oct. 2026.", "mois", 1, 980, 19),
+      L2("Licence de l’outil de supervision", "Abonnement mensuel.", "hôtes", 10, 18, 19),
+      L2("Développement de l’API de suivi des expéditions", "Points d’accès de consultation et notifications des transporteurs.", "jours", 5, 450, 19),
+      L2("Revue de code et tests automatisés", "Couverture des modules facturation et stock.", "jours", 2, 420, 19),
+      L2("Tableau de bord opérationnel", "Indicateurs de livraison et export CSV.", "jours", 2, 450, 19),
+      L2("Configuration d’un VPN site à site", "Liaison siège – entrepôt.", "forfait", 1, 350, 19),
+      L2("Sauvegarde externalisée", "500 Go, rétention de 30 jours.", "mois", 1, 120, 19),
+      L2("Atelier de cadrage — phase 2", "Demi-journée sur site, compte rendu inclus.", "forfait", 1, 300, 19),
+      L2("Formation des utilisateurs au tableau de bord", "Une session de trois heures.", "session", 1, 280, 7),
+      L2("Formation des administrateurs", "Gestion des comptes et des droits d’accès.", "session", 1, 280, 7),
+      L2("Documentation d’exploitation", "Procédures de reprise et d’escalade.", "forfait", 1, 400, 19),
+      L2("Audit de conformité des sauvegardes", "Tests de restauration trimestriels.", "forfait", 1, 360, 19),
+      L2("Support utilisateurs de niveau 1", "Forfait mensuel, 20 demandes incluses.", "mois", 1, 450, 19),
+      L2("Intervention hors heures ouvrées", "Incident du 22 oct. 2026.", "heures", 2.5, 110, 19),
+      L2("Frais de déplacement", "Deux déplacements sur site.", "dépl.", 2, 45, 0),
+      L2("Noms de domaine et certificats", "Renouvellement annuel.", "domaines", 3, 60, 19)
+    ];
+    const abroad = [
+      { q: 1, p: 1500, r: 0, en: ["Cloud infrastructure security audit", "Review of access, network configuration and backups; report and remediation plan.", "fixed"] },
+      { q: 4, p: 400, r: 0, en: ["Continuous integration and deployment pipeline setup", "Build and deployment pipelines, staging and production environments.", "days"] },
+      { q: 1, p: 900, r: 0, en: ["Managed operations — October 2026", "24/7 monitoring, alert handling and monthly report.", "month"] }
+    ];
+    const pages = [
+      ...this.build({ lang: "fr", cur: "TND", no: "FA-2026-0042", issue: "17 oct. 2026", due: "16 nov. 2026", client: tnClientFr, lines: main, stamp: true, ids: ["1"], captions: ["1 · Facture émise — français"] }),
+      ...this.build({ lang: "en", cur: "TND", no: "FA-2026-0042", issue: "Oct 17, 2026", due: "Nov 16, 2026", client: tnClientEn, lines: main, stamp: true, ids: ["2"], captions: ["2 · Issued invoice — English"] }),
+      ...this.build({ lang: "fr", cur: "TND", no: "BR-0057", issue: "17 oct. 2026", due: "16 nov. 2026", client: tnClientFr, lines: main, stamp: true, draft: true, ids: ["3"], captions: ["3 · Brouillon"] }),
+      ...this.build({ lang: "fr", cur: "TND", no: "FA-2026-0043", issue: "31 oct. 2026", due: "30 nov. 2026", client: tnClientFr, lines: long, stamp: true, split: [13, 7], ids: ["4a", "4b"], captions: ["4 · Facture longue — page 1 / 2", "4 · Facture longue — page 2 / 2"] }),
+      ...this.build({ lang: "en", cur: "EUR", no: "FA-2026-0044", issue: "Oct 17, 2026", due: "Nov 16, 2026", client: { name: "Example Retail SAS", lines: ["12 rue de l’Exemple", "69002 Lyon, France"], taxLabel: "VAT No.", taxId: "FR 00 000000000" }, lines: abroad, stamp: false, exempt: true, ids: ["5"], captions: ["5 · Client abroad — EUR, VAT exempt (to confirm)"] })
+    ];
+    const only = p.only ? String(p.only).split(",").map(x => x.trim()) : null;
+    const shown = only ? pages.filter(pg => only.includes(pg.id)) : pages;
+    const net = p.totalStyle ?? "Ink fill";
+    const spec = [
+      { h: "Page & grid", rows: [
+        { k: "Format", v: "A4 210 × 297 mm, margins 15 mm all sides → content box 180 × 267 mm" },
+        { k: "Header", v: "Logo 52 × 11.4 mm (trim PNG padding first). Title 22 pt bold, tracking +0.1 em; lime block 3 × 6.4 mm, gap 2.2 mm. Number 10.5 pt mono" },
+        { k: "Header rule", v: "0.75 pt ink, 7 mm below header, 6 mm above parties" },
+        { k: "Parties", v: "3 columns: 58 / 58 / 50 mm, gutters 7 mm. Labels 6.5 pt mono caps +0.14 em, Lime Deep. Body 8 pt / 1.5" },
+        { k: "Footer", v: "Pinned to bottom of content box. 0.5 pt ink rule, 2 mm gap, 6.5 pt mono grey. Legal name · MF · address left, “Page n / N” right" }
+      ]},
+      { h: "Line table", rows: [
+        { k: "Columns (mm)", v: "# 8 · Description 80 · Qty 15 · Unit price 26 · VAT 13 · Total 28 — gutters 2 mm (sum 180)" },
+        { k: "Header row", v: "1.5 pt ink top, 0.5 pt ink bottom, 2 mm padding, 6.5 pt mono caps. Repeat on every page (ReportLab repeatRows=1)" },
+        { k: "Body rows", v: "2.2 mm padding, 0.25 pt #C4C2BB bottom. Title 8.5 pt medium; detail 7.5 pt #4A4F52, wraps 2–3 lines. Numbers 8 pt mono right-aligned, tabular" },
+        { k: "Page break", v: "Split between rows only (never inside). Non-last pages end with “Suite page n →”. Totals block kept together (KeepTogether) on the last page" }
+      ]},
+      { h: "Totals & payment", rows: [
+        { k: "Totals block", v: "86 mm wide, right-aligned, 5 mm below table. Rows 1.6 mm padding, 0.25 pt rule. One VAT row per rate used, with its base" },
+        { k: "Total due", v: net === "Ink fill" ? "Lime bar 1.2 mm, then ink fill box, 3.5 × 4 mm padding. Label 7.5 pt mono caps paper; amount 15 pt mono bold white" : "Lime bar 1.2 mm, then 1.5 pt ink box (no top). Label 7.5 pt mono caps; amount 15 pt mono bold ink" },
+        { k: "Amount in words", v: "Full width, 4 mm below, between 0.25 pt rules, 8 pt; the words in semibold" },
+        { k: "Payment", v: "2 columns, 8 mm gutter, 7 mm below. Bank rows: 16 mm label + value, 7.5 pt mono" },
+        { k: "Client abroad", v: "VAT rows replaced by a single “VAT 0” row + exemption mention; no stamp duty; currency EUR/USD with 2 decimals" }
+      ]},
+      { h: "Type", rows: [
+        { k: "Space Grotesk", v: "400 / 500 / 600 / 700 — titles, labels, descriptions, words" },
+        { k: "JetBrains Mono", v: "400 / 500 / 700 — numbers, dates, references, amounts, IDs. Tabular figures" },
+        { k: "Minimum size", v: "6.5 pt (labels, footer); placeholder tag 5.5 pt (removed in production)" },
+        { k: "Number formats", v: "FR 4 200,000 TND (no-break space, comma) · 17 oct. 2026 — EN 4,200.000 TND · Oct 17, 2026. TND 3 decimals, EUR/USD 2" }
+      ]},
+      { h: "Colour & black-and-white", rows: [
+        { k: "Lime #C6F24E", v: "Fills only: title block, bar above total due. Never text. Prints ~10% grey — decorative, carries no meaning" },
+        { k: "Lime Deep #526B08", v: "Section labels and draft note only (small text). Prints dark grey, ≥ 6:1 on white" },
+        { k: "Greys", v: "Secondary text #4A4F52 (8.6:1). Hairlines #C4C2BB. Draft watermark #ECEAE4 solid (no alpha), drawn first, −35°" },
+        { k: "No effects", v: "No shadows, gradients, transparency or rounded text boxes. Solid fills, rules, rectangles only" }
+      ]},
+      { h: "Placeholders [to confirm]", rows: [
+        { k: "Seller", v: "Matricule fiscal, RNE, e-mail" },
+        { k: "Client", v: "Client MF / foreign VAT number (or omitted)" },
+        { k: "Amounts", v: "Stamp duty 1,000 TND; late-payment rate; VAT exemption article" },
+        { k: "Bank", v: "Bank name, RIB, IBAN, BIC" }
+      ]}
+    ];
+    const swatches = [
+      { name: "Ink", hex: "#101314" }, { name: "Signal Lime", hex: "#C6F24E" }, { name: "Lime Deep", hex: "#526B08" },
+      { name: "Secondary text", hex: "#4A4F52" }, { name: "Hairline", hex: "#C4C2BB" }, { name: "Watermark", hex: "#ECEAE4" }
+    ];
+    return {
+      pages: shown, spec, swatches, showChrome: !only, pad: only ? "32px" : "56px 56px 80px",
+      showTags: p.showPlaceholders ?? true,
+      netInk: net === "Ink fill", netOutline: net !== "Ink fill",
+      pageFilter: (p.grayscale ?? false) ? "grayscale(1)" : "none"
+    };
+  }
+}
+</script>
+</body>
+</html>
