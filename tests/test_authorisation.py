@@ -81,6 +81,8 @@ ROUTES = [
     # --- billing -----------------------------------------------------------
     ("GET", "/api/clients", BILLING),
     ("POST", "/api/clients", BILLING),
+    # Correcting a client and its invoice language (#192).
+    ("PATCH", "/api/clients/1", BILLING),
     ("GET", "/api/suppliers", BILLING),
     ("POST", "/api/suppliers", BILLING),
     ("GET", "/api/invoices", BILLING),
@@ -178,6 +180,7 @@ def test_every_route_is_covered(app):
         normalised = (path
                       .replace("/api/leave-requests/1/", "/api/leave-requests/{req_id}/")
                       .replace("/api/contact-requests/1/", "/api/contact-requests/{request_id}/")
+                      .replace("/api/clients/1", "/api/clients/{client_id}")
                       .replace("/api/notifications/1/", "/api/notifications/{notification_id}/")
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")

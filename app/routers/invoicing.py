@@ -35,6 +35,7 @@ from app.schemas.audit import InvoiceHistoryEventOut
 from app.schemas.invoicing import (
     ClientCreate,
     ClientOut,
+    ClientUpdate,
     InvoiceCancellation,
     InvoiceCreate,
     InvoicePayment,
@@ -94,12 +95,55 @@ def list_clients(
     return _paginate(response, db.query(Client).order_by(Client.nom), limit, offset)
 
 
+# The client fields worth a line in the audit trail when they change (#63, #192).
+_CLIENT_FIELDS = ("nom", "email", "telephone", "adresse", "locale")
+
+
+def _commit_client(db: Session, name: str) -> None:
+    """Commit, turning the case-insensitive unique name (ux_clients_nom_ci)
+    into a clear 409. It used to surface as a 500."""
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(409, "client.name_taken", name=name) from exc
+
+
 @router.post("/clients", response_model=ClientOut)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db)):
     client = Client(**payload.model_dump())
     db.add(client)
-    db.commit()
+    try:
+        db.flush()  # the id, for the audit event; a duplicate name fails here
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(409, "client.name_taken", name=payload.nom) from exc
+    record_event(db, "client.created", "client", client.id, after=payload.model_dump())
+    _commit_client(db, payload.nom)
     db.refresh(client)
+    return client
+
+
+@router.patch("/clients/{client_id}", response_model=ClientOut)
+def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db)):
+    """Correct a client (#192): its name, contact details or invoice language.
+
+    Only the fields sent change. The language decides how the client's invoices
+    print from now on (#135); an invoice already issued is printed again in
+    the new language, since the PDF is generated on each download.
+    """
+    client = db.get(Client, client_id)
+    if client is None:
+        raise ApiError(404, "client.not_found")
+    changes = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    before = {k: getattr(client, k) for k in changes if getattr(client, k) != changes[k]}
+    after = {k: changes[k] for k in before}
+    if after:
+        for field, value in after.items():
+            setattr(client, field, value)
+        record_event(db, "client.updated", "client", client.id, before=before, after=after)
+        _commit_client(db, client.nom)
+        db.refresh(client)
     return client
 
 
