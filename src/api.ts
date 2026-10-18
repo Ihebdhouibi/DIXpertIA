@@ -279,6 +279,9 @@ export interface ClientInput {
   telephone: string;
   adresse: string;
   locale: 'fr' | 'en';
+  export: boolean;
+  devise: 'TND' | 'EUR' | 'USD' | 'GBP';
+  identifiant_fiscal: string;
 }
 
 export const clients = {
@@ -311,10 +314,18 @@ export const payslips = {
 };
 
 /** One status on the dashboard: how many invoices, and for how much (TTC). */
+/** An amount in one currency (#195): never added to another currency's. */
+export interface CurrencyAmount {
+  currency: string;
+  amount: number;
+}
+
 export interface StatusFigure {
   status: string;
   count: number;
+  /** The TND part only; `amounts` has every currency (#195). */
   amount: number;
+  amounts?: CurrencyAmount[];
 }
 
 /**
@@ -325,7 +336,9 @@ export interface StatusFigure {
 /** Invoices one way (#40), and their total TTC. */
 export interface DirectionTotal {
   count: number;
+  /** The TND part only; `amounts` has every currency (#195). */
   amount: number;
+  amounts?: CurrencyAmount[];
 }
 
 export interface DashboardSummary {

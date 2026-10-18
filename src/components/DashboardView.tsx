@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Employee, LeaveRequest, Payslip, User } from '../types';
 import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
-import { formatDateTime, formatTND } from '../format';
+import { formatAmounts, formatDateTime, formatTND } from '../format';
 import { labelOf, useT, type MessageKey } from '../i18n';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
 import Button from './ui/Button';
@@ -137,13 +137,14 @@ export default function DashboardView({
     {
       label: t('dashboard.metric.clientInvoices'),
       value: clientTotals.count,
-      hint: formatTND(clientTotals.amount),
+      // One amount per currency, side by side (#195).
+      hint: formatAmounts(clientTotals.amounts, clientTotals.amount),
       to: 'invoices',
     },
     {
       label: t('dashboard.metric.supplierBills'),
       value: supplierTotals.count,
-      hint: formatTND(supplierTotals.amount),
+      hint: formatAmounts(supplierTotals.amounts, supplierTotals.amount),
       to: 'invoices',
     },
   ];
@@ -158,7 +159,7 @@ export default function DashboardView({
     processingCounts.find((p) => p.state === state)?.count ?? 0;
   const commercialStats = COMMERCIAL_STATES.map((status) => {
     const figure = figures?.byStatus.find((s) => s.status === status);
-    return { status, count: figure?.count ?? 0, amount: figure?.amount ?? 0 };
+    return { status, count: figure?.count ?? 0, amount: formatAmounts(figure?.amounts, figure?.amount ?? 0) };
   });
 
   // --- Leave and team ---
@@ -334,8 +335,8 @@ export default function DashboardView({
                     <li key={status} className="rounded-lg border border-outline-variant p-3">
                       <StatusBadge status={status} tone={statusTone(status)} />
                       <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-on-surface">{count}</p>
-                      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-on-surface-variant" title={formatTND(amount)}>
-                        {formatTND(amount)}
+                      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-on-surface-variant" title={amount}>
+                        {amount}
                       </p>
                     </li>
                   ))}
