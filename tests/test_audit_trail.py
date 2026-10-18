@@ -286,7 +286,8 @@ def test_the_admin_endpoint_filters_and_counts(client, admin, accountant, identi
 
     everything = client.get("/api/audit-events", headers=admin)
     assert everything.status_code == 200
-    assert everything.headers["X-Total-Count"] == "3"
+    # The a_client fixture's creation is audited too since #192: 1 + 3.
+    assert everything.headers["X-Total-Count"] == "4"
     assert everything.json()[0]["action"] == "invoice.submitted", "newest first"
 
     one_invoice = client.get("/api/audit-events", headers=admin,
@@ -302,7 +303,7 @@ def test_the_admin_endpoint_filters_and_counts(client, admin, accountant, identi
 
     today = date.today().isoformat()
     in_range = client.get("/api/audit-events", headers=admin, params={"since": today, "until": today})
-    assert in_range.headers["X-Total-Count"] == "3"
+    assert in_range.headers["X-Total-Count"] == "4"
     future = client.get("/api/audit-events", headers=admin, params={"since": "2099-01-01"})
     assert future.json() == []
 
