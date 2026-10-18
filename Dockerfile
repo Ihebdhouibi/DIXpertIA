@@ -6,7 +6,7 @@
 #
 # Python 3.11, as in CI, on a pinned Debian release so a rebuild does not
 # silently move the base.
-FROM python:3.11.10-slim-bookworm
+FROM python:3.11.16-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,6 +14,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
+
+# Security fixes released since the base image was built (the CI scan fails on
+# a critical one that has a fix). Nothing else is installed.
+RUN apt-get update     && apt-get -y upgrade     && rm -rf /var/lib/apt/lists/*
 
 # Dependencies first, for layer caching. psycopg2-binary ships its own libpq,
 # so no compiler is installed.
