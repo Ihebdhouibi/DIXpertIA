@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Literal
@@ -18,8 +19,67 @@ class ClientBase(BaseModel):
     locale: Literal["fr", "en"] = "fr"
 
 
+def _client_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("the client name is required")
+    if len(value) > 150:
+        raise ValueError("the client name is at most 150 characters")
+    return value
+
+
+def _client_email(value: str) -> str:
+    value = value.strip()
+    # Optional, but when given it must look like an address: it is printed on
+    # the invoice and shown as the client's contact (#192).
+    if value and not _EMAIL.fullmatch(value):
+        raise ValueError("the e-mail address is not valid")
+    return value
+
+
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
 class ClientCreate(ClientBase):
-    pass
+    """A new client (#192). Lengths follow the columns: name 150, e-mail 100,
+    phone 30; the address is free text, capped at 500 characters."""
+
+    email: str = Field(default="", max_length=100)
+    telephone: str = Field(default="", max_length=30)
+    adresse: str = Field(default="", max_length=500)
+
+    _name = field_validator("nom")(_client_name)
+    _mail = field_validator("email")(_client_email)
+
+    @field_validator("telephone", "adresse")
+    @classmethod
+    def _trim(cls, value: str) -> str:
+        return value.strip()
+
+
+class ClientUpdate(BaseModel):
+    """A correction to a client (#192): only the fields sent change."""
+
+    nom: str | None = None
+    email: str | None = Field(default=None, max_length=100)
+    telephone: str | None = Field(default=None, max_length=30)
+    adresse: str | None = Field(default=None, max_length=500)
+    locale: Literal["fr", "en"] | None = None
+
+    @field_validator("nom")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        return None if value is None else _client_name(value)
+
+    @field_validator("email")
+    @classmethod
+    def _mail(cls, value: str | None) -> str | None:
+        return None if value is None else _client_email(value)
+
+    @field_validator("telephone", "adresse")
+    @classmethod
+    def _trim(cls, value: str | None) -> str | None:
+        return None if value is None else value.strip()
 
 
 class ClientOut(ClientBase):

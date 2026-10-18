@@ -108,6 +108,10 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "A supplier named '{name}' already exists.",
         "fr": "Un fournisseur nommé « {name} » existe déjà."},
     "supplier.not_found": {"en": "Supplier not found", "fr": "Fournisseur introuvable"},
+    "client.name_taken": {
+        "en": "A client named '{name}' already exists.",
+        "fr": "Un client nommé « {name} » existe déjà."},
+    "client.not_found": {"en": "Client not found", "fr": "Client introuvable"},
     "supplier_invoice.duplicate": {
         "en": "Invoice '{ref}' from this supplier has already been recorded.",
         "fr": "La facture « {ref} » de ce fournisseur est déjà enregistrée."},

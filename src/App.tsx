@@ -16,6 +16,7 @@ import InvoicesView from './components/InvoicesView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
 import EnquiriesView from './components/EnquiriesView';
+import ClientsView from './components/ClientsView';
 import SkipLink from './components/ui/SkipLink';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
@@ -382,6 +383,14 @@ export default function App() {
 
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
+
+      case 'clients':
+        return currentUser.role === 'admin' || currentUser.role === 'accountant' ? (
+          <ClientsView
+            clients={clients}
+            onChanged={async () => setClients(await api.clients.list())}
+          />
+        ) : null;
 
       case 'enquiries':
         return currentUser.role === 'admin' ? <EnquiriesView /> : null;
