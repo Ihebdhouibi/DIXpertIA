@@ -188,22 +188,16 @@ jobs:
           # The link-preview URL was built for this environment.
           curl -sf http://127.0.0.1:8080/ | grep -q 'https://staging.dixpertia.tn'
 
-      - name: Scan the API image
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: dixpertia-api:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-
-      - name: Scan the frontend image
+      - name: Scan both images (Trivy)
+        # Trivy's own image at a pinned version, rather than a third-party
+        # action: one less piece of someone else's code in the pipeline.
         if: success() || failure()
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: dixpertia-web:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
+        run: |
+          status=0
+          for image in dixpertia-api:ci dixpertia-web:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.74.0               image --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "$image" || status=1
+          done
+          exit $status
 
   server-config:
     name: server hardening config
