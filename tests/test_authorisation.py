@@ -39,6 +39,7 @@ ROUTES = [
     ("POST", "/api/forgot-password", PUBLIC),
     ("POST", "/api/reset-password", PUBLIC),
     ("POST", "/api/activate", PUBLIC),
+    ("GET", "/api/health", PUBLIC),
     # The website's contact form (#98): anonymous; its inbox is the admin's.
     ("POST", "/api/contact", PUBLIC),
     ("GET", "/api/contact-requests", ADMIN_ONLY),

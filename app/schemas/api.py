@@ -430,6 +430,11 @@ class MessageOut(BaseModel):
     message: str
 
 
+class HealthOut(BaseModel):
+    """GET /api/health (#185): "ok", or "unavailable" with a 503."""
+    status: str
+
+
 class NotificationsUpdatedOut(BaseModel):
     updated: int
 
