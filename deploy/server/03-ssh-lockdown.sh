@@ -23,15 +23,12 @@ if [ "${SUDO_USER:-}" != "$ADMIN_USER" ]; then
   echo "If you cannot sign in as $ADMIN_USER with your key yet, do NOT lock SSH down."
   exit 1
 fi
-if [ -z "${SSH_CONNECTION:-}" ]; then
-  echo "Refused: run this from an SSH session, so it proves SSH works for $ADMIN_USER."
-  exit 1
-fi
 HOME_DIR="$(getent passwd "$ADMIN_USER" | cut -d: -f6)"
 if ! grep -qE '^(ssh-ed25519|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh.com) ' "$HOME_DIR/.ssh/authorized_keys" 2>/dev/null; then
   echo "Refused: $ADMIN_USER has no authorised key."; exit 1
 fi
-# This session signed in with a key, not a password: sshd logs the method.
+# A key login by the admin, recently: sshd logs the method. (Not $SSH_CONNECTION:
+# sudo clears the environment, so the script never sees it.)
 if ! { journalctl -u ssh --since "-12h" --no-pager -q 2>/dev/null; cat /var/log/auth.log 2>/dev/null; } \
      | grep -q "Accepted publickey for $ADMIN_USER "; then
   echo "Refused: no key login by $ADMIN_USER in the last 12 hours. Sign in with your key, then run this again."
