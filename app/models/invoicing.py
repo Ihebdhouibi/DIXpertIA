@@ -2,6 +2,7 @@ import enum
 from datetime import date
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     Date,
@@ -164,12 +165,25 @@ class Client(Base):
     # The language this client's invoices are printed in (#135), French by default:
     # the same invoice always prints the same way, whoever downloads it.
     locale = Column(String(2), nullable=False, default="fr", server_default=text("'fr'"))
+    # A client abroad, billed for an export of services: no Tunisian VAT
+    # (Code de la TVA, art. 3-I and 11-I). The flag, not the currency, is what
+    # removes the VAT (#195).
+    export = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # The currency this client's invoices are in (#195).
+    devise = Column(String(3), nullable=False, default="TND", server_default=text("'TND'"))
+    # A foreign VAT number, or a Tunisian client's matricule fiscal (#189);
+    # printed on the invoice only when filled.
+    identifiant_fiscal = Column(String(50), nullable=True)
 
     invoices = relationship("Invoice", back_populates="client")
 
     __table_args__ = (
         # Stops "Acme Corp" and "ACME CORP" becoming two customers.
         CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
+        CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_clients_devise"),
+        # Decided for this release (#195): an export client always pays in a
+        # foreign currency. Lifting it is dropping this one constraint.
+        CheckConstraint("NOT export OR devise <> 'TND'", name="ck_clients_export_in_foreign_currency"),
         Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
     )
 
@@ -203,6 +217,11 @@ class Invoice(Base):
     date_echeance = Column(Date, nullable=False)
     montant_ht = Column(Numeric(10, 2), nullable=False)
     montant_ttc = Column(Numeric(10, 2), nullable=False)
+    # Copied from the client when the invoice is created, then fixed by the
+    # invoice_currency_is_fixed trigger: an issued invoice reprints exactly as
+    # the client received it (#195).
+    devise = Column(String(3), nullable=False, default="TND", server_default=text("'TND'"))
+    export = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     # NOT NULL with a default: the status was nullable and never set, so every
     # invoice was created with statut = NULL. InvoiceOut requires it, so
     # serialising the response failed *after* the commit - the invoice was
@@ -277,6 +296,7 @@ class Invoice(Base):
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_invoices_devise"),
         # Approved, sent or paid means numbered; a draft, or one cancelled
         # before approval, may have no number (#118).
         CheckConstraint(

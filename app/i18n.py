@@ -249,6 +249,13 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "Invoice {0} is no longer a draft and its lines cannot be changed; correct it with a new document.",
         "fr": "La facture {0} n'est plus un brouillon et ses lignes ne peuvent pas être modifiées ; "
               "corrigez-la par un nouveau document."},
+    "db.currency_is_fixed": {
+        "en": "The currency and export status of invoice {0} are set when it is created; they cannot change.",
+        "fr": "La devise et le statut export de la facture {0} sont fixés à sa création ; "
+              "ils ne peuvent pas être modifiés."},
+    "db.export_no_vat": {
+        "en": "Invoice {0} is an export of services: its lines carry no VAT.",
+        "fr": "La facture {0} est une exportation de services : ses lignes ne portent pas de TVA."},
     "db.review_history_append_only": {
         "en": "The review history is append-only.",
         "fr": "L'historique de vérification ne peut qu'être complété."},
@@ -600,6 +607,9 @@ _DB_FORMATS = {
     "invoice % is no longer a draft and its lines cannot be changed; correct it with a new document":
         "db.lines_not_draft",
     "the review history is append-only": "db.review_history_append_only",
+    "the currency and export status of invoice % are set when it is created; they cannot change":
+        "db.currency_is_fixed",
+    "invoice % is an export of services; its lines carry no VAT": "db.export_no_vat",
     "an invoice is never approved or rejected by the person who created it": "db.no_self_review",
     "invoice % dated % would come before %, which is numbered lower but dated %. "
     "Invoice numbers must follow issue dates": "db.number_before_date",
