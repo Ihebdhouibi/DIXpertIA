@@ -108,6 +108,20 @@ jobs:
       - name: Parse deploy/postgres with PostgreSQL 17
         run: docker run --rm -v "$PWD/deploy/postgres:/conf:ro" postgres:17 bash /conf/ci-check.sh
 
+  server-config:
+    name: server hardening config
+    runs-on: ubuntu-latest
+    # deploy/server (#172) is applied by hand on the production VPS. A typo
+    # there shows up as a lockdown that did nothing, or a locked-out server.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck the scripts
+        run: shellcheck deploy/server/*.sh
+
+      - name: sshd accepts our configuration, and it wins over cloud-init's
+        run: docker run --rm -v "$PWD/deploy/server:/conf:ro" ubuntu:24.04 bash /conf/ci-check.sh
+
   frontend:
     name: frontend (tsc)
     runs-on: ubuntu-latest
