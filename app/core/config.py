@@ -130,6 +130,10 @@ class Settings:
     # contact) from one address per minute.
     PUBLIC_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_REQUESTS_PER_MINUTE", 20)
 
+    # /docs, /redoc and /openapi.json (#185). Off by default, so production
+    # does not publish a map of every route; on in development and staging.
+    API_DOCS: bool = _flag("API_DOCS", False)
+
 
     # The seller on every invoice PDF (#194). Empty means not printed: no
     # placeholder ever reaches a real invoice. The tax ID (matricule fiscal),

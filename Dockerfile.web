@@ -1,0 +1,35 @@
+# The frontend image (#185): the Vite build, served by an unprivileged nginx.
+#
+#   docker build -f Dockerfile.web --build-arg FRONTEND_URL=https://dixpertia.tn -t dixpertia-web .
+#
+# It serves static files only. Traefik routes /api to the API container on the
+# same domain (#184), so the browser makes same-origin calls and no CORS is
+# needed. FRONTEND_URL makes the link-preview tags absolute (og:url, og:image),
+# so staging builds with its own.
+
+# --- Build --------------------------------------------------------------------
+# Node 24 LTS: 20 reached its end of life in April 2026. Build stage only.
+FROM node:24.20.0-alpine3.24 AS build
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY index.html vite.config.ts tsconfig.json ./
+COPY src ./src
+COPY public ./public
+ARG FRONTEND_URL=https://dixpertia.tn
+ENV FRONTEND_URL=${FRONTEND_URL}
+RUN npm run build
+
+# --- Serve ----------------------------------------------------------------------
+# nginx-unprivileged runs as uid 101 and listens on 8080: never root.
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24
+# Security fixes released since the base image was built.
+USER root
+RUN apk upgrade --no-cache
+USER 101
+COPY deploy/app/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/app/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY --from=build /src/dist /usr/share/nginx/html
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]

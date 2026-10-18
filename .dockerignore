@@ -42,3 +42,13 @@ uploads/
 
 # Brand assets
 design/
+
+# Not part of either image (#185): tests, documents, design sources, local
+# tooling. Keeps the build context small and nothing private in a layer.
+tests/
+docs/
+scripts/
+DI Xpertia Logo Concepts/
+.claude/
+*.md
+!db/README.md

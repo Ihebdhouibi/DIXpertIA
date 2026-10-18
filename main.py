@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Literal, Optional
-from fastapi import FastAPI, Depends, Query, Request
+from fastapi import FastAPI, Depends, Query, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
 from app.schemas.api import (
+    HealthOut,
     ActivationSentOut,
     EmployeeOut,
     LoginOut,
@@ -70,6 +71,8 @@ PUBLIC_PATHS = frozenset({
     "/api/activate",
     # The website's contact form (#98): anonymous, rate limited in the database.
     "/api/contact",
+    # Container health check (#185): says only whether the database answers.
+    "/api/health",
 })
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
@@ -133,7 +136,17 @@ async def lifespan(_: FastAPI):
             await task
 
 
-app = FastAPI(dependencies=[Depends(require_authentication)], lifespan=lifespan)
+# The interactive API documentation (/docs, /redoc, /openapi.json) maps every
+# route and schema: useful in development and on staging, not something to hand
+# the internet in production (#185). Off unless API_DOCS is set.
+_docs = settings.API_DOCS
+app = FastAPI(
+    dependencies=[Depends(require_authentication)],
+    lifespan=lifespan,
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
+)
 
 
 @app.exception_handler(ApiError)
@@ -265,6 +278,25 @@ def _account_by_email(db: Session, email: str):
     The row is read-only, not an ORM object.
     """
     return db.execute(text("SELECT * FROM auth_account_by_email(:e)"), {"e": email}).first()
+
+
+@app.get('/api/health', response_model=HealthOut)
+def health(response: Response):
+    """Whether the API is up and reaches the database (#185).
+
+    For the container health check and the uptime monitor (#188). Public, so
+    it reveals nothing: no version, no host, no error text - only ok or not.
+    Not rate limited: it is cheap, and a refusing health check would have the
+    platform restart a healthy container.
+    """
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        log.warning("Health check: the database did not answer", exc_info=True)
+        response.status_code = 503
+        return HealthOut(status="unavailable")
+    return HealthOut(status="ok")
 
 
 # --- Auth endpoints ---
