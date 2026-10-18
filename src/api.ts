@@ -148,6 +148,10 @@ export interface InvoiceLineInput {
   quantite: number;
   prix_unitaire: number;
   taux_tva: number;
+  /** Optional, printed under the designation (#194). */
+  detail?: string;
+  /** Optional unit of the quantity, e.g. "days" (#194). */
+  unite?: string;
 }
 
 /** Body of POST /api/invoices (#128). */

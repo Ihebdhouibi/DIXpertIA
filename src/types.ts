@@ -92,6 +92,9 @@ export interface InvoiceItem {
   total: number;
   /** VAT rate in percent (#125). */
   vatRate: number;
+  /** Optional text printed under the description, and unit of the quantity (#194). */
+  detail?: string | null;
+  unit?: string | null;
 }
 
 export interface InvoiceReview {
