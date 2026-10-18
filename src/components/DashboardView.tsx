@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Employee, LeaveRequest, Payslip, User } from '../types';
 import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
-import { formatAmounts, formatDateTime, formatTND } from '../format';
+import { formatAmounts, formatDateTime, formatMoney, formatTND } from '../format';
 import { labelOf, useT, type MessageKey } from '../i18n';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
 import Button from './ui/Button';
@@ -159,7 +159,9 @@ export default function DashboardView({
     processingCounts.find((p) => p.state === state)?.count ?? 0;
   const commercialStats = COMMERCIAL_STATES.map((status) => {
     const figure = figures?.byStatus.find((s) => s.status === status);
-    return { status, count: figure?.count ?? 0, amount: formatAmounts(figure?.amounts, figure?.amount ?? 0) };
+    // One line per currency (#195): a narrow card cannot hold them side by side.
+    const amounts = figure?.amounts?.length ? figure.amounts : [{ currency: 'TND', amount: figure?.amount ?? 0 }];
+    return { status, count: figure?.count ?? 0, amounts: amounts.map((a) => formatMoney(a.amount, a.currency)) };
   });
 
   // --- Leave and team ---
@@ -331,13 +333,15 @@ export default function DashboardView({
                 <LoadingRow />
               ) : (
                 <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                  {commercialStats.map(({ status, count, amount }) => (
+                  {commercialStats.map(({ status, count, amounts }) => (
                     <li key={status} className="rounded-lg border border-outline-variant p-3">
                       <StatusBadge status={status} tone={statusTone(status)} />
                       <p className="mt-3 font-mono text-2xl font-semibold tabular-nums text-on-surface">{count}</p>
-                      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-on-surface-variant" title={amount}>
-                        {amount}
-                      </p>
+                      {amounts.map((amount) => (
+                        <p key={amount} className="mt-0.5 truncate font-mono text-xs tabular-nums text-on-surface-variant" title={amount}>
+                          {amount}
+                        </p>
+                      ))}
                     </li>
                   ))}
                 </ul>
