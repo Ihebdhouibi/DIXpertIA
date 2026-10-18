@@ -115,6 +115,18 @@ class InvoiceItemCreate(BaseModel):
     quantite: Decimal = Field(default=Decimal(1), gt=0)
     prix_unitaire: Decimal = Field(ge=0)
     taux_tva: Decimal = Field(default=Decimal(19), ge=0, le=100)
+    # Both optional (#194): a description under the designation, and the unit
+    # of the quantity ("days", "flat fee"). Blank is stored as NULL.
+    detail: str | None = Field(default=None, max_length=1000)
+    unite: str | None = Field(default=None, max_length=30)
+
+    @field_validator("detail", "unite", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
 
 
 class InvoiceCreate(BaseModel):

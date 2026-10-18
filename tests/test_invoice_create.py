@@ -79,3 +79,56 @@ def test_a_due_date_in_the_past_is_refused(client, admin, a_client):
         "client_id": a_client, "date_echeance": "2000-01-01", "items": LINES,
     })
     assert response.status_code == 422
+
+
+# --- Line detail and unit (#194) ---------------------------------------------
+
+DETAILED = [
+    {"designation": "Development", "quantite": 12, "prix_unitaire": 350, "taux_tva": 19,
+     "detail": "  Payroll module: leave balances and payslip PDF.\nTwo review rounds.  ", "unite": " days "},
+    {"designation": "Hosting", "quantite": 1, "prix_unitaire": 90, "taux_tva": 19, "detail": "   ", "unite": ""},
+]
+
+
+def test_a_line_keeps_its_detail_and_unit(client, admin, a_client):
+    items = create(client, admin, a_client, items=DETAILED).json()["items"]
+    assert items[0]["detail"] == "Payroll module: leave balances and payslip PDF.\nTwo review rounds."
+    assert items[0]["unit"] == "days"
+    # Blank is nothing, not an empty line on the PDF.
+    assert (items[1]["detail"], items[1]["unit"]) == (None, None)
+
+
+def test_a_line_without_detail_or_unit_is_still_valid(client, admin, a_client):
+    items = create(client, admin, a_client).json()["items"]
+    assert all(i["detail"] is None and i["unit"] is None for i in items)
+
+
+def test_correcting_a_draft_changes_its_detail_and_unit(client, admin, a_client):
+    invoice_id = create(client, admin, a_client).json()["id"]
+    response = client.patch(f"/api/invoices/{invoice_id}", headers=admin, json={
+        "date_echeance": "2027-12-31",
+        "items": [{**LINES[0], "detail": "Architecture review", "unite": "flat fee"}],
+    })
+    assert response.status_code == 200, response.text
+    assert [(i["detail"], i["unit"]) for i in response.json()["items"]] == [("Architecture review", "flat fee")]
+
+
+@pytest.mark.parametrize("field,size", [("detail", 1001), ("unite", 31)])
+def test_a_detail_or_unit_too_long_is_refused_by_name(client, admin, a_client, field, size):
+    response = create(client, admin, a_client, items=[{**LINES[0], field: "x" * size}])
+    assert response.status_code == 422
+    assert field in response.text
+
+
+@pytest.mark.parametrize("field,size", [("detail", 1000), ("unite", 30)])
+def test_a_detail_or_unit_at_the_limit_is_accepted(client, admin, a_client, field, size):
+    assert create(client, admin, a_client, items=[{**LINES[0], field: "x" * size}]).status_code == 200
+
+
+def test_the_database_caps_the_detail_too(database, client, admin, a_client):
+    """The CHECK holds even for a write that skips the API."""
+    invoice_id = create(client, admin, a_client).json()["id"]
+    with pytest.raises(Exception, match="ck_invoice_items_detail"):
+        with database.begin() as c:
+            c.execute(text("UPDATE invoice_items SET detail = repeat('x', 1001) WHERE invoice_id = :i"),
+                      {"i": invoice_id})
