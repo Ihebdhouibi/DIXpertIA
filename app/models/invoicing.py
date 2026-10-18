@@ -394,6 +394,9 @@ class InvoiceItem(Base):
     quantite = Column(Numeric(8, 2), default=1)
     prix_unitaire = Column(Numeric(10, 2), nullable=False)
     taux_tva = Column(Numeric(4, 2), default=19)
+    # Optional, printed under the designation and under the quantity (#194).
+    detail = Column(Text, nullable=True)
+    unite = Column(String(30), nullable=True)
 
     invoice = relationship("Invoice", back_populates="items")
 
@@ -401,6 +404,7 @@ class InvoiceItem(Base):
         CheckConstraint("quantite > 0", name="ck_invoice_items_quantite"),
         CheckConstraint("prix_unitaire >= 0", name="ck_invoice_items_prix"),
         CheckConstraint("taux_tva >= 0 AND taux_tva <= 100", name="ck_invoice_items_tva"),
+        CheckConstraint("char_length(detail) <= 1000", name="ck_invoice_items_detail"),
         # The single largest win measured: loading one invoice's lines went from
         # a full scan of invoice_items to an index lookup. Every invoice detail
         # view and every PDF render takes this path.
