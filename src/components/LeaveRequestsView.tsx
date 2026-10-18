@@ -1,20 +1,47 @@
 import React, { useState } from 'react';
-import { Calendar, Plus, Filter, Plane, HeartPulse, MoreVertical, X, Check } from 'lucide-react';
+import { Calendar, Plus, Plane, HeartPulse, Info } from 'lucide-react';
 import { LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
+import StatusBadge from './StatusBadge';
+import Dialog from './ui/Dialog';
+import Button from './ui/Button';
+import { Field, Input, Select, Textarea } from './ui/Field';
+import { useToast, ToastTone } from './ui/feedback';
+import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
+import { FilterPills } from './ui/TableControls';
+import { useDataStatus } from '../dataStatus';
+import { formatDate, formatDayMonth } from '../format';
+import { labelOf, useT, type MessageKey } from '../i18n';
+
+type StatusFilter = 'All' | 'Pending' | 'Approved' | 'Rejected';
+const STATUS_FILTERS: readonly StatusFilter[] = ['All', 'Pending', 'Approved', 'Rejected'];
+const FILTER_LABEL: Record<StatusFilter, MessageKey> = {
+  All: 'people.leave.filter.All',
+  Pending: 'people.leave.filter.Pending',
+  Approved: 'people.leave.filter.Approved',
+  Rejected: 'people.leave.filter.Rejected',
+};
+const EMPTY_FILTERED: Record<StatusFilter, MessageKey> = {
+  All: 'people.leave.empty.All',
+  Pending: 'people.leave.empty.Pending',
+  Approved: 'people.leave.empty.Approved',
+  Rejected: 'people.leave.empty.Rejected',
+};
+const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Personal Day', 'Unpaid Leave'] as const;
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
   onAddRequest: (newReq: Partial<LeaveRequest>) => void;
   userRole: UserRole;
-  currentUserId?: string;   // <-- added to filter employee's own requests in calendar
+  /** The employee record id, used to filter the calendar to one person. */
+  currentEmployeeId?: number;
 }
 
-export default function LeaveRequestsView({ 
-  leaveRequests, 
-  onAddRequest, 
-  userRole, 
-  currentUserId 
+export default function LeaveRequestsView({
+  leaveRequests,
+  onAddRequest,
+  userRole,
+  currentEmployeeId
 }: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -22,32 +49,34 @@ export default function LeaveRequestsView({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('All');
+  const status = useDataStatus();
+  const t = useT();
 
   const isEmployee = userRole === 'employee';
 
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const toast = useToast();
+  const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate) {
-      showToast('Please enter start and end dates.');
+      showToast(t('people.leave.enterDates'), 'error');
       return;
     }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // Local midnight: a bare YYYY-MM-DD would be read as UTC.
+    const start = new Date(`${startDate}T00:00`);
+    const end = new Date(`${endDate}T00:00`);
     const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    const formatDateStr = (date: Date) =>
-      date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-    const dateRangeStr = `${formatDateStr(start)} - ${formatDateStr(end)}, ${start.getFullYear()}`;
+    const dateRangeStr = `${formatDayMonth(start)} - ${formatDate(end)}`;
     onAddRequest({
       type: leaveType,
+      // The API reads startDate / endDate; they were not passed, so the
+      // request reached the server without dates.
+      startDate,
+      endDate,
       dates: dateRangeStr,
       duration: diffDays,
       reason: reason,
@@ -55,43 +84,24 @@ export default function LeaveRequestsView({
     });
 
     setIsModalOpen(false);
-    showToast('Leave request submitted successfully.');
+    showToast(t('people.leave.submitted'));
     setStartDate('');
     setEndDate('');
     setReason('');
     setLeaveType('Annual Leave');
   };
 
-  const getStatusBadge = (status: 'Approved' | 'Pending' | 'Rejected') => {
-    if (status === 'Approved') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#e6f4ea] text-[#137333]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Approved
-        </span>
-      );
-    }
-    if (status === 'Pending') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#fef7e0] text-[#b06000]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#b06000]"></span> Pending
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-error-container text-on-error-container border border-error/10">
-        <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span> Rejected
-      </span>
-    );
-  };
-
+  // A leave type is a category, not a state: one neutral colour, the icon
+  // tells them apart (sick leave was in the error red).
   const getLeaveIcon = (type: string) => {
+    const icon = 'w-4 h-4 text-on-surface-variant';
     switch (type) {
       case 'Annual Leave':
-        return <Plane className="w-4 h-4 text-primary" />;
+        return <Plane className={icon} aria-hidden="true" />;
       case 'Sick Leave':
-        return <HeartPulse className="w-4 h-4 text-error" />;
+        return <HeartPulse className={icon} aria-hidden="true" />;
       default:
-        return <Calendar className="w-4 h-4 text-secondary" />;
+        return <Calendar className={icon} aria-hidden="true" />;
     }
   };
 
@@ -106,225 +116,192 @@ export default function LeaveRequestsView({
 
   return (
     <div className="flex-1 flex flex-col gap-6">
-      {/* Toast notification */}
-      {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-50 bg-primary text-white py-3 px-5 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in text-body-sm font-semibold border border-white/15">
-          <Check className="w-5 h-5 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Leave Requests</h1>
-          <p className="text-body-lg text-on-surface-variant mt-1">Manage and track your time off</p>
+          <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{t('people.leave.title')}</h1>
+          <p className="text-body-lg text-on-surface-variant mt-1">{t('people.leave.subtitle')}</p>
         </div>
         {isEmployee && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-primary text-white font-semibold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-5 h-5" />
-            <span>New Request</span>
-          </button>
+          <Button onClick={() => setIsModalOpen(true)} className="shrink-0">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            {t('people.leave.newRequest')}
+          </Button>
         )}
       </div>
 
       {/* Balance cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/5 rounded-full transition-transform group-hover:scale-110"></div>
-          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Annual Leave</p>
+          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Annual Leave')}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-display font-black text-primary">{annualLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
+            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: annualLeft })}</span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-secondary/5 rounded-full transition-transform group-hover:scale-110"></div>
-          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Sick Leave</p>
+          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Sick Leave')}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-display font-black text-on-surface">{sickLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
+            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: sickLeft })}</span>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
+        <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-tertiary/5 rounded-full transition-transform group-hover:scale-110"></div>
-          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">Personal Days</p>
+          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{t('people.leave.personalDays')}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-display font-black text-on-surface">{personalLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">days left</span>
+            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: personalLeft })}</span>
           </div>
         </div>
-        <div
+        {/* A button, not a clickable div: it was unreachable from the keyboard. */}
+        <button
+          type="button"
           onClick={() => setShowCalendar(true)}
-          className="bg-white p-5 rounded-xl border border-outline-variant shadow-sm flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors select-none"
+          className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors"
         >
-          <Calendar className="text-primary mb-2 w-7 h-7" />
-          <span className="font-semibold text-body-sm text-primary">View Calendar</span>
-        </div>
+          <Calendar className="text-on-surface mb-2 w-7 h-7" aria-hidden="true" />
+          <span className="font-semibold text-body-sm text-on-surface">{t('people.viewCalendar')}</span>
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-outline-variant bg-white flex justify-between items-center">
-          <h2 className="font-bold text-body-lg text-on-surface">Recent Requests</h2>
-          <div className="flex gap-2">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="px-3 py-1.5 border border-outline-variant rounded-lg text-caption font-medium bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="All">All</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
+      {/* Requests */}
+      <section className="flex flex-col gap-3" aria-labelledby="recent-requests">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 id="recent-requests" className="text-lg font-bold tracking-[-0.02em] text-on-surface">
+            {t('people.leave.recent')}
+          </h2>
+          <FilterPills
+            label={t('people.filterByStatus')}
+            options={STATUS_FILTERS}
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+            renderOption={(option) => t(FILTER_LABEL[option])}
+          />
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-outline-variant bg-surface">
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Type</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Dates</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Duration</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold">Status</th>
-                <th className="px-6 py-3 text-caption text-on-surface-variant uppercase tracking-wider font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="text-body-sm text-on-surface divide-y divide-outline-variant">
-              {filteredRequests.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-on-surface-variant font-medium">
-                    No leave requests found.
-                  </td>
-                </tr>
-              ) : (
-                filteredRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-surface-container-lowest transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          {getLeaveIcon(req.type)}
-                        </div>
-                        <span className="font-semibold text-on-surface">{req.type}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-on-surface-variant font-medium">{req.dates}</td>
-                    <td className="px-6 py-4 font-medium">{req.duration} {req.duration > 1 ? 'days' : 'day'}</td>
-                    <td className="px-6 py-4">{getStatusBadge(req.status)}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => req.rejectionReason ? showToast(`Rejection reason: ${req.rejectionReason}`) : showToast(`Request: ${req.type}`)}
-                        className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer p-1"
-                      >
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <Table caption={t('people.leave.caption')}>
+          <THead>
+            <Th>{t('people.col.type')}</Th>
+            <Th numeric>{t('people.col.dates')}</Th>
+            <Th numeric>{t('people.col.duration')}</Th>
+            <Th>{t('people.col.status')}</Th>
+            <Th numeric>
+              <span className="sr-only">{t('people.leave.details')}</span>
+            </Th>
+          </THead>
+          <TBody>
+            {filteredRequests.length > 0 ? (
+              filteredRequests.map((req) => (
+                <Tr key={req.id}>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high">
+                        {getLeaveIcon(req.type)}
+                      </span>
+                      <span className="font-semibold">{labelOf(t, 'common.leaveType', req.type)}</span>
+                    </div>
+                  </Td>
+                  <Td numeric muted>{req.dates}</Td>
+                  <Td numeric>
+                    {t('people.days', { count: req.duration })}
+                  </Td>
+                  <Td>
+                    <StatusBadge status={req.status} />
+                  </Td>
+                  <Td numeric>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        req.rejectionReason
+                          ? showToast(t('people.leave.rejectionReason', { reason: req.rejectionReason }), 'info')
+                          : showToast(t('people.leave.requestOf', { type: labelOf(t, 'common.leaveType', req.type) }), 'info')
+                      }
+                      aria-label={t('people.leave.detailsOf', { type: labelOf(t, 'common.leaveType', req.type), dates: req.dates })}
+                      className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                    >
+                      <Info className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </Td>
+                </Tr>
+              ))
+            ) : status.loading ? (
+              <TableState kind="loading" colSpan={5} title={t('people.loadingLeave')} />
+            ) : status.error && leaveRequests.length === 0 ? (
+              <TableState kind="error" colSpan={5} message={status.error} />
+            ) : (
+              <TableState
+                kind="empty"
+                colSpan={5}
+                title={leaveRequests.length === 0 ? t('people.leave.emptyNone') : t(EMPTY_FILTERED[selectedStatus])}
+                message={leaveRequests.length === 0 && isEmployee ? t('people.leave.emptyHint') : undefined}
+              />
+            )}
+          </TBody>
+        </Table>
+      </section>
 
       {/* Calendar Modal */}
       {showCalendar && (
         <CalendarView
           leaveRequests={leaveRequests}
           userRole={userRole}
-          currentUserId={currentUserId}
+          currentEmployeeId={currentEmployeeId}
           onClose={() => setShowCalendar(false)}
         />
       )}
 
-      {/* New Request Modal */}
-      {isEmployee && isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-lg border border-outline-variant overflow-hidden flex flex-col max-h-full animate-scale-up">
-            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface">
-              <h3 className="text-h2 font-black text-on-surface">New Leave Request</h3>
-              <button
-                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer"
-                onClick={() => setIsModalOpen(false)}
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* New Request */}
+      {isEmployee && (
+        <Dialog
+          open={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title={t('people.leave.newTitle')}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+                {t('people.cancel')}
+              </Button>
+              <Button type="submit" form="leave-request-form">
+                {t('people.leave.submit')}
+              </Button>
+            </>
+          }
+        >
+          <form id="leave-request-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field label={t('people.leave.type')}>
+              {({ id }) => (
+                <Select id={id} value={leaveType} onChange={(e) => setLeaveType(e.target.value as any)}>
+                  {LEAVE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {labelOf(t, 'common.leaveType', type)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label={t('people.leave.startDate')}>
+                {({ id }) => <Input id={id} type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />}
+              </Field>
+              <Field label={t('people.leave.endDate')}>
+                {({ id }) => <Input id={id} type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} />}
+              </Field>
             </div>
-            <div className="p-6 overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Leave Type</label>
-                  <select
-                    value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value as any)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all cursor-pointer font-semibold"
-                  >
-                    <option value="Annual Leave">Annual Leave</option>
-                    <option value="Sick Leave">Sick Leave</option>
-                    <option value="Personal Day">Personal Day</option>
-                    <option value="Unpaid Leave">Unpaid Leave</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Start Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">End Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">Reason (Optional)</label>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-shadow resize-none"
-                    placeholder="Provide details if necessary..."
-                    rows={3}
-                  ></textarea>
-                </div>
-
-                <div className="pt-4 border-t border-outline-variant/30 flex justify-end gap-3 shrink-0">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg border border-primary text-primary font-bold text-body-sm hover:bg-primary/5 transition-colors cursor-pointer"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-primary text-white font-bold text-body-sm hover:bg-primary/95 transition-colors shadow-sm cursor-pointer"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+            <Field label={t('people.leave.reasonOptional')}>
+              {({ id }) => (
+                <Textarea
+                  id={id}
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={t('people.leave.reasonPlaceholder')}
+                />
+              )}
+            </Field>
+          </form>
+        </Dialog>
       )}
     </div>
   );

@@ -1,0 +1,86 @@
+# Extrait masqué du log du backend (uvicorn main:app) pendant run_api_tests.py, le 2026-10-02.
+# Masquage : e-mails -> <EMAIL>, hash bcrypt -> <BCRYPT REDACTED>, JWT -> <JWT REDACTED>.
+# Seules les lignes de requêtes HTTP, d'exceptions finales, de paramètres SQL et d'avertissements de l'application sont conservées.
+# Numéros de ligne : ceux du fichier de sortie d'origine.
+
+9:INFO:     127.0.0.1:51059 - "GET /openapi.json HTTP/1.1" 200 OK
+10:INFO:     127.0.0.1:51077 - "GET /openapi.json HTTP/1.1" 200 OK
+11:INFO:     127.0.0.1:51078 - "POST /api/login HTTP/1.1" 200 OK
+12:INFO:     127.0.0.1:51081 - "POST /api/leave-requests/999999/approve HTTP/1.1" 404 Not Found
+13:INFO:     127.0.0.1:51082 - "POST /api/leave-requests/999999/reject HTTP/1.1" 404 Not Found
+14:INFO:     127.0.0.1:51083 - "POST /api/leave-requests HTTP/1.1" 500 Internal Server Error
+84:TypeError: 'employeeId' is an invalid keyword argument for LeaveRequest
+85:INFO:     127.0.0.1:51084 - "GET /logs HTTP/1.1" 200 OK
+86:INFO:     127.0.0.1:51085 - "GET /api/devices HTTP/1.1" 500 Internal Server Error
+147:TypeError: 'User' object is not subscriptable
+148:INFO:     127.0.0.1:51086 - "GET /api/data HTTP/1.1" 200 OK
+149:INFO:     127.0.0.1:51087 - "POST /api/users HTTP/1.1" 422 Unprocessable Entity
+150:INFO:     127.0.0.1:51088 - "GET /api/data HTTP/1.1" 401 Unauthorized
+151:INFO:     127.0.0.1:51089 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+152:INFO:     127.0.0.1:51090 - "POST /api/login HTTP/1.1" 401 Unauthorized
+153:INFO:     127.0.0.1:51091 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+154:INFO:     127.0.0.1:51093 - "POST /api/login HTTP/1.1" 401 Unauthorized
+155:INFO:     127.0.0.1:51100 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+156:INFO:     127.0.0.1:51101 - "POST /api/login HTTP/1.1" 401 Unauthorized
+157:INFO:     127.0.0.1:51102 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+158:INFO:     127.0.0.1:51103 - "POST /api/login HTTP/1.1" 401 Unauthorized
+159:INFO:     127.0.0.1:51104 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+160:INFO:     127.0.0.1:51105 - "POST /api/login HTTP/1.1" 401 Unauthorized
+161:INFO:     127.0.0.1:51106 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+162:INFO:     127.0.0.1:51107 - "POST /api/login HTTP/1.1" 401 Unauthorized
+163:INFO:     127.0.0.1:51109 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+164:INFO:     127.0.0.1:51110 - "POST /api/login HTTP/1.1" 401 Unauthorized
+165:INFO:     127.0.0.1:51111 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+166:INFO:     127.0.0.1:51112 - "POST /api/login HTTP/1.1" 401 Unauthorized
+167:INFO:     127.0.0.1:51114 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+168:INFO:     127.0.0.1:51115 - "POST /api/login HTTP/1.1" 422 Unprocessable Entity
+169:INFO:     127.0.0.1:62588 - "GET /openapi.json HTTP/1.1" 200 OK
+170:INFO:     127.0.0.1:62589 - "POST /api/login HTTP/1.1" 200 OK
+171:INFO:     127.0.0.1:62590 - "POST /api/leave-requests/999999/approve HTTP/1.1" 404 Not Found
+172:INFO:     127.0.0.1:62591 - "POST /api/leave-requests/999999/reject HTTP/1.1" 404 Not Found
+173:INFO:     127.0.0.1:62592 - "POST /api/leave-requests HTTP/1.1" 500 Internal Server Error
+243:TypeError: 'employeeId' is an invalid keyword argument for LeaveRequest
+244:INFO:     127.0.0.1:62593 - "GET /logs HTTP/1.1" 200 OK
+245:INFO:     127.0.0.1:62594 - "GET /api/devices HTTP/1.1" 500 Internal Server Error
+306:TypeError: 'User' object is not subscriptable
+307:INFO:     127.0.0.1:62595 - "GET /api/data HTTP/1.1" 200 OK
+308:INFO:     127.0.0.1:62596 - "POST /api/users HTTP/1.1" 500 Internal Server Error
+315:psycopg2.errors.UniqueViolation: ERREUR:  la valeur d'une clé dupliquée rompt la contrainte unique « users_pkey »
+430:sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) ERREUR:  la valeur d'une clé dupliquée rompt la contrainte unique « users_pkey »
+434:[parameters: {'id': 'USR-008', 'email': '<EMAIL>', 'firstName': 'AUDIT-TEST', 'lastName': 'T07', 'role': 'employee', 'department': None, 'avatarUrl': None, 'hashedPassword': '<BCRYPT REDACTED>', 'isActive': True, 'isVerified': False, 'resetToken': None, 'resetTokenExpiry': None, 'createdAt': datetime.datetime(2026, 10, 2, 10, 41, 52, 427747)}]
+436:INFO:     127.0.0.1:62597 - "GET /api/data HTTP/1.1" 401 Unauthorized
+437:INFO:     127.0.0.1:62598 - "POST /api/login HTTP/1.1" 401 Unauthorized
+438:INFO:     127.0.0.1:62599 - "POST /api/login HTTP/1.1" 401 Unauthorized
+439:INFO:     127.0.0.1:62600 - "POST /api/login HTTP/1.1" 401 Unauthorized
+440:INFO:     127.0.0.1:62601 - "POST /api/login HTTP/1.1" 401 Unauthorized
+441:INFO:     127.0.0.1:62602 - "POST /api/login HTTP/1.1" 401 Unauthorized
+442:INFO:     127.0.0.1:62603 - "POST /api/login HTTP/1.1" 401 Unauthorized
+443:INFO:     127.0.0.1:62604 - "POST /api/login HTTP/1.1" 401 Unauthorized
+444:INFO:     127.0.0.1:62605 - "POST /api/login HTTP/1.1" 401 Unauthorized
+445:INFO:     127.0.0.1:62606 - "POST /api/login HTTP/1.1" 401 Unauthorized
+446:INFO:     127.0.0.1:62607 - "POST /api/login HTTP/1.1" 401 Unauthorized
+447:INFO:     127.0.0.1:62608 - "POST /api/login HTTP/1.1" 401 Unauthorized
+448:INFO:     127.0.0.1:62609 - "POST /api/login HTTP/1.1" 401 Unauthorized
+449:INFO:     127.0.0.1:62610 - "POST /api/login HTTP/1.1" 401 Unauthorized
+450:INFO:     127.0.0.1:62611 - "POST /api/login HTTP/1.1" 401 Unauthorized
+451:INFO:     127.0.0.1:62612 - "POST /api/login HTTP/1.1" 401 Unauthorized
+452:INFO:     127.0.0.1:62613 - "POST /api/login HTTP/1.1" 401 Unauthorized
+453:INFO:     127.0.0.1:62615 - "POST /api/login HTTP/1.1" 200 OK
+454:INFO:     127.0.0.1:62616 - "POST /api/login HTTP/1.1" 200 OK
+455:INFO:     127.0.0.1:62617 - "GET /api/data HTTP/1.1" 200 OK
+456:INFO:     127.0.0.1:62618 - "GET /api/invoices HTTP/1.1" 403 Forbidden
+457:INFO:     127.0.0.1:62619 - "GET /api/clients HTTP/1.1" 403 Forbidden
+458:INFO:     127.0.0.1:62620 - "POST /api/login HTTP/1.1" 200 OK
+459:INFO:     127.0.0.1:62621 - "POST /api/clients HTTP/1.1" 200 OK
+460:INFO:     127.0.0.1:62622 - "POST /api/invoices HTTP/1.1" 500 Internal Server Error
+505:fastapi.exceptions.ResponseValidationError: 1 validation errors:
+506:  {'type': 'enum', 'loc': ('response', 'statut'), 'msg': "Input should be 'brouillon', 'envoyee', 'payee', 'en_retard' or 'annulee'", 'input': None, 'ctx': {'expected': "'brouillon', 'envoyee', 'payee', 'en_retard' or 'annulee'"}}
+508:INFO:     127.0.0.1:62623 - "POST /api/invoices HTTP/1.1" 500 Internal Server Error
+553:fastapi.exceptions.ResponseValidationError: 1 validation errors:
+554:  {'type': 'enum', 'loc': ('response', 'statut'), 'msg': "Input should be 'brouillon', 'envoyee', 'payee', 'en_retard' or 'annulee'", 'input': None, 'ctx': {'expected': "'brouillon', 'envoyee', 'payee', 'en_retard' or 'annulee'"}}
+556:INFO:     127.0.0.1:62624 - "GET /api/invoices/FA-2026-0001/download HTTP/1.1" 403 Forbidden
+557:SMTP credentials missing. Email not sent.
+558:INFO:     127.0.0.1:62625 - "POST /api/forgot-password HTTP/1.1" 200 OK
+559:INFO:     127.0.0.1:62626 - "GET /api/data HTTP/1.1" 200 OK
+560:INFO:     127.0.0.1:62627 - "POST /api/team-members HTTP/1.1" 201 Created
+561:INFO:     127.0.0.1:62628 - "POST /api/leave-requests/7/approve HTTP/1.1" 200 OK

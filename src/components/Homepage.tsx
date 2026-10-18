@@ -1,50 +1,69 @@
 import React, { useState } from 'react';
-import { 
-  Mail, Phone, MapPin, Clock, Search, Send, HelpCircle, 
-  CheckCircle2, ChevronDown, ChevronUp, AlertCircle 
+import HomeHeader, { type HomeTarget } from './home/HomeHeader';
+import Hero from './home/Hero';
+import HowWeWorkConsole from './home/HowWeWorkConsole';
+import Services from './home/Services';
+import Engagement from './home/Engagement';
+import { ApiError, contact } from '../api';
+import AboutCta from './home/AboutCta';
+import HomeFooter from './home/HomeFooter';
+import SkipLink from './ui/SkipLink';
+import { useT, type MessageKey } from '../i18n';
+import {
+  Mail, Phone, MapPin, Clock, Search, Send, HelpCircle,
+  CheckCircle2, ChevronDown, ChevronUp, AlertCircle, ArrowLeft
 } from 'lucide-react';
 
 interface HomepageProps {
-  onLoginClick: () => void;
-  showDashboardButton?: boolean;
+  /** Opens the app for a signed-in user, the login form for a visitor. */
+  onDashboardClick: () => void;
 }
 
-type Page = 'home' | 'services' | 'about' | 'contact';
+type Page = HomeTarget;
 
-// FAQ data (same as in ContactView, but translated to English)
-const faqData = [
-  {
-    question: 'What types of cloud services do you offer?',
-    answer: 'We provide IaaS, PaaS, and SaaS solutions with a multi-cloud architecture (AWS, Azure, GCP) for optimal scalability.'
-  },
-  {
-    question: 'How do you ensure the security of our data?',
-    answer: 'We apply ISO 27001 standards, regular audits, and advanced encryption protocols to protect your data.'
-  },
-  {
-    question: 'What is your average support response time?',
-    answer: 'Our technical support responds within 4 hours for standard requests, and immediately for critical incidents (24/7 SLA).'
-  },
-  {
-    question: 'Can we migrate an existing infrastructure without service interruption?',
-    answer: 'Yes, we plan phased migrations with failover testing to ensure business continuity.'
-  },
-  {
-    question: 'How does your service pricing estimation work?',
-    answer: 'We conduct a preliminary audit of your needs, then provide a detailed quote with no obligation.'
-  }
+/** Smooth scrolling, unless the visitor asked for less motion. */
+const scrollBehavior = (): ScrollBehavior =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+// FAQ entries (question and answer keys). Worded without guarantees the
+// company has not committed to: no response times, no 24/7 line, no
+// certification (#98).
+const FAQ: { question: MessageKey; answer: MessageKey }[] = [
+  { question: 'home.faq.cloud.q', answer: 'home.faq.cloud.a' },
+  { question: 'home.faq.security.q', answer: 'home.faq.security.a' },
+  { question: 'home.faq.response.q', answer: 'home.faq.response.a' },
+  { question: 'home.faq.migration.q', answer: 'home.faq.migration.a' },
+  { question: 'home.faq.pricing.q', answer: 'home.faq.pricing.a' },
 ];
 
-export default function Homepage({ onLoginClick, showDashboardButton }: HomepageProps) {
+/** The topics the API accepts; only their labels are translated. */
+const TOPICS = ['security_audit', 'cloud_migration', 'custom_development', 'support_subscription', 'other'] as const;
+
+const PHONE = '+216 28 814 729';
+
+// Shared class strings for the contact page. They use the homepage roles, so
+// the page follows the light/dark theme with the rest of the site (#165).
+const LIME_CTA =
+  'inline-flex items-center justify-center gap-2 bg-lime text-ink px-6 py-3 rounded-lg font-semibold text-sm hover:brightness-95 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime';
+const FIELD =
+  'w-full px-3 py-2.5 bg-home-bg border border-home-fg/14 rounded-lg text-sm text-home-fg placeholder:text-home-fg/50 outline-none focus:border-home-fg focus:ring-1 focus:ring-home-fg transition';
+const EYEBROW = 'font-mono text-xs font-medium uppercase tracking-[0.18em]';
+
+export default function Homepage({ onDashboardClick }: HomepageProps) {
+  const t = useT();
   const [currentPage, setCurrentPage] = useState<Page>('home');
 
   // Contact form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [subject, setSubject] = useState('Security audit / Penetration testing');
+  const [subject, setSubject] = useState('security_audit');
   const [message, setMessage] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  // The honeypot (#98): hidden from people, so only a bot fills it in.
+  const [website, setWebsite] = useState('');
+  // The error's key, not its text, so it follows a change of language.
+  const [errorMsg, setErrorMsg] = useState<MessageKey | null>(null);
   const [success, setSuccess] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // FAQ state
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,14 +72,14 @@ export default function Homepage({ onLoginClick, showDashboardButton }: Homepage
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+      el.scrollIntoView({ behavior: scrollBehavior() });
     }
   };
 
   const handleNavClick = (page: Page) => {
     if (page === 'home') {
       setCurrentPage('home');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     } else if (page === 'services') {
       setCurrentPage('home');
       setTimeout(() => scrollToSection('services'), 100);
@@ -69,35 +88,52 @@ export default function Homepage({ onLoginClick, showDashboardButton }: Homepage
       setTimeout(() => scrollToSection('about'), 100);
     } else if (page === 'contact') {
       setCurrentPage('contact');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     }
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErrorMsg(null);
+    setSuccess(false);
     if (!name.trim()) {
-      setErrorMsg('Please enter your full name.');
+      setErrorMsg('home.contact.error.name');
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      setErrorMsg('Please enter a valid email address.');
+      setErrorMsg('home.contact.error.email');
       return;
     }
     if (message.trim().length < 10) {
-      setErrorMsg('Your message must be at least 10 characters.');
+      setErrorMsg('home.contact.error.messageLength');
       return;
     }
-    // Simulate successful submission
-    setSuccess(true);
-    setName('');
-    setEmail('');
-    setMessage('');
-    setSubject('Security audit / Penetration testing');
-    setTimeout(() => setSuccess(false), 5000);
+    // The enquiry goes to the server (#98), which stores it and tells the
+    // team. It used to "simulate" success here while nothing was sent.
+    setSending(true);
+    try {
+      await contact.send({ name: name.trim(), email: email.trim(), topic: subject, message: message.trim(), website });
+      setSuccess(true);
+      setName('');
+      setEmail('');
+      setMessage('');
+      setSubject('security_audit');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof ApiError && err.status === 429
+          ? 'home.contact.error.tooMany'
+          : err instanceof ApiError && err.status === 422
+            ? 'home.contact.error.invalid'
+            : 'home.contact.error.notSent',
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
-  const filteredFaqs = faqData.filter(
+  // Searched in the language shown, so a French query finds French answers.
+  const faqs = FAQ.map(({ question, answer }) => ({ question: t(question), answer: t(answer) }));
+  const filteredFaqs = faqs.filter(
     (faq) =>
       faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
       faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
@@ -107,470 +143,251 @@ export default function Homepage({ onLoginClick, showDashboardButton }: Homepage
     setExpandedFaqIdx(expandedFaqIdx === idx ? null : idx);
   };
 
+  const header = (
+    <>
+    <SkipLink />
+    <HomeHeader
+      current={currentPage === 'contact' ? 'contact' : 'home'}
+      onNavigate={handleNavClick}
+      onDashboardClick={onDashboardClick}
+    />
+    </>
+  );
+
+  const footer = <HomeFooter onNavigate={handleNavClick} onDashboardClick={onDashboardClick} />;
+
   // ---------- Contact Page ----------
   if (currentPage === 'contact') {
-    return (
-      <div className="min-h-screen bg-white text-on-surface font-sans">
-        {/* Header (same as homepage) */}
-        <header className="border-b border-outline-variant/30 bg-surface-container-lowest sticky top-0 z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-            <button
-              onClick={() => handleNavClick('home')}
-              className="text-primary font-black text-2xl tracking-tight hover:opacity-80 transition cursor-pointer"
-            >
-              DIXpertIA
-            </button>
-            <nav className="hidden md:flex items-center gap-6 text-body-sm font-medium text-on-surface-variant">
-              <button onClick={() => handleNavClick('home')} className="hover:text-primary transition">Home</button>
-              <button onClick={() => handleNavClick('services')} className="hover:text-primary transition">Services</button>
-              <button onClick={() => handleNavClick('about')} className="hover:text-primary transition">About</button>
-              <button onClick={() => handleNavClick('contact')} className="text-primary font-semibold">Contact</button>
-            </nav>
-            <div className="flex items-center gap-2">
-              {showDashboardButton && (
-                <button
-                  onClick={onLoginClick}
-                  className="bg-secondary text-white px-5 py-2 rounded-lg font-semibold hover:bg-secondary/90 transition shadow-sm"
-                >
-                  Go to Dashboard
-                </button>
-              )}
-              {!showDashboardButton && (
-                <button
-                  onClick={onLoginClick}
-                  className="bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary/95 transition shadow-sm"
-                >
-                  Employee Login
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
+    const contactItems = [
+      {
+        icon: Phone,
+        title: t('home.contact.phone'),
+        value: PHONE,
+        note: t('home.contact.phoneNote')
+      },
+      {
+        icon: Mail,
+        title: t('home.contact.business'),
+        value: 'contact@dixpertia.com',
+        note: t('home.contact.businessNote')
+      },
+      {
+        icon: MapPin,
+        title: t('home.contact.headquarters'),
+        value: t('home.contact.address')
+      },
+      {
+        icon: Clock,
+        title: t('home.contact.hours'),
+        value: t('home.contact.hoursValue')
+      }
+    ];
 
-        {/* Contact Page Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Back to Home */}
+    return (
+      <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
+        {header}
+
+        <main id="main-content" tabIndex={-1} className="focus:outline-none max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <button
             onClick={() => handleNavClick('home')}
-            className="inline-flex items-center gap-2 text-body-sm text-outline hover:text-primary transition mb-8"
+            className="inline-flex items-center gap-2 text-sm text-home-fg/62 hover:text-home-fg transition mb-10"
           >
-            ← Back to Home
+            <ArrowLeft className="w-4 h-4" /> {t('home.contact.back')}
           </button>
 
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h1 className="text-3xl font-bold text-[#03224d]">Contact Our Experts</h1>
-            <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-              Whether you want a full system audit or to initiate a migration, our on‑call architects
-              are ready to respond within 4 hours.
+          <div className="max-w-2xl mb-12">
+            <p className={`${EYEBROW} text-home-accent-text`}>{t('home.contact.eyebrow')}</p>
+            <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-[-0.02em]">{t('home.contact.title')}</h1>
+            <p className="mt-4 text-base text-home-fg/62 leading-relaxed">
+              {t('home.contact.intro')}
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Contact Info (left) */}
-            <div className="lg:col-span-5 flex flex-col gap-6 text-left">
-              <h2 className="font-bold text-base text-[#03224d] pb-2 border-b border-gray-100">Our Contact Details</h2>
-              <div className="flex flex-col gap-5">
-                <div className="flex gap-4 items-start">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                    <Phone className="w-5 h-5 text-[#03224d]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900">Emergency Assistance (SLA)</h4>
-                    <p className="text-xs font-semibold text-[#0e61a1] mt-1">+33 (0) 1 45 88 90 22</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">24/7 emergency line for subscribed clients</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 items-start border-t border-gray-200/40 pt-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                    <Mail className="w-5 h-5 text-[#03224d]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900">Business Integration Inquiries</h4>
-                    <p className="text-xs font-semibold text-[#0e61a1] mt-1">contact@dixpertia.com</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Guaranteed response within 4 business hours</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 items-start border-t border-gray-200/40 pt-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5 text-[#03224d]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900">Technical Headquarters</h4>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      DIXpertIA SAS<br />
-                      Tunis, Tunisie
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-4 items-start border-t border-gray-200/40 pt-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                    <Clock className="w-5 h-5 text-[#03224d]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-gray-900">On‑Call Office Uptime</h4>
-                    <p className="text-xs text-gray-600 mt-1">Monday – Friday: 8:00 AM – 7:00 PM</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Active network crisis team 24/7/365</p>
-                  </div>
-                </div>
-              </div>
+            {/* Contact details */}
+            <div className="lg:col-span-5">
+              <h2 className="text-base font-semibold pb-3 border-b border-home-fg/14">{t('home.contact.details')}</h2>
+              <ul className="divide-y divide-home-fg/14">
+                {contactItems.map(({ icon: Icon, title, value, note }) => (
+                  <li key={title} className="flex gap-4 items-start py-5">
+                    <div className="w-10 h-10 rounded-lg bg-home-fg/5 flex items-center justify-center shrink-0">
+                      <Icon className="w-5 h-5 text-home-fg" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">{title}</h3>
+                      <p className="mt-1 font-mono text-sm text-home-fg">{value}</p>
+                      {note && <p className="mt-0.5 text-xs text-home-fg/62">{note}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            {/* Contact Form (right) */}
-            <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 p-6 md:p-8 text-left shadow-sm">
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
-                <h2 className="font-bold text-base text-[#03224d]">Inquiry Registration Form</h2>
-                <span className="font-mono text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded font-bold">
-                  REPLY SLA: 4h
-                </span>
+            {/* Contact form */}
+            <div className="lg:col-span-7 bg-home-surface rounded-2xl border border-home-fg/14 p-6 md:p-8">
+              <div className="pb-4 border-b border-home-fg/14 mb-6">
+                <h2 className="text-base font-semibold">{t('home.contact.form.title')}</h2>
               </div>
 
-              <form onSubmit={handleContactSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleContactSubmit} className="relative flex flex-col gap-5" noValidate>
                 {success && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex gap-3 text-left animate-fade-in">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div role="status" className="bg-home-fg/3 border border-home-fg/14 rounded-lg p-4 flex gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-home-fg shrink-0 mt-0.5" />
                     <div>
-                      <span className="block text-xs font-bold text-emerald-800">Message received successfully!</span>
-                      <p className="text-[11px] text-emerald-700 mt-0.5">
-                        A unique incident token has been generated. Our operations center has received it in real time.
+                      <span className="block text-sm font-semibold">{t('home.contact.form.sent')}</span>
+                      <p className="text-xs text-home-fg/62 mt-0.5">
+                        {t('home.contact.form.sentHint')}
                       </p>
                     </div>
                   </div>
                 )}
 
                 {errorMsg && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-left items-center animate-fade-in">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span className="text-xs font-semibold text-red-800">{errorMsg}</span>
+                  <div role="alert" className="bg-error-container border border-error/20 rounded-lg p-3 flex gap-2 items-center">
+                    <AlertCircle className="w-4 h-4 text-error shrink-0" />
+                    <span className="text-sm font-medium text-on-error-container">{t(errorMsg, { phone: PHONE })}</span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-600">Full Name *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.name')}</span>
                     <input
                       type="text"
-                      placeholder="e.g. Alexandre Dubois"
+                      placeholder={t('home.contact.form.namePlaceholder')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="p-2.5 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#03224d] outline-none"
+                      className={FIELD}
                     />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-600">Email Address *</label>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.email')}</span>
                     <input
                       type="email"
-                      placeholder="e.g. a.dubois@innovate.fr"
+                      placeholder={t('home.contact.form.emailPlaceholder')}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="p-2.5 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#03224d] outline-none"
+                      className={FIELD}
                     />
-                  </div>
+                  </label>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-600">Consultation Topic *</label>
-                  <select
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="p-2.5 border border-gray-200 rounded text-xs bg-white focus:ring-1 focus:ring-[#03224d] outline-none"
-                  >
-                    <option value="Security audit / Penetration testing">Security audit / Penetration testing</option>
-                    <option value="Hybrid Cloud Migration">Hybrid Cloud Migration Planning</option>
-                    <option value="Custom Development">Custom API / CRM Development</option>
-                    <option value="24/7 Support Subscription">24/7 SLA Support Subscription</option>
-                    <option value="Other">Other Technology Request</option>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.topic')}</span>
+                  <select value={subject} onChange={(e) => setSubject(e.target.value)} className={FIELD}>
+                    {TOPICS.map((topic) => (
+                      <option key={topic} value={topic}>{t(`home.contact.form.topic.${topic}`)}</option>
+                    ))}
                   </select>
-                </div>
+                </label>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-600">Message / Technical Context *</label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-home-fg/62">{t('home.contact.form.message')}</span>
                   <textarea
                     rows={5}
-                    placeholder="Briefly describe your company's existing infrastructure, performance goals, or specific regulatory requirements..."
+                    placeholder={t('home.contact.form.messagePlaceholder')}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="p-3 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#03224d] outline-none resize-none"
+                    className={`${FIELD} resize-none`}
                   />
+                </label>
+
+                {/* Honeypot (#98): off-screen and out of the tab order, so people
+                    never see or reach it; bots that fill every field do. */}
+                <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                  <label>
+                    Website
+                    <input type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                  </label>
                 </div>
 
-                <button
-                  type="submit"
-                  className="mt-2 bg-[#03224d] hover:bg-[#1f3864] text-white text-xs font-bold py-3 px-5 rounded-lg transition-colors flex items-center justify-center gap-2 self-start cursor-pointer active:scale-95"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Submit to Technical Team
+                <button type="submit" disabled={sending} className={`${LIME_CTA} self-start disabled:cursor-wait disabled:opacity-70`}>
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                  {sending ? t('home.contact.form.sending') : t('home.contact.form.submit')}
                 </button>
               </form>
             </div>
           </div>
 
-          {/* FAQ Section */}
-          <section className="mt-16 bg-slate-50 rounded-2xl border border-gray-200 p-6 md:p-8 flex flex-col gap-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-gray-200 text-left">
-              <div className="flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-[#03224d]" />
+          {/* FAQ */}
+          <section className="mt-20 border-t border-home-fg/14 pt-10">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+              <div className="flex items-start gap-3">
+                <HelpCircle className="w-5 h-5 text-home-fg mt-1" />
                 <div>
-                  <h2 className="font-bold text-base text-[#03224d]">Frequently Asked Questions</h2>
-                  <p className="text-[11px] text-gray-400">Search and filter our official answers instantly</p>
+                  <h2 className="text-xl font-bold tracking-[-0.02em]">{t('home.faq.title')}</h2>
+                  <p className="text-sm text-home-fg/62 mt-1">{t('home.faq.subtitle')}</p>
                 </div>
               </div>
-              <div className="relative max-w-sm w-full md:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-home-fg/62" />
                 <input
                   type="text"
-                  placeholder="Search (e.g. SLA, security)..."
+                  placeholder={t('home.faq.search')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border border-gray-200 pl-9 pr-3 py-1.5 rounded text-xs outline-none focus:ring-1 focus:ring-[#03224d]"
+                  className={`${FIELD} pl-9`}
                 />
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="bg-home-surface border border-home-fg/14 rounded-2xl divide-y divide-home-fg/14">
               {filteredFaqs.length > 0 ? (
                 filteredFaqs.map((faq, idx) => {
                   const isExpanded = expandedFaqIdx === idx;
                   return (
-                    <div
-                      key={idx}
-                      className="bg-white border border-gray-200/60 rounded-xl overflow-hidden transition-all text-left"
-                    >
+                    <div key={idx}>
                       <button
                         onClick={() => toggleFaq(idx)}
-                        className="w-full px-5 py-4 flex justify-between items-center hover:bg-gray-50/50 transition-colors"
+                        aria-expanded={isExpanded}
+                        className="w-full px-5 py-4 flex justify-between items-center gap-4 text-left hover:bg-home-fg/3 transition-colors"
                       >
-                        <span className="font-semibold text-xs text-[#03224d]">{faq.question}</span>
+                        <span className="text-sm font-semibold">{faq.question}</span>
                         {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                          <ChevronUp className="w-4 h-4 text-home-fg/62 shrink-0" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                          <ChevronDown className="w-4 h-4 text-home-fg/62 shrink-0" />
                         )}
                       </button>
                       {isExpanded && (
-                        <div className="px-5 pb-5 pt-1 text-xs text-gray-500 leading-relaxed border-t border-gray-50 animate-fade-in">
-                          {faq.answer}
-                        </div>
+                        <div className="px-5 pb-5 text-sm text-home-fg/62 leading-relaxed">{faq.answer}</div>
                       )}
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center py-6 text-xs text-gray-400">
-                  No results for "{searchQuery}". Please broaden your search.
+                <div className="text-center py-8 text-sm text-home-fg/62">
+                  {t('home.faq.noResults', { query: searchQuery })}
                 </div>
               )}
             </div>
           </section>
         </main>
 
-        {/* Footer (same as homepage) */}
-        <footer className="bg-surface-container-lowest border-t border-outline-variant/30 py-12 px-4 mt-12">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <div className="text-primary font-black text-2xl">DIXpertIA</div>
-              <p className="mt-2 text-body-sm text-on-surface-variant">
-                Enterprise IT Solutions built on a foundation of reliability, security, and precision.
-              </p>
-              <p className="mt-4 text-caption text-outline">© 2024 DIXpertIA. All rights reserved.</p>
-            </div>
-            <div>
-              <h4 className="font-bold text-body-sm text-on-surface">Company</h4>
-              <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-                <li><button onClick={() => handleNavClick('about')} className="hover:text-primary transition">About Us</button></li>
-                <li><button className="hover:text-primary transition">Leadership</button></li>
-                <li><button className="hover:text-primary transition">Careers</button></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-body-sm text-on-surface">Links</h4>
-              <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-                <li><button onClick={() => handleNavClick('services')} className="hover:text-primary transition">Services</button></li>
-                <li><button className="hover:text-primary transition">Case Studies</button></li>
-                <li><button onClick={onLoginClick} className="hover:text-primary transition">Employee Portal</button></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold text-body-sm text-on-surface">Contact</h4>
-              <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-                <li><button onClick={() => handleNavClick('contact')} className="hover:text-primary transition">Support</button></li>
-                <li><button onClick={() => handleNavClick('contact')} className="hover:text-primary transition">Sales</button></li>
-              </ul>
-            </div>
-          </div>
-        </footer>
+        {footer}
       </div>
     );
   }
 
   // ---------- Homepage (default) ----------
   return (
-    <div className="min-h-screen bg-white text-on-surface font-sans">
-      {/* Header */}
-      <header className="border-b border-outline-variant/30 bg-surface-container-lowest sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <button
-            onClick={() => handleNavClick('home')}
-            className="text-primary font-black text-2xl tracking-tight hover:opacity-80 transition cursor-pointer"
-          >
-            DIXpertIA
-          </button>
-          <nav className="hidden md:flex items-center gap-6 text-body-sm font-medium text-on-surface-variant">
-            <button onClick={() => handleNavClick('home')} className="hover:text-primary transition">Home</button>
-            <button onClick={() => handleNavClick('services')} className="hover:text-primary transition">Services</button>
-            <button onClick={() => handleNavClick('about')} className="hover:text-primary transition">About</button>
-            <button onClick={() => handleNavClick('contact')} className="hover:text-primary transition">Contact</button>
-          </nav>
-          <div className="flex items-center gap-2">
-            {showDashboardButton && (
-              <button
-                onClick={onLoginClick}
-                className="bg-secondary text-white px-5 py-2 rounded-lg font-semibold hover:bg-secondary/90 transition shadow-sm"
-              >
-                Go to Dashboard
-              </button>
-            )}
-            {!showDashboardButton && (
-              <button
-                onClick={onLoginClick}
-                className="bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary/95 transition shadow-sm"
-              >
-                Employee Login
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="home-page min-h-screen bg-home-bg text-home-fg font-sans">
+      {header}
 
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-surface-container-low to-white py-20 px-4">
-        <div className="max-w-5xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-display font-black text-on-surface tracking-tight leading-tight">
-            Digital solutions built <br className="hidden sm:block" /> around you.
-          </h1>
-          <p className="mt-4 text-body-lg text-on-surface-variant max-w-2xl mx-auto">
-            We deliver enterprise-grade IT solutions tailored to your unique operational needs,
-            ensuring professional, reliable, and modern technical precision.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <button
-              onClick={() => handleNavClick('services')}
-              className="bg-primary text-white px-6 py-3 rounded-lg font-bold text-body-sm hover:bg-primary/95 transition shadow-sm"
-            >
-              Our Services
-            </button>
-            <button
-              onClick={() => handleNavClick('contact')}
-              className="bg-surface-container-lowest border border-outline-variant text-on-surface px-6 py-3 rounded-lg font-bold text-body-sm hover:bg-surface-container-low transition shadow-sm"
-            >
-              Contact Us
-            </button>
-          </div>
-        </div>
-      </section>
+      <main id="main-content" tabIndex={-1} className="focus:outline-none">
+        <Hero
+          onContact={() => handleNavClick('contact')}
+          onServices={() => handleNavClick('services')}
+          console={<HowWeWorkConsole />}
+        />
 
-      {/* Services */}
-      <section id="services" className="py-16 px-4 bg-white scroll-mt-16">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-h2 font-black text-on-surface text-center mb-12">What We Do</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition bg-surface-container-lowest">
-              <div className="w-12 h-12 rounded-full bg-primary-container text-primary flex items-center justify-center text-2xl mb-4">☁️</div>
-              <h3 className="text-body-lg font-bold text-on-surface">Cloud Infrastructure</h3>
-              <p className="mt-2 text-body-sm text-on-surface-variant">
-                Scalable and secure cloud architecture designed for high availability and enterprise performance.
-              </p>
-              <button className="mt-4 inline-block text-primary font-semibold text-body-sm hover:underline">
-                Learn more →
-              </button>
-            </div>
-            <div className="p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition bg-surface-container-lowest">
-              <div className="w-12 h-12 rounded-full bg-secondary-container text-secondary flex items-center justify-center text-2xl mb-4">🔒</div>
-              <h3 className="text-body-lg font-bold text-on-surface">Cybersecurity</h3>
-              <p className="mt-2 text-body-sm text-on-surface-variant">
-                Comprehensive threat protection and compliance management to safeguard your critical data assets.
-              </p>
-              <button className="mt-4 inline-block text-primary font-semibold text-body-sm hover:underline">
-                Learn more →
-              </button>
-            </div>
-            <div className="p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition bg-surface-container-lowest">
-              <div className="w-12 h-12 rounded-full bg-tertiary-container text-tertiary flex items-center justify-center text-2xl mb-4">⚙️</div>
-              <h3 className="text-body-lg font-bold text-on-surface">Custom Software</h3>
-              <p className="mt-2 text-body-sm text-on-surface-variant">
-                Bespoke application development tailored to streamline your unique operational workflows.
-              </p>
-              <button className="mt-4 inline-block text-primary font-semibold text-body-sm hover:underline">
-                Learn more →
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+        <Services onPick={() => handleNavClick('contact')} />
+        <Engagement />
 
-      {/* Trusted */}
-      <section className="py-12 px-4 bg-surface-container-low border-y border-outline-variant/30">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-body-sm font-semibold text-on-surface-variant uppercase tracking-wider">Trusted by teams who value reliability</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-12 text-on-surface-variant/60 font-bold text-lg">
-            <span>LOGO1</span>
-            <span>LOGO2</span>
-            <span>LOGO3</span>
-            <span>LOGO4</span>
-          </div>
-        </div>
-      </section>
+        <AboutCta onStart={() => handleNavClick('contact')} />
+      </main>
 
-      {/* About / CTA */}
-      <section id="about" className="py-16 px-4 bg-primary-container/20 scroll-mt-16">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-h2 font-black text-on-surface">Ready to transform your IT infrastructure?</h2>
-          <p className="mt-4 text-body-lg text-on-surface-variant">
-            Partner with DIXpertIA to bring modern, reliable technology to your organization.
-          </p>
-          <button
-            onClick={() => handleNavClick('contact')}
-            className="mt-8 bg-primary text-white px-8 py-3 rounded-lg font-bold text-body-sm hover:bg-primary/95 transition shadow-sm"
-          >
-            Get Started Today
-          </button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-surface-container-lowest border-t border-outline-variant/30 py-12 px-4">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div>
-            <div className="text-primary font-black text-2xl">DIXpertIA</div>
-            <p className="mt-2 text-body-sm text-on-surface-variant">
-              Enterprise IT Solutions built on a foundation of reliability, security, and precision.
-            </p>
-            <p className="mt-4 text-caption text-outline">© 2024 DIXpertIA. All rights reserved.</p>
-          </div>
-          <div>
-            <h4 className="font-bold text-body-sm text-on-surface">Company</h4>
-            <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-              <li><button onClick={() => handleNavClick('about')} className="hover:text-primary transition">About Us</button></li>
-              <li><button className="hover:text-primary transition">Leadership</button></li>
-              <li><button className="hover:text-primary transition">Careers</button></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-body-sm text-on-surface">Links</h4>
-            <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-              <li><button onClick={() => handleNavClick('services')} className="hover:text-primary transition">Services</button></li>
-              <li><button className="hover:text-primary transition">Case Studies</button></li>
-              <li><button onClick={onLoginClick} className="hover:text-primary transition">Employee Portal</button></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-body-sm text-on-surface">Contact</h4>
-            <ul className="mt-2 space-y-1 text-body-sm text-on-surface-variant">
-              <li><button onClick={() => handleNavClick('contact')} className="hover:text-primary transition">Support</button></li>
-              <li><button onClick={() => handleNavClick('contact')} className="hover:text-primary transition">Sales</button></li>
-            </ul>
-          </div>
-        </div>
-      </footer>
+      {footer}
     </div>
   );
 }

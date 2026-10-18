@@ -1,0 +1,10 @@
+:root{
+  --dix-ink:#101314;        /* fonds sombres, texte principal */
+  --dix-lime:#C6F24E;       /* accent : curseur, bandes, filets, boutons */
+  --dix-lime-deep:#5C7A0A;  /* texte accentué sur papier, icônes, liens */
+  --dix-paper:#F3F2EE;      /* fonds clairs */
+  --dix-ink-62:rgba(16,19,20,.62); /* texte secondaire */
+  --dix-hairline:rgba(16,19,20,.14); /* séparateurs */
+  --dix-font-display:'Space Grotesk',system-ui,sans-serif;
+  --dix-font-mono:'JetBrains Mono',ui-monospace,monospace;
+}

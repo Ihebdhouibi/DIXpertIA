@@ -1,8 +1,28 @@
 import enum
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Date, Numeric, Enum
+from datetime import date
+
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+# Imported for its side effect, not for direct use: loading this module registers
+# the `users` table on Base.metadata, which Invoice.cree_par_id needs in order to
+# resolve ForeignKey("users.id"). Do not let a linter auto-remove it.
+from app.models.user import User  # noqa: F401
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -13,43 +33,376 @@ class InvoiceStatus(str, enum.Enum):
     ANNULEE = "annulee"
 
 
+class InvoiceProcessingStatus(str, enum.Enum):
+    """The accountant's workflow state, independent of the commercial state.
+
+    This is a second axis, not a renaming of InvoiceStatus (#41). The two
+    describe different things and move for different reasons:
+
+        statut            what the client sees - issued, paid, overdue
+        processing_status what the books see   - booked, reconciled, closed
+
+    An invoice is routinely PAYEE and still `pending`: the client has paid, but
+    nobody has entered it in the books yet. The reverse happens too - an invoice
+    can be `completed` in the accounts while the client has not paid, because
+    booking an expectation and collecting on it are separate events. Collapsing
+    the two into one enum would make "paid but not yet booked" inexpressible,
+    which is the normal state of most invoices mid-month.
+
+    Meanings, as confirmed with the accountant:
+
+        pending    it exists, nobody has handled it. The state on creation.
+        processed  entered in the books.
+        completed  booked AND matched against an actual payment.
+        archived   the month it belongs to has been closed.
+
+    `processed` and `completed` are deliberately distinct: booking an invoice
+    and reconciling it against a bank line are separate acts, often days apart,
+    and the gap between them is exactly what the accountant chases at month end.
+    """
+
+    PENDING = "pending"
+    PROCESSED = "processed"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class InvoiceReviewStatus(str, enum.Enum):
+    """Where an outgoing invoice is in the accountant's verification (#118).
+
+    A third axis, next to the commercial `statut` and the bookkeeping
+    `processing_status`: verification happens before an invoice leaves, the
+    books after.
+
+        NOT_SUBMITTED  a draft the admin is still writing
+        SUBMITTED      waiting for the accountant; frozen
+        APPROVED       verified: it has its legal number and can be sent
+        REJECTED       sent back with a comment; the admin corrects, resubmits
+
+    Supplier bills are recorded as received and are never reviewed.
+    """
+
+    NOT_SUBMITTED = "not_submitted"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class InvoiceReviewAction(str, enum.Enum):
+    """One step in an invoice's review history (#118)."""
+
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class InvoiceDirection(str, enum.Enum):
+    """Which way the money goes (#40).
+
+    OUTGOING is an invoice we issue to a client: income, and the series the tax
+    authority expects to be gapless and in date order.
+
+    INCOMING is a bill a supplier issued to us: an expense. It arrives with the
+    supplier's own number, which we cannot change, and bills arrive out of date
+    order by nature - one dated the 3rd is routinely booked after one dated the
+    20th. That is why the chronological rule from #39 applies to OUTGOING only.
+
+    Separating the two is also what makes VAT reportable: VAT on sales is
+    collected and VAT on purchases is deductible, and a VAT return reports them
+    apart to arrive at the amount owed. Without a direction the system holds
+    both figures and cannot tell them apart.
+    """
+
+    OUTGOING = "outgoing"
+    INCOMING = "incoming"
+
+
+class Supplier(Base):
+    """A company that invoices us (#40).
+
+    Deliberately a separate table from `clients` rather than one counterparty
+    table with a role flag. The same company could in principle be both, but
+    conflating them makes every revenue figure that counts clients wrong, and
+    the audit found exactly that class of mistake elsewhere in this schema.
+
+    Before this existed, storing a supplier bill meant inventing a row in
+    `clients` - so the client list silently mixed people who pay us with people
+    we pay.
+    """
+
+    __tablename__ = "suppliers"
+
+    id = Column(Integer, primary_key=True)
+    nom = Column(String(150), nullable=False)
+    # '' means "not given". NOT NULL with a server default, so a row inserted
+    # outside the ORM cannot store NULL either - the invoice PDF crashed on one
+    # (#86).
+    email = Column(String(100), default="", server_default=text("''"), nullable=False)
+    telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
+    adresse = Column(Text, default="", server_default=text("''"), nullable=False)
+
+    invoices = relationship("Invoice", back_populates="supplier")
+
+    __table_args__ = (
+        # Stops the same supplier being created twice under different casing,
+        # which would let the same bill be entered twice and paid twice.
+        Index("ux_suppliers_nom_ci", text("lower(nom)"), unique=True),
+    )
+
+
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     nom = Column(String(150), nullable=False)
-    email = Column(String(100), default="")
-    telephone = Column(String(30), default="")
-    adresse = Column(Text, default="")
+    # '' means "not given". NOT NULL with a server default, so a row inserted
+    # outside the ORM cannot store NULL either - the invoice PDF crashed on one
+    # (#86).
+    email = Column(String(100), default="", server_default=text("''"), nullable=False)
+    telephone = Column(String(30), default="", server_default=text("''"), nullable=False)
+    adresse = Column(Text, default="", server_default=text("''"), nullable=False)
+    # The language this client's invoices are printed in (#135), French by default:
+    # the same invoice always prints the same way, whoever downloads it.
+    locale = Column(String(2), nullable=False, default="fr", server_default=text("'fr'"))
 
     invoices = relationship("Invoice", back_populates="client")
+
+    __table_args__ = (
+        # Stops "Acme Corp" and "ACME CORP" becoming two customers.
+        CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
+        Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
+    )
 
 
 class Invoice(Base):
     __tablename__ = "invoices"
 
-    id = Column(Integer, primary_key=True, index=True)
-    numero = Column(String(30), unique=True, nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    id = Column(Integer, primary_key=True)
+    # Our own number, in both directions. For an outgoing invoice this is the
+    # legal number the client sees (FA-YYYY-NNNN); for an incoming one it is an
+    # internal filing reference (FF-YYYY-NNNN), because a supplier's own number
+    # is not ours to assign and two suppliers may well use the same one.
+    # NULL on an outgoing draft: the legal number is given when the accountant
+    # approves it (#118), so an abandoned draft never holds one. UNIQUE allows
+    # several NULLs. Shown as BR- and the id until then (`reference`).
+    numero = Column(String(30), unique=True, nullable=True)
+    direction = Column(
+        Enum(InvoiceDirection),
+        nullable=False,
+        server_default=InvoiceDirection.OUTGOING.name,
+    )
+    # Exactly one of these is set, enforced by ck_invoice_counterparty below.
+    # RESTRICT: a counterparty with invoices must not be deletable.
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True)
+    # The number printed on the supplier's bill, stored exactly as received.
+    # Never merged into `numero`: if the two shared a column, every report and
+    # filter would silently mix their numbering with ours.
+    supplier_reference = Column(String(60), nullable=True)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=False)
-    montant_ht = Column(Numeric(10, 2), default=0)
-    montant_ttc = Column(Numeric(10, 2), default=0)
-    statut = Column(Enum(InvoiceStatus), default=InvoiceStatus.BROUILLON)
-    cree_par_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    montant_ht = Column(Numeric(10, 2), nullable=False)
+    montant_ttc = Column(Numeric(10, 2), nullable=False)
+    # NOT NULL with a default: the status was nullable and never set, so every
+    # invoice was created with statut = NULL. InvoiceOut requires it, so
+    # serialising the response failed *after* the commit - the invoice was
+    # saved, the client got a 500, and the retry created a second invoice with
+    # a new legal number (AUDIT-DB-010).
+    # server_default uses the enum NAME, not .value: SQLAlchemy's Enum type
+    # stores Python enum names as the PostgreSQL labels, so the labels here are
+    # BROUILLON/ENVOYEE/..., while .value would give 'brouillon' and the ALTER
+    # would be rejected as an invalid input value for the enum.
+    statut = Column(Enum(InvoiceStatus), nullable=False,
+                    server_default=InvoiceStatus.BROUILLON.name)
+    # Make cree_par_id nullable so we can insert without it
+    # RESTRICT: authorship of an issued invoice must survive.
+    cree_par_id = Column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    # The accountant's workflow state. Separate from `statut` above - see
+    # InvoiceProcessingStatus for why these are two fields and not one.
+    # server_default uses the enum NAME, as `statut` does: SQLAlchemy stores
+    # Python enum names as the PostgreSQL labels, so 'pending' would be rejected
+    # as an invalid input value while 'PENDING' is the actual label.
+    processing_status = Column(
+        Enum(InvoiceProcessingStatus),
+        nullable=False,
+        server_default=InvoiceProcessingStatus.PENDING.name,
+    )
+    # Set from the Idempotency-Key header. UNIQUE, so a retried request cannot
+    # create a second invoice: in accounting an issued invoice cannot be
+    # deleted, so each duplicate would need a credit note.
+    idempotency_key = Column(String(64), unique=True, nullable=True)
+    # The accountant's verification before sending (#118). Stored with the enum
+    # NAME, like the two other states.
+    review_status = Column(
+        Enum(InvoiceReviewStatus),
+        nullable=False,
+        server_default=InvoiceReviewStatus.NOT_SUBMITTED.name,
+    )
+    # #126: set exactly when statut is PAYEE (paid in full on that date), and
+    # the cancellation exactly when ANNULEE. Held by CHECKs and by
+    # trg_invoice_commercial_transitions; see that migration for the moves.
+    paid_on = Column(Date, nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
 
     client = relationship("Client", back_populates="invoices")
+    supplier = relationship("Supplier", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+    reviews = relationship("InvoiceReview", back_populates="invoice",
+                           order_by="InvoiceReview.created_at")
+
+    def displayed_status(self, today: date | None = None) -> "InvoiceStatus":
+        """The commercial status as shown: Overdue is derived, never stored (#117).
+
+        A sent invoice whose due date has passed is overdue - due today is not
+        yet. A stored "overdue" went stale the day after it was written and
+        nothing ever set it, so a late invoice showed as merely sent. The list
+        filter in the invoicing router applies the same rule in SQL.
+        """
+        today = today or date.today()
+        if self.statut == InvoiceStatus.ENVOYEE and self.date_echeance and self.date_echeance < today:
+            return InvoiceStatus.EN_RETARD
+        return self.statut
+
+    @property
+    def reference(self) -> str:
+        """The legal number, or BR- and the id while the draft has none (#118).
+
+        Computed, never stored: a provisional reference must not become a second
+        series to keep gapless.
+        """
+        return self.numero or f"BR-{self.id:04d}"
+
+    __table_args__ = (
+        CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
+                        name="ck_invoices_amounts"),
+        CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        # Approved, sent or paid means numbered; a draft, or one cancelled
+        # before approval, may have no number (#118).
+        CheckConstraint(
+            "direction <> 'OUTGOING' OR numero IS NOT NULL "
+            "OR (statut IN ('BROUILLON', 'ANNULEE') AND review_status <> 'APPROVED')",
+            name="ck_invoices_numbered_once_approved",
+        ),
+        CheckConstraint("(statut = 'PAYEE') = (paid_on IS NOT NULL)", name="ck_invoices_paid_has_date"),
+        # Overdue is derived from the due date at read time (#117), never stored.
+        CheckConstraint("statut <> 'EN_RETARD'", name="ck_invoices_overdue_is_derived"),
+        CheckConstraint("paid_on IS NULL OR paid_on >= date_emission", name="ck_invoices_paid_after_issue"),
+        CheckConstraint(
+            "(statut = 'ANNULEE') = (cancelled_at IS NOT NULL"
+            " AND btrim(coalesce(cancellation_reason, '')) <> '')",
+            name="ck_invoices_cancelled_has_reason",
+        ),
+        # The accountant's "to verify" queue.
+        Index("ix_invoices_review_status", "review_status", "date_emission"),
+        # An invoice has exactly one counterparty, and which one follows from
+        # the direction. Without this, a row could name both a client and a
+        # supplier, or neither, and no report could say what it was.
+        CheckConstraint(
+            "(direction = 'OUTGOING' AND client_id IS NOT NULL"
+            " AND supplier_id IS NULL AND supplier_reference IS NULL)"
+            " OR (direction = 'INCOMING' AND supplier_id IS NOT NULL"
+            " AND client_id IS NULL AND supplier_reference IS NOT NULL)",
+            name="ck_invoice_counterparty",
+        ),
+        # The supplier's number is unique PER SUPPLIER, never globally. Two
+        # suppliers both numbering a bill "2026-001" is ordinary; a global
+        # UNIQUE would reject the second one outright. Scoped this way it does
+        # the job that matters: the same bill cannot be entered twice, and so
+        # cannot be paid twice.
+        UniqueConstraint("supplier_id", "supplier_reference",
+                         name="uq_supplier_reference"),
+        # Indexes below were chosen by measuring, not by habit: db/seed_perf_data.py
+        # fills the tables and db/measure_indexes.py prints the resulting plans.
+        #
+        # Ascending, although the list reads newest first: PostgreSQL scans a
+        # btree backward at the same cost, and one ascending index then serves
+        # both the newest-first list and the accountant's ascending month range.
+        Index("ix_invoices_date_emission", "date_emission", "id"),
+        # Invoices for one client.
+        Index("ix_invoices_client_id", "client_id"),
+        Index("ix_invoices_supplier_id", "supplier_id"),
+        # The accountant reads income and expense apart on every screen.
+        Index("ix_invoices_direction", "direction", "date_emission"),
+        # Not for reads: without it, deleting a user who has issued no invoices
+        # makes the RESTRICT check scan the whole table to prove absence.
+        Index("ix_invoices_cree_par_id", "cree_par_id"),
+        # Only five distinct statuses, so this earns about 2x rather than the
+        # large factors above - kept because the accountant's workflow filters
+        # by status constantly.
+        Index("ix_invoices_statut", "statut"),
+        # Composite, not a single column on processing_status. Measured at 10k
+        # invoices, the paginated list never uses either: with four roughly
+        # equal values the filter is 25% selective, so ix_invoices_date_emission
+        # plus a LIMIT beats both. What this does earn is the unbounded count
+        # behind "how many invoices are still awaiting me" - 1.13 ms to 0.49 ms
+        # against a sequential scan - and the month-scoped close query, where
+        # leading with the status and then the date beats a single column
+        # (0.14 ms against 0.33 ms). Re-check with db/measure_indexes.py.
+        Index("ix_invoices_processing_status", "processing_status", "date_emission"),
+        # Serves the two triggers that police the legal series (#38, #39). Both
+        # extract the year and number from `numero` with substring(), which no
+        # ordinary index on `numero` can serve, so without this every insert
+        # scanned the table. Partial, because only FA-YYYY-NNNN is the series.
+        Index(
+            "ix_invoices_series",
+            text("substring(numero from 1 for 2)"),
+            text("substring(numero from 4 for 4)"),
+            text("substring(numero from 9)::integer"),
+            postgresql_where=text("numero ~ '^(FA|FF)-[0-9]{4}-[0-9]+$'"),
+        ),
+    )
+
+
+class InvoiceReview(Base):
+    """One submission or decision in an invoice's verification (#118).
+
+    Append-only, enforced by the invoice_review_is_valid trigger, which also
+    refuses a decision taken by the invoice's creator. A rejection carries the
+    comment that tells the admin what to correct.
+    """
+
+    __tablename__ = "invoice_reviews"
+
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="RESTRICT"), nullable=False)
+    actor_id = Column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    action = Column(Enum(InvoiceReviewAction), nullable=False)
+    comment = Column(Text, nullable=False, default="", server_default=text("''"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    invoice = relationship("Invoice", back_populates="reviews")
+    actor = relationship("User", foreign_keys=[actor_id])
+
+    __table_args__ = (
+        CheckConstraint("action <> 'REJECTED' OR length(btrim(comment)) > 0",
+                        name="ck_invoice_reviews_rejection_has_comment"),
+        Index("ix_invoice_reviews_invoice_id", "invoice_id", "created_at"),
+        Index("ix_invoice_reviews_actor_id", "actor_id"),
+    )
 
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
 
-    id = Column(Integer, primary_key=True, index=True)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
+    id = Column(Integer, primary_key=True)
+    # CASCADE, matching the ORM cascade on Invoice.items. Previously the ORM
+    # deleted lines while a direct SQL delete was refused - the same operation
+    # with two different outcomes depending on the code path (#60).
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
     designation = Column(String(255), nullable=False)
     quantite = Column(Numeric(8, 2), default=1)
     prix_unitaire = Column(Numeric(10, 2), nullable=False)
     taux_tva = Column(Numeric(4, 2), default=19)
 
     invoice = relationship("Invoice", back_populates="items")
+
+    __table_args__ = (
+        CheckConstraint("quantite > 0", name="ck_invoice_items_quantite"),
+        CheckConstraint("prix_unitaire >= 0", name="ck_invoice_items_prix"),
+        CheckConstraint("taux_tva >= 0 AND taux_tva <= 100", name="ck_invoice_items_tva"),
+        # The single largest win measured: loading one invoice's lines went from
+        # a full scan of invoice_items to an index lookup. Every invoice detail
+        # view and every PDF render takes this path.
+        Index("ix_invoice_items_invoice_id", "invoice_id"),
+    )

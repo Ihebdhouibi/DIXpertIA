@@ -1,12 +1,12 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean
-
 from app.core.database import Base
 
-
+# The website service catalogue for dixpertia.tn - display order, active
+# flag, image. Not a repair-services table.
 class Service(Base):
     __tablename__ = "services"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     titre = Column(String(150), nullable=False)
     description = Column(Text, default="")
     image = Column(String(255), nullable=True)

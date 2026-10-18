@@ -1,0 +1,54 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "node_modules",
+    "dist",
+    "__pycache__",
+    # Alembic's env.py and generated revisions are template output, not
+    # hand-written code. Excluded wholesale, as is conventional.
+    "alembic",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes: undefined names, unused imports, redefinitions
+    "W",    # pycodestyle warnings: trailing whitespace, missing final newline
+    "T20",  # flake8-print: no print() / pprint() left in application code
+    "S105", # hardcoded password string
+    "S106", # hardcoded password as a function argument
+]
+
+# Deliberately not enabled yet:
+#   "I"  (isort) - would reorder imports in 21 files. Worth doing, but as its own
+#        change so it does not bury the rules that catch real defects.
+
+[tool.ruff.lint.per-file-ignores]
+# These are command-line utilities. print() is their user interface, not
+# leftover debugging, so T201 does not apply. Their *emoji* are still a problem
+# on Windows (cp1252 stdout) and are caught by the check-no-emoji hook instead.
+"seed_users.py" = ["T201"]
+"migrate_data.py" = ["T201"]
+"insert_invoices.py" = ["T201"]
+# Same reasoning: the hook reports findings on stdout for pre-commit to display.
+"scripts/*.py" = ["T201"]
+# Database setup utility: a command-line script that reports progress on stdout.
+"db/*.py" = ["T201"]
+# Database audit tooling: command-line scripts that report progress on stdout.
+"docs/technical-audit/**/scripts/*.py" = ["T201"]
+# Its probe table holds one SQL statement per string literal; wrapping them would
+# make the statements harder to read and compare, for no gain.
+"docs/technical-audit/database-audit/01-requests/scripts/run_constraint_probe.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Quiet by default; -v when a failure needs reading.
+addopts = "-q --strict-markers"
+# The suite needs a real PostgreSQL built by the migrations, so it skips
+# loudly rather than silently when TEST_DATABASE_URL is unset. See
+# tests/conftest.py.
+filterwarnings = [
+    "ignore::DeprecationWarning:passlib",
+]

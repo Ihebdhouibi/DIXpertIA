@@ -1,0 +1,90 @@
+# Run once after cloning:
+#
+#     pip install -r requirements-dev.txt
+#     pre-commit install
+#
+# Hooks then run against staged files on every `git commit`. To sweep the whole
+# tree: `pre-commit run --all-files`.
+#
+# Note that hooks live in .git/, which is not cloned, and `git commit --no-verify`
+# bypasses them. The GitHub Actions workflow in .github/workflows/lint.yml runs
+# the same checks on every push and pull request, and that is what actually holds
+# the line.
+
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        # Configuration lives in pyproject.toml under [tool.ruff].
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+        # Precedent: e9412de was committed purely to remove conflict markers
+        # that had been merged into PayslipsView.tsx.
+
+      # These two rewrite files. They are scoped away from generated and data
+      # files so they cannot churn content nobody edits by hand. The whole tree
+      # was swept in #51, so `pre-commit run --all-files` is expected to pass;
+      # the hygiene job in .github/workflows/lint.yml enforces it on every push.
+      - id: end-of-file-fixer
+        exclude: &generated ^(db\.json|package-lock\.json|docs/|public/|dist/|design/)
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: *generated
+
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        exclude: *generated
+      - id: check-yaml
+      - id: check-json
+        exclude: ^(tsconfig\.json|\.vscode/|db\.json)
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: check-no-emoji
+        name: no emoji in python source
+        entry: python scripts/check_no_emoji.py
+        language: system
+        types: [python]
+        exclude: ^(node_modules|dist|\.venv)/
+        # Python only, deliberately. The failure this prevents is
+        # UnicodeEncodeError on a cp1252 stdout stream, which is a Python/Windows
+        # problem - emoji in .tsx render correctly in a browser and are a design
+        # question, not a portability one. The 9 emoji currently in src/ are
+        # tracked in #33 and will mostly be replaced by lucide-react icons during
+        # the v2 rebrand.
+        #
+        # Accented Latin (the French API messages) is deliberately permitted.
+
+      - id: check-no-raw-colors
+        name: no raw colours in frontend source
+        entry: python scripts/check_no_raw_colors.py
+        language: system
+        types_or: [ts, tsx, css]
+        files: ^src/
+        exclude: ^src/index\.css$
+        # Colours come from the token layer in src/index.css so they follow the
+        # brand and switch with the dark theme (#23, #24, #80). This rejects hex
+        # and rgb() literals, raw Tailwind palette classes and bg/text-white in
+        # src/ (#25). Scrims and the unthemed public homepage are allowed; any
+        # other exception needs a `raw-color-ok: <reason>` marker.
+
+      - id: check-text-sizes
+        name: no undeclared text-* or animate-* classes in frontend source
+        entry: python scripts/check_text_sizes.py
+        language: system
+        files: ^src/.*\.(ts|tsx|css)$
+        pass_filenames: false
+        # Tailwind silently generates nothing for an unknown class: text-h1 and
+        # friends were used for months before being declared, so every title
+        # rendered at body size (#122). Runs over all of src/ whenever a source
+        # file or src/index.css changes, so removing a token fails too.

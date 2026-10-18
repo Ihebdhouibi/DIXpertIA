@@ -1,5 +1,19 @@
+/**
+ * The API contract, as the UI sees it.
+ *
+ * These mirror the response schemas in `app/schemas/api.py`. They are not the
+ * database columns: the backend translates French, snake_case columns into this
+ * English, camelCase shape at the edge (#37), so a column rename never reaches
+ * the frontend and the UI never has to know that `statut` and
+ * `processing_status` are different things.
+ *
+ * Anything added here must exist in a response schema. Before #65 these types
+ * described mock data instead, and drifted far enough that `Payslip` had no
+ * link to an employee and `Invoice.amount` had no VAT.
+ */
 export type UserRole = 'employee' | 'admin' | 'accountant';
 
+/** A login account. Mirrors UserOut; never carries a password hash or a reset token. */
 export interface User {
   id: string;
   firstName: string;
@@ -8,68 +22,126 @@ export interface User {
   avatarUrl?: string;
   role: UserRole;
   department?: string;
-  isActive: boolean;      
-  isVerified: boolean;  
+  isActive: boolean;
+  isVerified: boolean;
   createdAt: string;
-  resetToken?: string;   
-  resetTokenExpiry?: string; 
+  /** The account's language (#135): its e-mails, notifications and default UI language. */
+  locale?: 'fr' | 'en';
+}
+
+/**
+ * A person employed by the company. Separate from their login account since
+ * #60, so someone can be offboarded without taking their payroll history with
+ * them. Mirrors EmployeeOut, which joins the two back together for display.
+ */
+export interface Employee {
+  id: number;
+  userId: string;
+  name: string;
+  email: string;
+  jobTitle?: string;
+  role: UserRole;
+  hiredOn: string;
+  employmentStatus: 'active' | 'on_leave' | 'terminated';
+  annualEntitlementDays: number;
 }
 
 export interface Payslip {
   id: string;
+  employeeId?: number;
+  /** Whose payslip it is (#144); empty when the record has no account. */
+  employeeName: string;
   period: string;
   grossPay: number;
   netPay: number;
-  issuedOn: string;
+  issuedOn?: string;
   pdfUrl?: string;
 }
 
 export interface LeaveRequest {
   id: string;
-  employeeId: string;
+  employeeId?: number;
   employeeName: string;
-  department: string;
+  jobTitle?: string;
   type: 'Annual Leave' | 'Sick Leave' | 'Personal Day' | 'Unpaid Leave';
+  /** A formatted range for display; startDate/endDate are the real values. */
   dates: string;
+  startDate: string;
+  endDate: string;
   duration: number;
   status: 'Approved' | 'Pending' | 'Rejected';
   reason?: string;
   rejectionReason?: string;
 }
 
-export interface TeamMember {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: string;
-  status: 'Active' | 'Inactive';
-  avatarUrl?: string;
-  initials?: string;
+/** A company we invoice. Mirrors ClientOut. */
+export interface Client {
+  id: number;
+  nom: string;
+  email?: string;
+  telephone?: string;
+  adresse?: string;
+  /** The language this client's invoices print in (#135, #192). */
+  locale?: 'fr' | 'en';
+}
+
+export interface InvoiceItem {
+  description: string;
+  qty: number;
+  price: number;
+  total: number;
+  /** VAT rate in percent (#125). */
+  vatRate: number;
+}
+
+export interface InvoiceReview {
+  action: 'submitted' | 'approved' | 'rejected';
+  actor: string;
+  comment: string;
+  /** ISO timestamp. */
+  at: string;
 }
 
 export interface Invoice {
   id: string;
-  client: string;
-  clientInitials: string;
-  amount: number;
+  /** Always ours: FA-YYYY-NNNN outgoing, FF-YYYY-NNNN incoming (#38, #40). */
+  /** The legal number; null for an outgoing draft until the accountant approves it (#118). */
+  numero: string | null;
+  /** What to show: the number, or BR- and the id while it is a draft (#118). */
+  reference: string;
+  direction: 'outgoing' | 'incoming';
+  /** The client we billed, or the supplier who billed us. */
+  counterparty: string;
+  counterpartyInitials: string;
+  /** Their contact details as stored; '' when not given (#127). */
+  counterpartyEmail?: string;
+  counterpartyAddress?: string;
+  /** The supplier's own number, on an incoming invoice only. */
+  supplierReference?: string | null;
+  amountHT: number;
+  amountTTC: number;
   dateIssued: string;
   dueDate: string;
-  status: 'Draft' | 'Sent' | 'Paid' | 'Overdue';
-  items: {
-    description: string;
-    qty: number;
-    price: number;
-    total: number;
-  }[];
-}
-export interface Project {
-  id: string;
-  name: string;
-  client: string;
-  description?: string;
-  status: 'Active' | 'In Progress' | 'Completed' | 'On Hold';
-  deadline: string;
-  teamMembers: string[];
-  createdAt: string;
+  /** The due date as YYYY-MM-DD, for a date input; `dueDate` is for display. */
+  dueDateIso?: string | null;
+  /** The issue date as YYYY-MM-DD: the earliest a payment can be dated (#126). */
+  dateIssuedIso?: string | null;
+  /** Set once paid (#126), for display. */
+  paidOn?: string | null;
+  /** Set once cancelled (#126): when (ISO), and the admin's reason. */
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+  /** The commercial state the counterparty sees. */
+  status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
+  /**
+   * The accountant's workflow state (#41). A separate axis from `status`: an
+   * invoice is routinely Paid and Pending at once - the client has paid,
+   * nobody has booked it yet.
+   */
+  processingStatus: 'Pending' | 'Processed' | 'Completed' | 'Archived';
+  /** The accountant's verification before sending (#118) - a third axis. */
+  reviewStatus: 'Not submitted' | 'Submitted' | 'Approved' | 'Rejected';
+  /** Submissions and decisions, oldest first; a rejection carries its comment. */
+  reviews: InvoiceReview[];
+  items: InvoiceItem[];
 }

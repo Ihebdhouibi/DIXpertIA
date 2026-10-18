@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
-import { User, Mail, Shield, Bell, Globe, Moon, Sun, LogOut, Save, Key } from 'lucide-react';
+import { User, Mail, Shield, Bell, Globe, Moon, Sun, Monitor, LogOut, Save, Key } from 'lucide-react';
 import { User as UserType } from '../types';
+import { ThemePreference, setThemePreference, useThemePreference } from '../theme';
+import Button from './ui/Button';
+import { Field, Input, Select } from './ui/Field';
+import { chooseLocale, useLocale, useT, type MessageKey } from '../i18n';
+import { ROLE_LABEL } from '../navigation';
+
+const THEME_OPTIONS: { value: ThemePreference; label: MessageKey; icon: typeof Sun }[] = [
+  { value: 'system', label: 'common.settings.theme.system', icon: Monitor },
+  { value: 'light', label: 'common.settings.theme.light', icon: Sun },
+  { value: 'dark', label: 'common.settings.theme.dark', icon: Moon },
+];
 
 interface SettingsViewProps {
   user: UserType;
@@ -8,29 +19,20 @@ interface SettingsViewProps {
 }
 
 export default function SettingsView({ user, onLogout }: SettingsViewProps) {
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('dixpertia_darkmode');
-    return saved ? JSON.parse(saved) : false;
-  });
+  const t = useT();
+  const theme = useThemePreference();
 
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
-  const [language, setLanguage] = useState('en');
-
-  const toggleDarkMode = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    localStorage.setItem('dixpertia_darkmode', JSON.stringify(newMode));
-    // Apply dark mode to document (if you have a dark theme)
-    document.documentElement.classList.toggle('dark', newMode);
-  };
+  // The same choice as the FR / EN toggle; App saves it on the account (#135).
+  const locale = useLocale();
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in max-w-4xl">
       <div>
-        <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">Settings</h1>
+        <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{t('common.settings.title')}</h1>
         <p className="text-body-lg text-on-surface-variant mt-1">
-          Manage your profile, preferences, and account settings.
+          {t('common.settings.subtitle')}
         </p>
       </div>
 
@@ -40,133 +42,140 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
         {/* Main content */}
         <div className="lg:col-span-3 space-y-6">
           {/* Profile Card */}
-          <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-on-surface mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />
-              Profile
+              {t('common.settings.profile')}
             </h2>
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center text-2xl font-bold">
+              <div className="w-16 h-16 rounded-full bg-primary text-on-primary flex items-center justify-center text-2xl font-bold">
                 {user.firstName[0]}{user.lastName[0]}
               </div>
               <div>
                 <p className="text-body-lg font-bold text-on-surface">{user.firstName} {user.lastName}</p>
                 <p className="text-body-sm text-on-surface-variant">{user.email}</p>
-                <p className="text-caption font-semibold text-primary uppercase">{user.role}</p>
+                <p className="text-caption font-semibold text-primary uppercase">{t(ROLE_LABEL[user.role])}</p>
               </div>
             </div>
           </div>
 
           {/* Appearance */}
-          <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-on-surface mb-4 flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
-              Appearance
+              {t('common.settings.appearance')}
             </h2>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <p className="text-body-sm font-semibold text-on-surface">Dark Mode</p>
-                <p className="text-caption text-on-surface-variant">Toggle dark theme (experimental)</p>
+                <p id="theme-label" className="text-body-sm font-semibold text-on-surface">{t('common.settings.theme')}</p>
+                <p className="text-caption text-on-surface-variant">
+                  {t('common.settings.themeHint')}
+                </p>
               </div>
-              <button
-                onClick={toggleDarkMode}
-                className={`relative w-12 h-6 rounded-full transition-colors ${darkMode ? 'bg-primary' : 'bg-outline-variant'}`}
+              <div
+                role="radiogroup"
+                aria-labelledby="theme-label"
+                className="inline-flex p-1 rounded-lg bg-surface-container border border-outline-variant"
               >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                    darkMode ? 'translate-x-6' : ''
-                  }`}
-                />
-              </button>
+                {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+                  const selected = theme === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setThemePreference(value)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-body-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
+                        selected
+                          ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" aria-hidden="true" />
+                      {t(label)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           {/* Notifications */}
-          <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-on-surface mb-4 flex items-center gap-2">
               <Bell className="w-5 h-5 text-primary" />
-              Notification Preferences
+              {t('common.settings.notificationPreferences')}
             </h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-body-sm font-medium text-on-surface">Email Notifications</span>
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
+                <span className="text-body-sm font-medium text-on-surface">{t('common.settings.emailNotifications')}</span>
                 <input
                   type="checkbox"
                   checked={emailNotifications}
                   onChange={() => setEmailNotifications(!emailNotifications)}
-                  className="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary"
+                  className="w-4 h-4 accent-primary cursor-pointer"
                 />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-body-sm font-medium text-on-surface">Push Notifications</span>
+              </label>
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
+                <span className="text-body-sm font-medium text-on-surface">{t('common.settings.pushNotifications')}</span>
                 <input
                   type="checkbox"
                   checked={pushNotifications}
                   onChange={() => setPushNotifications(!pushNotifications)}
-                  className="w-4 h-4 text-primary rounded border-outline-variant focus:ring-primary"
+                  className="w-4 h-4 accent-primary cursor-pointer"
                 />
-              </div>
+              </label>
             </div>
           </div>
 
           {/* Language */}
-          <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-on-surface mb-4 flex items-center gap-2">
               <Globe className="w-5 h-5 text-primary" />
-              Language
+              {t('common.language')}
             </h2>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full md:w-48 px-3 py-2 border border-outline-variant rounded-lg bg-surface text-body-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-            </select>
+            <Field label={t('common.settings.interfaceLanguage')} className="md:w-56">
+              {({ id }) => (
+                <Select id={id} value={locale} onChange={(e) => chooseLocale(e.target.value === 'en' ? 'en' : 'fr')}>
+                  <option value="fr" lang="fr">Français</option>
+                  <option value="en" lang="en">English</option>
+                </Select>
+              )}
+            </Field>
           </div>
 
           {/* Change Password */}
-          <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm p-6">
             <h2 className="text-body-lg font-bold text-on-surface mb-4 flex items-center gap-2">
               <Key className="w-5 h-5 text-primary" />
-              Change Password
+              {t('common.settings.changePassword')}
             </h2>
-            <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
-              <input
-                type="password"
-                placeholder="Current password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <input
-                type="password"
-                placeholder="New password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                className="w-full px-3 py-2 border border-outline-variant rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-body-sm"
-              />
-              <button
-                type="submit"
-                className="bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary/95 transition shadow-sm flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Update Password
-              </button>
+            <form className="flex flex-col gap-4 md:max-w-md" onSubmit={(e) => e.preventDefault()}>
+              {/* Placeholders were the only labels; each field now has a real one. */}
+              <Field label={t('common.settings.currentPassword')}>
+                {({ id }) => <Input id={id} type="password" autoComplete="current-password" />}
+              </Field>
+              <Field label={t('common.settings.newPassword')}>
+                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+              </Field>
+              <Field label={t('common.settings.confirmNewPassword')}>
+                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+              </Field>
+              <Button type="submit" className="self-start">
+                <Save className="w-4 h-4" aria-hidden="true" />
+                {t('common.settings.updatePassword')}
+              </Button>
             </form>
           </div>
 
           {/* Danger Zone */}
-          <div className="bg-white rounded-xl border border-error/20 shadow-sm p-6">
-            <h2 className="text-body-lg font-bold text-error mb-4">Danger Zone</h2>
-            <button
-              onClick={onLogout}
-              className="bg-error hover:bg-error/90 text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
+          <div className="bg-surface-container-lowest rounded-xl border border-error/20 shadow-sm p-6">
+            <h2 className="text-body-lg font-bold text-error mb-4">{t('common.settings.dangerZone')}</h2>
+            <Button variant="danger" onClick={onLogout}>
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+              {t('common.signOut')}
+            </Button>
           </div>
         </div>
       </div>

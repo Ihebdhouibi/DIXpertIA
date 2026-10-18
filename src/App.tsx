@@ -1,37 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { User, UserRole, Payslip, LeaveRequest, TeamMember, Invoice, Project } from './types';
-import {
-  initialPayslips,
-  initialLeaveRequests,
-  initialTeamMembers,
-  initialInvoices,
-  initialProjects
-} from './data';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Client, Employee, LeaveRequest, Payslip, User } from './types';
+import * as api from './api';
 import Login from './components/Login';
 import Homepage from './components/Homepage';
+import { ThemeScope } from './theme';
+import { getLocale, hasChosenLocale, setAccountLocale, t as translateNow, useLocale, useT } from './i18n';
 import Sidebar from './components/Sidebar';
+import AppHeader from './components/AppHeader';
+import { DataStatusContext } from './dataStatus';
+import { useToast } from './components/ui/feedback';
 import PayslipsView from './components/PayslipsView';
 import LeaveRequestsView from './components/LeaveRequestsView';
 import TeamView from './components/TeamView';
 import InvoicesView from './components/InvoicesView';
-import ProjectsView from './components/ProjectsView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
+import EnquiriesView from './components/EnquiriesView';
+import ClientsView from './components/ClientsView';
+import SkipLink from './components/ui/SkipLink';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
 import ForgotPassword from './components/ForgotPassword';   // NEW
 import ResetPassword from './components/ResetPassword';     // NEW
-import { 
-  Bell, 
-  Menu, 
-  HelpCircle, 
-  AlertCircle,
-  CheckCircle,
-  X,
-  User as UserIcon,
-  Settings,
-  LogOut
-} from 'lucide-react';
+import { HelpCircle, AlertCircle } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -40,7 +31,6 @@ interface Notification {
   read: boolean;
   timestamp: number;
   link?: string;
-  targetRole?: 'admin' | 'employee';
 }
 
 interface AppUser extends User {
@@ -51,370 +41,287 @@ interface AppUser extends User {
 
 export default function App() {
   // --- State ---
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    const saved = localStorage.getItem('dixpertia_user');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        ...parsed,
-        isActive: parsed.isActive !== undefined ? parsed.isActive : true,
-        isVerified: parsed.isVerified !== undefined ? parsed.isVerified : true,
-        createdAt: parsed.createdAt || new Date().toISOString()
-      };
-    }
-    return null;
-  });
+  // Nothing is seeded from a fixture and nothing is read back from
+  // localStorage: every entity below is loaded from the API once there is a
+  // signed-in user, and reloaded after any change (#65). Business data now
+  // lives in one place - the database - so what the admin creates the
+  // accountant sees, and clearing the browser loses nothing.
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  // Read here so the whole tree re-renders when the language changes (#135):
+  // components that only format numbers or dates have no hook of their own.
+  const locale = useLocale();
+  const t = useT();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [payslips, setPayslips] = useState<Payslip[]>(() => {
-    const saved = localStorage.getItem('dixpertia_payslips');
-    return saved ? JSON.parse(saved) : initialPayslips;
-  });
-
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(() => {
-    const saved = localStorage.getItem('dixpertia_leave_requests');
-    return saved ? JSON.parse(saved) : initialLeaveRequests;
-  });
-
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    const saved = localStorage.getItem('dixpertia_team_members');
-    return saved ? JSON.parse(saved) : initialTeamMembers;
-  });
-
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('dixpertia_invoices');
-    return saved ? JSON.parse(saved) : initialInvoices;
-  });
-
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('dixpertia_projects');
-    return saved ? JSON.parse(saved) : initialProjects;
-  });
-
-  const [users, setUsers] = useState<AppUser[]>(() => {
-    const saved = localStorage.getItem('dixpertia_users');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [payslips, setPayslips] = useState<Payslip[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  // The dashboard's figures, computed by the server (#120). They replaced a
+  // list of at most 200 invoices the browser added up itself.
+  const [summary, setSummary] = useState<api.DashboardSummary | null>(null);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [showNotificationList, setShowNotificationList] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [showHomepage, setShowHomepage] = useState(true);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
-  const [resetToken, setResetToken] = useState<string | null>(null);    // NEW
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  // A reset link carries ?token=, an activation link ?activate= (#62). Both
+  // open the same "choose a password" page, against different endpoints.
+  const [linkMode, setLinkMode] = useState<'reset' | 'activate'>('reset');
 
-  // --- Detect reset token from URL ---
+  // --- Detect a reset or activation link in the URL ---
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const activation = params.get('activate');
+    const token = activation ?? params.get('token');
     if (token) {
+      setLinkMode(activation ? 'activate' : 'reset');
       setResetToken(token);
       setShowForgotPassword(false);
     }
   }, []);
 
-  // --- Notifications state ---
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('dixpertia_notifications');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setNotificationCount(parsed.filter((n: Notification) => !n.read).length);
-      return parsed;
+  // --- Notifications (#116) ---
+  // Kept by the server, per user, and written on workflow events - an invoice
+  // to verify, a rejection, an approval - so they reach the person concerned
+  // and survive a reload or another device. They used to be made in this
+  // browser and lived only in the session. Reloaded on sign-in, every minute,
+  // and when the window regains focus; every action goes through the API and
+  // reloads, so the bell and the page always show the server's state.
+  const toast = useToast();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const page = await api.notifications.list();
+      setNotifications(page.rows.map((n) => ({ ...n, link: n.link ?? undefined })));
+      setNotificationCount(page.unread);
+    } catch {
+      // A failed refresh keeps what the bell already shows; the next one retries.
     }
-    return [];
-  });
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('dixpertia_notifications', JSON.stringify(notifications));
-    setNotificationCount(notifications.filter(n => !n.read).length);
-  }, [notifications]);
-
-  const addNotification = (
-    message: string,
-    type: Notification['type'] = 'info',
-    link?: string,
-    targetRole?: 'admin' | 'employee'
-  ) => {
-    const newNotif: Notification = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      message,
-      type,
-      read: false,
-      timestamp: Date.now(),
-      link,
-      targetRole,
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+  const notificationAction = (action: () => Promise<unknown>) => {
+    action()
+      .catch((error) => toast(error instanceof Error ? error.message : t('common.couldNotUpdateNotifications'), 'error'))
+      .finally(loadNotifications);
   };
 
-  // --- Persist state ---
+  // --- Loading everything from the API ---
+
+  const refresh = useCallback(async (user: AppUser) => {
+    // Each call is scoped by the server: an employee's request returns their
+    // own payslips and leave, an admin's returns everyone's. The row-level
+    // security policies decide that, not this code, so there is no role check
+    // here to drift out of step.
+    const isPrivileged = user.role === 'admin' || user.role === 'accountant';
+    setLoading(true);
+    const results = await Promise.allSettled([
+      api.payslips.list(),
+      api.leaveRequests.list(),
+      api.employees.list(),
+      api.dashboard.summary(),
+      user.role === 'admin' ? api.users.list() : Promise.resolve([]),
+      isPrivileged ? api.clients.list() : Promise.resolve([]),
+    ]);
+
+    const [p, l, e, i, u, c] = results;
+    if (p.status === 'fulfilled') setPayslips(p.value);
+    if (l.status === 'fulfilled') setLeaveRequests(l.value);
+    if (e.status === 'fulfilled') setEmployees(e.value);
+    if (i.status === 'fulfilled') setSummary(i.value);
+    if (u.status === 'fulfilled') setUsers(u.value as AppUser[]);
+    if (c.status === 'fulfilled') setClients(c.value as Client[]);
+
+    // allSettled rather than all: one failing list should not blank the other
+    // four. The first real failure is surfaced, the rest are left to the next
+    // refresh.
+    const failed = results.find(r => r.status === 'rejected');
+    setLoadError(failed ? (failed as PromiseRejectedResult).reason?.message ?? translateNow('common.couldNotLoad') : null);
+    setLoading(false);
+  }, []);
+
+  // Restore the session from the token alone. The user is never read from
+  // localStorage: the client would then be deciding its own role.
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('dixpertia_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('dixpertia_user');
+    let cancelled = false;
+    (async () => {
+      if (!api.getToken()) {
+        setSessionChecked(true);
+        return;
+      }
+      try {
+        const me = await api.auth.me();
+        if (cancelled) return;
+        adoptAccountLocale(me);
+        setCurrentUser(me);
+        setShowHomepage(false);
+        await refresh(me);
+      } catch {
+        // An expired or invalid token: fall back to the public site.
+        api.setToken(null);
+      } finally {
+        if (!cancelled) setSessionChecked(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refresh]);
+
+  // Send the user back to the public site when the API rejects the token.
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => {
+      setCurrentUser(null);
+      setShowHomepage(true);
+    });
+  }, []);
+
+  // --- Language (#135) ---
+  // On sign-in, a language chosen in this browser wins and is saved on the
+  // account; otherwise the account's own language applies.
+  function adoptAccountLocale(user: User) {
+    if (hasChosenLocale() && user.locale !== getLocale()) {
+      api.auth.setLocale(getLocale()).catch(() => {
+        // Not saved: the next toggle or sign-in tries again.
+      });
     }
-  }, [currentUser]);
+    setAccountLocale(user.locale);
+  }
 
+  // The toggle while signed in: save the choice on the account, so e-mails and
+  // other devices follow, and reload what the server wrote in the old
+  // language - dates, notifications, error messages.
+  const firstLocale = useRef(true);
   useEffect(() => {
-    localStorage.setItem('dixpertia_payslips', JSON.stringify(payslips));
-  }, [payslips]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_leave_requests', JSON.stringify(leaveRequests));
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_team_members', JSON.stringify(teamMembers));
-  }, [teamMembers]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_invoices', JSON.stringify(invoices));
-  }, [invoices]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_projects', JSON.stringify(projects));
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('dixpertia_users', JSON.stringify(users));
-  }, [users]);
+    if (firstLocale.current) {
+      firstLocale.current = false;
+      return;
+    }
+    if (!currentUser || !hasChosenLocale()) return;
+    if (currentUser.locale !== locale) {
+      api.auth.setLocale(locale)
+        .then((saved) => setCurrentUser((user) => (user ? { ...user, locale: saved.locale } : user)))
+        .catch(() => {
+          // Kept in this browser; saved on the account at the next sign-in.
+        });
+    }
+    void refresh(currentUser);
+    void loadNotifications();
+    // Only a change of language triggers this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   // --- Handlers with real API calls ---
 
-  const handleLogin = async (role: UserRole, email: string, firstName: string, lastName: string, password?: string) => {
+  useEffect(() => {
+    if (!currentUser) return;
+    void loadNotifications();
+    const timer = window.setInterval(loadNotifications, 60_000);
+    window.addEventListener('focus', loadNotifications);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', loadNotifications);
+    };
+  }, [currentUser, loadNotifications]);
+
+  // Authentication goes through POST /api/login only. The role, and every other
+  // user attribute, comes from the server's response - never from the client.
+  // Returns the error to show in the form, or null: a failed sign-in used to be
+  // added to the in-app notifications, which are not on the sign-in screen, so
+  // a wrong password showed nothing at all (#116).
+  const handleLogin = async (email: string, password: string): Promise<string | null> => {
     try {
-      if (password) {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          addNotification(`Login failed: ${error.detail || 'Invalid credentials'}`, 'error');
-          return;
-        }
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        const user = data.user;
-        const appUser: AppUser = {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          department: user.department || 'Operations',
-          avatarUrl: user.avatarUrl || undefined,
-          isActive: user.isActive,
-          isVerified: user.isVerified,
-          createdAt: user.createdAt || new Date().toISOString()
-        };
-        setCurrentUser(appUser);
-        setActiveTab('dashboard');
-        setShowHomepage(false);
-        setShowAuth(false);
-        setShowLogin(false);
-        addNotification(`Welcome back, ${appUser.firstName}!`, 'success');
-        return;
-      }
-      // Fallback mock (if no password – for testing)
-      const newUser: AppUser = {
-        id: role === 'admin' ? 'ADMIN-01' : 'EMP-102',
-        firstName,
-        lastName,
-        email,
-        role,
-        department: role === 'admin' ? 'Human Resources' : 'Engineering',
-        avatarUrl: role === 'admin' 
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop'
-          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-        isActive: true,
-        isVerified: true,
-        createdAt: new Date().toISOString()
-      };
-      localStorage.setItem('token', 'mock-admin-token');
-      setCurrentUser(newUser);
+      const data = await api.auth.login(email, password);
+      api.setToken(data.access_token);
+      const appUser = data.user as AppUser;
+      adoptAccountLocale(appUser);
+      setCurrentUser(appUser);
       setActiveTab('dashboard');
       setShowHomepage(false);
-      setShowAuth(false);
       setShowLogin(false);
+      await refresh(appUser);
+      return null;
     } catch (error) {
-      addNotification('Network error during login', 'error');
+      return error instanceof api.ApiError ? error.message : t('auth.networkError');
     }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('dixpertia_user');
-    localStorage.removeItem('token');
+    api.setToken(null);
+    setAccountLocale(null);
+    // Business data is dropped with the session rather than left in memory for
+    // whoever signs in next on this browser.
+    setPayslips([]);
+    setLeaveRequests([]);
+    setEmployees([]);
+    setSummary(null);
+    setUsers([]);
+    setClients([]);
+    setNotifications([]);
+    setNotificationCount(0);
     setShowHomepage(true);
-    setShowUserDropdown(false);
     setShowLogin(false);
   };
 
-  const handleToggleRole = () => {
-    if (!currentUser) return;
-    const toggledRole: UserRole = currentUser.role === 'admin' ? 'employee' : 'admin';
-    const updatedUser: AppUser = {
-      ...currentUser,
-      role: toggledRole,
-      id: toggledRole === 'admin' ? 'ADMIN-01' : 'EMP-102',
-      firstName: toggledRole === 'admin' ? 'David' : 'John',
-      lastName: toggledRole === 'admin' ? 'Admin' : 'Doe',
-      department: toggledRole === 'admin' ? 'Human Resources' : 'Engineering',
-      avatarUrl: toggledRole === 'admin'
-        ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
-      isActive: true,
-      isVerified: true,
-      createdAt: currentUser.createdAt || new Date().toISOString()
-    };
-    setCurrentUser(updatedUser);
-    setActiveTab('dashboard');
-  };
+  // handleToggleRole is gone (#66). It rewrote the signed-in user's role, name
+  // and id in the browser and re-rendered the admin screens on top of mock
+  // data. The server always refused the admin actions, so nothing could be
+  // done with it - but it showed every employee an admin view of fictional
+  // numbers, which is worse than refusing outright.
 
   // --- Leave handlers ---
-  const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) => {
+  //
+  // Each one calls the API and then reloads from it, rather than editing local
+  // state and hoping the two agree. The server applies the rules - who may
+  // approve, that nobody validates their own request - so the reloaded list is
+  // the truth, including any change someone else made meanwhile.
+
+  const withRefresh = async (action: () => Promise<unknown>, failure: string) => {
     if (!currentUser) return;
-    const req: LeaveRequest = {
-      id: `LR-00${leaveRequests.length + 1}`,
-      employeeId: currentUser.id,
-      employeeName: `${currentUser.firstName} ${currentUser.lastName}`,
-      department: currentUser.department || 'Operations',
-      type: newReq.type || 'Annual Leave',
-      dates: newReq.dates || 'Oct 20, 2024',
-      duration: newReq.duration || 1,
-      status: 'Pending',
-      reason: newReq.reason || ''
-    };
-    setLeaveRequests([req, ...leaveRequests]);
-    addNotification(
-      `New leave request from ${currentUser.firstName} ${currentUser.lastName} (${req.type})`,
-      'warning',
-      'team',
-      'admin'
-    );
-  };
-
-  const handleApproveLeave = (id: string) => {
-    setLeaveRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: 'Approved' as const } : req
-      )
-    );
-    const req = leaveRequests.find(r => r.id === id);
-    if (req && currentUser?.role === 'admin') {
-      addNotification(
-        `Your leave request (${req.type}) has been approved`,
-        'success',
-        undefined,
-        'employee'
-      );
+    try {
+      await action();
+      await refresh(currentUser);
+    } catch (error) {
+      const message = error instanceof api.ApiError ? error.message : failure;
+      toast(message, 'error');
     }
   };
 
-  const handleRejectLeave = (id: string, comment: string) => {
-    setLeaveRequests(prev =>
-      prev.map(req =>
-        req.id === id ? { ...req, status: 'Rejected' as const, rejectionReason: comment } : req
-      )
+  const handleAddLeaveRequest = (newReq: Partial<LeaveRequest>) =>
+    withRefresh(
+      () => api.leaveRequests.create({
+        type: newReq.type ?? 'Annual Leave',
+        startDate: newReq.startDate,
+        endDate: newReq.endDate,
+        reason: newReq.reason ?? '',
+      }),
+      t('common.couldNotSubmitLeave'),
     );
-    const req = leaveRequests.find(r => r.id === id);
-    if (req && currentUser?.role === 'admin') {
-      addNotification(
-        `Your leave request (${req.type}) has been rejected`,
-        'error',
-        undefined,
-        'employee'
-      );
-    }
-  };
 
-  // --- Other handlers ---
-  const handleAddEmployee = (newEmp: Partial<TeamMember>) => {
-    const emp: TeamMember = {
-      id: `TM-00${teamMembers.length + 1}`,
-      firstName: newEmp.firstName || 'Jane',
-      lastName: newEmp.lastName || 'Doe',
-      email: newEmp.email || 'jane.doe@dixpertia.com',
-      role: newEmp.role || 'Contributor',
-      status: 'Active',
-      initials: newEmp.initials || 'JD'
-    };
-    setTeamMembers([emp, ...teamMembers]);
-  };
+  const handleApproveLeave = (id: string) =>
+    withRefresh(() => api.leaveRequests.approve(id), t('common.couldNotApprove'));
 
-  const handleAddInvoice = (newInv: Partial<Invoice>) => {
-    const inv: Invoice = {
-      id: newInv.id || `INV-2024-00${invoices.length + 1}`,
-      client: newInv.client || 'Faux Client',
-      clientInitials: newInv.clientInitials || 'FC',
-      amount: newInv.amount || 1000.00,
-      dateIssued: newInv.dateIssued || 'Oct 20, 2024',
-      dueDate: newInv.dueDate || 'Nov 20, 2024',
-      status: newInv.status || 'Sent',
-      items: newInv.items || []
-    };
-    setInvoices([inv, ...invoices]);
-  };
+  const handleRejectLeave = (id: string, comment: string) =>
+    withRefresh(() => api.leaveRequests.reject(id, comment), t('common.couldNotReject'));
 
-  // --- Project handlers ---
-  const handleAddProject = (project: Partial<Project>) => {
-    const newProject: Project = {
-      id: `PRJ-00${projects.length + 1}`,
-      name: project.name || 'Untitled',
-      client: project.client || 'Unknown',
-      description: project.description || '',
-      status: project.status || 'Active',
-      deadline: project.deadline || new Date().toISOString().split('T')[0],
-      teamMembers: project.teamMembers || [],
-      createdAt: new Date().toISOString(),
-    };
-    setProjects([newProject, ...projects]);
-    addNotification(
-      `New project "${newProject.name}" created`,
-      'success',
-      'projects',
-      'admin'
-    );
-  };
-
-  const handleEditProject = (id: string, updates: Partial<Project>) => {
-    setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
-    const proj = projects.find(p => p.id === id);
-    if (proj) {
-      addNotification(
-        `Project "${proj.name}" updated`,
-        'info',
-        'projects',
-        'admin'
-      );
-    }
-  };
-
-  const handleDeleteProject = (id: string) => {
-    const proj = projects.find(p => p.id === id);
-    setProjects(prev => prev.filter(p => p.id !== id));
-    if (proj) {
-      addNotification(
-        `Project "${proj.name}" deleted`,
-        'error',
-        undefined,
-        'admin'
-      );
-    }
+  // The invoice view creates the invoice itself, so it can keep the form open
+  // on a refusal and send an Idempotency-Key (#128); the app only reloads what
+  // other screens show, such as the dashboard figures.
+  const handleInvoiceCreated = () => {
+    if (currentUser) refresh(currentUser);
   };
 
   // --- Quick actions ---
   const handleQuickAction = (action: string) => {
     switch (action) {
       case 'approve-leaves': setActiveTab('team'); break;
-      case 'create-invoice': setActiveTab('reports'); break;
-      case 'add-project': setActiveTab('projects'); break;
+      case 'create-invoice': setActiveTab('invoices'); break;
       case 'download-payslip': setActiveTab('payslips'); break;
       case 'view-notifications': setActiveTab('notifications'); break;
       default: break;
@@ -423,7 +330,6 @@ export default function App() {
 
   const handleGoHome = () => {
     setShowHomepage(true);
-    setShowUserDropdown(false);
     setShowLogin(false);
   };
 
@@ -432,70 +338,14 @@ export default function App() {
     setShowLogin(false);
   };
 
-  // --- Notification filter ---
-  const visibleNotifications = notifications.filter(n => {
-    if (!n.targetRole) return true;
-    return n.targetRole === currentUser?.role;
-  });
+  // Leave and payroll belong to the employee record, not the login account
+  // (#60), so "mine" means this id. An admin account with no employee record
+  // has no leave of its own, which is correct.
+  const myEmployeeId = employees.find(e => e.userId === currentUser?.id)?.id;
 
-  // --- User management handlers (admin only) – REAL API ---
-  const handleAddUser = async (newUser: Partial<AppUser> & { tempPassword?: string }) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        addNotification('You are not logged in. Please log in again.', 'error');
-        return;
-      }
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          role: newUser.role || 'employee'
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const user: AppUser = {
-          id: data.id,
-          email: data.email,
-          firstName: newUser.firstName!,
-          lastName: newUser.lastName!,
-          role: newUser.role || 'employee',
-          isActive: true,
-          isVerified: false,
-          createdAt: new Date().toISOString(),
-          department: 'Operations',
-          avatarUrl: undefined,
-        };
-        setUsers(prev => [...prev, user]);
-        addNotification(`User ${user.firstName} ${user.lastName} created. Temp password: ${data.tempPassword}`, 'success');
-        console.log(`🔐 Temporary password for ${data.email}: ${data.tempPassword}`);
-      } else {
-        const error = await response.json();
-        addNotification(`Error: ${error.detail || 'Could not create user'}`, 'error');
-      }
-    } catch (error) {
-      addNotification('Network error. Please try again.', 'error');
-    }
-  };
+  // The server returns only the caller's own notifications (#116).
+  const visibleNotifications = notifications;
 
-  const handleEditUser = (id: string, updates: Partial<AppUser>) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
-  };
-
-  const handleDeleteUser = (id: string) => {
-    const user = users.find(u => u.id === id);
-    setUsers(prev => prev.filter(u => u.id !== id));
-    if (user) addNotification(`User ${user.firstName} ${user.lastName} deleted`, 'error');
-  };
-
-  // --- Render content helper ---
   const renderTabContent = () => {
     if (!currentUser) return null;
 
@@ -504,15 +354,12 @@ export default function App() {
         return (
           <DashboardView
             user={currentUser}
-            projects={projects}
-            invoices={invoices}
+            summary={summary}
+            payslips={payslips}
             leaveRequests={leaveRequests}
-            teamMembers={teamMembers}
+            employees={employees}
             notifications={visibleNotifications}
-            onNavigate={(tab: string) => {
-              setActiveTab(tab);
-              setShowNotificationList(false);
-            }}
+            onNavigate={(tab: string) => setActiveTab(tab)}
             onQuickAction={handleQuickAction}
           />
         );
@@ -521,25 +368,15 @@ export default function App() {
         return (
           <NotificationsView
             notifications={visibleNotifications}
-            onMarkRead={(id) => {
-              setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, read: true } : n)
-              );
-            }}
-            onMarkAllRead={() => {
-              setNotifications(prev =>
-                prev.map(n => ({ ...n, read: true }))
-              );
-            }}
-            onClearAll={() => {
-              if (window.confirm('Delete all notifications?')) {
-                setNotifications([]);
-              }
-            }}
-            onNavigate={(link) => {
-              setActiveTab(link);
-              setShowNotificationList(false);
-            }}
+            onMarkRead={(id) => notificationAction(() => api.notifications.read(id))}
+            onMarkAllRead={() => notificationAction(api.notifications.readAll)}
+            // The view asks for confirmation (#106); asking here as well
+            // made "Clear all" prompt twice. Clearing is a soft dismissal.
+            onClearAll={() => notificationAction(api.notifications.dismissAll)}
+            onClearSelected={(ids) =>
+              notificationAction(() => Promise.all(ids.map((id) => api.notifications.dismiss(id))))
+            }
+            onNavigate={(link) => setActiveTab(link)}
             userRole={currentUser.role}
           />
         );
@@ -547,26 +384,39 @@ export default function App() {
       case 'settings':
         return <SettingsView user={currentUser} onLogout={handleLogout} />;
 
+      case 'clients':
+        return currentUser.role === 'admin' || currentUser.role === 'accountant' ? (
+          <ClientsView
+            clients={clients}
+            onChanged={async () => setClients(await api.clients.list())}
+          />
+        ) : null;
+
+      case 'enquiries':
+        return currentUser.role === 'admin' ? <EnquiriesView /> : null;
+
       case 'invoices':
-        return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+        return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
 
       case 'leave-requests':
-        if (currentUser.role !== 'employee' && currentUser.role !== 'accountant') {
+        // Employees only. Hiding the sidebar entry is not enough on its own -
+        // activeTab can be reached by other paths, so the view guards too (#10).
+        if (currentUser.role !== 'employee') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view leave requests.</p>
+              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">{t('common.accessDenied')}</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">{t('common.noPermissionLeave')}</p>
               </div>
             </div>
           );
         }
         return (
           <LeaveRequestsView
-            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)}
+            leaveRequests={leaveRequests.filter(req => req.employeeId === myEmployeeId)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
-            currentUserId={currentUser.id}
+            currentEmployeeId={myEmployeeId}
           />
         );
 
@@ -574,92 +424,67 @@ export default function App() {
         if (currentUser.role !== 'admin' && currentUser.role !== 'accountant') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">You do not have permission to view this page.</p>
+              <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
+                <h2 className="text-h2 font-black text-on-surface">{t('common.accessDenied')}</h2>
+                <p className="text-body-sm text-on-surface-variant mt-2">{t('common.noPermissionPage')}</p>
               </div>
             </div>
           );
         }
-        const isAdmin = currentUser.role === 'admin';
+        // The view creates, edits and deactivates accounts through the API
+        // itself (#62) and asks for a reload once the server has accepted.
         return (
           <UsersView
             users={users}
-            onAddUser={isAdmin ? handleAddUser : undefined}
-            onEditUser={isAdmin ? handleEditUser : undefined}
-            onDeleteUser={isAdmin ? handleDeleteUser : undefined}
             userRole={currentUser.role}
+            currentUserId={currentUser.id}
+            onChanged={currentUser.role === 'admin' ? () => refresh(currentUser) : undefined}
           />
         );
 
       case 'payslips':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return <PayslipsView payslips={payslips} userRole={currentUser.role} />;
-      
+
       case 'reports':
         if (currentUser.role === 'admin') {
-          return <InvoicesView invoices={invoices} onAddInvoice={handleAddInvoice} userRole={currentUser.role} />;
+          return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
         }
         return (
-          <LeaveRequestsView 
-            leaveRequests={leaveRequests.filter(req => req.employeeId === currentUser.id)} 
+          <LeaveRequestsView
+            leaveRequests={leaveRequests.filter(req => req.employeeId === myEmployeeId)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
           />
         );
-      
+
       case 'team':
         return (
           <TeamView
             userRole={currentUser.role}
-            teamMembers={teamMembers}
+            employees={employees}
             leaveRequests={leaveRequests}
-            onAddEmployee={handleAddEmployee}
             onApproveLeave={handleApproveLeave}
             onRejectLeave={handleRejectLeave}
-          />
-        );
-      
-      case 'projects':
-        if (currentUser.role !== 'admin') {
-          return (
-            <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-              <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto">
-                <h2 className="text-h2 font-black text-on-surface">Access Denied</h2>
-                <p className="text-body-sm text-on-surface-variant mt-2">Only administrators can manage projects.</p>
-              </div>
-            </div>
-          );
-        }
-        return (
-          <ProjectsView
-            projects={projects}
-            onAddProject={handleAddProject}
-            onEditProject={handleEditProject}
-            onDeleteProject={handleDeleteProject}
-            userRole={currentUser.role}
-            teamMembers={teamMembers}
           />
         );
 
       default:
         return (
           <div className="flex-1 flex flex-col gap-6 animate-fade-in">
-            <div className="bg-white p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto flex flex-col items-center justify-center gap-4 mt-8">
+            <div className="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant shadow-sm text-center max-w-2xl mx-auto flex flex-col items-center justify-center gap-4 mt-8">
               <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                 <HelpCircle className="w-10 h-10" />
               </div>
-              <h2 className="text-h2 font-black text-on-surface">Module "{activeTab.toUpperCase()}" is being deployed</h2>
-              <p className="text-body-sm text-on-surface-variant leading-relaxed">
-                The interactive module <strong className="text-primary">{activeTab}</strong> is currently in secure deployment testing.
-              </p>
+              <h2 className="text-h2 font-black text-on-surface">{t('common.unknownScreen')}</h2>
+              <p className="text-body-sm text-on-surface-variant leading-relaxed">{t('common.unknownScreenHint')}</p>
               <button
                 onClick={() => setActiveTab('dashboard')}
-                className="bg-primary text-white font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
+                className="bg-primary text-on-primary font-bold text-body-sm px-6 py-2.5 rounded-lg hover:bg-primary/95 transition-all cursor-pointer shadow-sm mt-2"
               >
-                Back to Dashboard
+                {t('common.backToDashboard')}
               </button>
             </div>
           </div>
@@ -669,232 +494,132 @@ export default function App() {
 
   // --- RENDERING LOGIC (NEW ORDER) ---
 
+  // 0. Hold the first paint until the token has been checked.
+  //
+  // Without this a signed-in user sees the public homepage for a moment on
+  // every reload, because the session is restored asynchronously and
+  // showHomepage starts true. A password-reset link is exempt: it carries its
+  // own token in the URL and does not need a session.
+  if (!sessionChecked && !resetToken) {
+    return (
+      <ThemeScope>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 rounded-full border-2 border-outline-variant border-t-primary animate-spin" />
+            <p className="text-body-sm text-on-surface-variant">{t('common.signingIn')}</p>
+          </div>
+        </div>
+      </ThemeScope>
+    );
+  }
+
   // 1. If resetToken is present, show ResetPassword
   if (resetToken) {
     return (
+      <ThemeScope>
       <ResetPassword
         token={resetToken}
+        mode={linkMode}
         onComplete={() => {
           setResetToken(null);
           window.history.replaceState({}, document.title, window.location.pathname);
           setShowLogin(true);
         }}
       />
+      </ThemeScope>
     );
   }
 
   // 2. If showForgotPassword is true, show ForgotPassword
   if (showForgotPassword) {
-    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+    return (
+      <ThemeScope>
+        <ForgotPassword onBack={() => setShowForgotPassword(false)} />
+      </ThemeScope>
+    );
   }
 
   // 3. If showLogin is true, show Login
   if (showLogin) {
     return (
+      <ThemeScope>
       <Login
         onLogin={handleLogin}
         onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
         onForgotPassword={() => setShowForgotPassword(true)}
       />
+      </ThemeScope>
     );
   }
 
-  // 4. If not logged in, show homepage
-  if (!currentUser) {
-    return <Homepage onLoginClick={() => setShowLogin(true)} />;
+  // 4. Public site: always for visitors, and for a signed-in user who went
+  // back to it. Its single "Go to Dashboard" button opens the app when signed
+  // in and the login form otherwise.
+  if (!currentUser || showHomepage) {
+    return (
+      // Themed since #165: the homepage follows the light/dark preference like the app.
+      <ThemeScope>
+        <Homepage onDashboardClick={currentUser ? handleGoToDashboard : () => setShowLogin(true)} />
+      </ThemeScope>
+    );
   }
 
-  // 5. If logged in and showHomepage is true, show homepage with "Go to Dashboard"
-  if (showHomepage) {
-    return <Homepage onLoginClick={() => { setShowLogin(true); setShowHomepage(false); }} />;
-  }
-
-  // 6. Otherwise, show the dashboard
+  // 5. Otherwise, show the dashboard
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
+    <ThemeScope><div className="min-h-screen bg-background flex flex-col md:flex-row text-on-background font-sans">
+      <SkipLink />
       <Sidebar
         currentUser={currentUser}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onLogout={handleLogout}
-        onToggleRole={handleToggleRole}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
         onGoHome={handleGoHome}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-surface-container-lowest border-b border-outline-variant px-6 flex items-center justify-between sticky top-0 z-40 shrink-0">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsOpenMobile(true)}
-              className="p-1.5 hover:bg-surface-container rounded-lg md:hidden text-on-surface-variant transition-colors cursor-pointer"
-              title="Menu"
+        <AppHeader
+          currentUser={currentUser}
+          activeTab={activeTab}
+          notifications={visibleNotifications}
+          unreadCount={notificationCount}
+          onOpenNavigation={() => setIsOpenMobile(true)}
+          onMarkAllRead={() => notificationAction(api.notifications.readAll)}
+          onOpenNotification={(notif) => {
+            if (!notif.read) notificationAction(() => api.notifications.read(notif.id));
+            if (notif.link) setActiveTab(notif.link);
+          }}
+          onOpenSettings={() => setActiveTab('settings')}
+          onLogout={handleLogout}
+        />
+
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto focus:outline-none">
+          {loadError && (
+            <div
+              role="alert"
+              className="mb-4 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger-container px-4 py-3"
             >
-              <Menu className="w-6 h-6" />
-            </button>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-caption font-bold text-outline uppercase tracking-wider">DIXpertIA</span>
-              <span className="text-caption text-outline-variant">/</span>
-              <span className="text-caption font-bold text-primary capitalize">{activeTab}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 relative">
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-              <span className="text-[11px] font-black uppercase text-primary tracking-wider">
-                {currentUser.role === 'admin' ? 'HR Admin' : currentUser.role === 'accountant' ? 'Accountant' : 'Employee'} View
-              </span>
-            </div>
-
-            {/* Notification Bell */}
-            <div className="relative">
+              <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-body-sm font-semibold text-danger">{t('common.someDataNotLoaded')}</p>
+                <p className="text-caption text-on-surface-variant mt-0.5">{loadError}</p>
+              </div>
               <button
-                onClick={() => setShowNotificationList(!showNotificationList)}
-                className="p-1.5 hover:bg-surface-container text-on-surface-variant hover:text-on-surface rounded-full transition-all relative cursor-pointer"
-                title="Notifications"
+                onClick={() => currentUser && refresh(currentUser)}
+                className="text-caption font-bold text-danger hover:underline cursor-pointer shrink-0"
               >
-                <Bell className="w-5 h-5" />
-                {notificationCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-error text-white font-black text-[9px] rounded-full flex items-center justify-center animate-bounce shadow-sm">
-                    {notificationCount}
-                  </span>
-                )}
+                {t('common.retry')}
               </button>
-
-              {showNotificationList && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-2 z-50 animate-scale-up">
-                  <div className="px-4 py-2 border-b border-outline-variant/40 flex justify-between items-center bg-surface">
-                    <span className="font-bold text-caption text-on-surface">Notifications</span>
-                    <div className="flex gap-2">
-                      {visibleNotifications.some(n => !n.read) && (
-                        <button
-                          onClick={() => {
-                            setNotifications(prev =>
-                              prev.map(n =>
-                                !n.targetRole || n.targetRole === currentUser.role
-                                  ? { ...n, read: true }
-                                  : n
-                              )
-                            );
-                          }}
-                          className="text-xs text-secondary hover:underline cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => setShowNotificationList(false)}
-                        className="text-xs text-secondary hover:underline cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-outline-variant/30 max-h-64 overflow-y-auto">
-                    {visibleNotifications.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-xs text-on-surface-variant">
-                        No notifications
-                      </div>
-                    ) : (
-                      visibleNotifications.slice(0, 10).map((notif) => (
-                        <div
-                          key={notif.id}
-                          className={`px-4 py-2.5 hover:bg-surface transition-colors cursor-pointer ${
-                            !notif.read ? 'bg-primary/5' : ''
-                          }`}
-                          onClick={() => {
-                            setNotifications(prev =>
-                              prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
-                            );
-                            if (notif.link) {
-                              setActiveTab(notif.link);
-                              setShowNotificationList(false);
-                            }
-                          }}
-                        >
-                          <div className="flex items-start gap-2">
-                            {notif.type === 'warning' && <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
-                            {notif.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />}
-                            {notif.type === 'error' && <X className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
-                            <div className="flex-1">
-                              <p className="text-xs font-semibold text-on-surface">{notif.message}</p>
-                              <p className="text-[10px] text-outline mt-1">
-                                {new Date(notif.timestamp).toLocaleString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
-
-            {/* User Avatar with Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="w-8 h-8 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center shadow-sm hover:opacity-80 transition cursor-pointer select-none"
-                title="User menu"
-              >
-                {currentUser.firstName[0]}{currentUser.lastName[0]}
-              </button>
-
-              {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-[0_4px_24px_rgba(3,34,77,0.12)] border border-outline-variant/60 py-1 z-50 animate-scale-up">
-                  <div className="px-4 py-2 border-b border-outline-variant/30">
-                    <p className="text-xs font-bold text-on-surface">{currentUser.firstName} {currentUser.lastName}</p>
-                    <p className="text-[10px] text-on-surface-variant">{currentUser.email}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <UserIcon className="w-4 h-4" />
-                    Profile
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
-                  <hr className="border-outline-variant/30 my-1" />
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setShowUserDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-body-sm text-error hover:bg-error-container/30 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
-          {renderTabContent()}
+          )}
+          <DataStatusContext.Provider
+            value={{ loading, error: loadError, retry: () => { if (currentUser) refresh(currentUser); } }}
+          >
+            {renderTabContent()}
+          </DataStatusContext.Provider>
         </main>
       </div>
-    </div>
+    </div></ThemeScope>
   );
 }

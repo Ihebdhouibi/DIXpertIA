@@ -1,0 +1,289 @@
+name: lint
+
+# Why this exists
+# ---------------
+# Pre-commit hooks live in .git/, which is not cloned, and `git commit
+# --no-verify` bypasses them. Branch protection and rulesets return
+# "403 Upgrade to GitHub Pro" on this private repository, so a failing check
+# cannot currently *block* a merge - but it is visible on the pull request, and
+# Actions do run on private repos on the free plan. This workflow is therefore
+# the only enforcement available today. If the plan is upgraded, add these jobs
+# as required status checks on `develop` and `main`.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: python (ruff + emoji)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the changed-file diff below has a base to compare to.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install lint tooling
+        # Only the linters - not requirements.txt. This job does not import the
+        # application, so it does not need psycopg2, reportlab or a database.
+        run: pip install ruff==0.6.9
+
+      - name: ruff (changed files must be clean)
+        run: ruff check --output-format=github .
+
+      - name: no emoji in python source
+        run: |
+          # Scan tracked Python files, excluding generated and vendored trees.
+          mapfile -t files < <(git ls-files '*.py' | grep -Ev '^(alembic/|\.venv/)')
+          if [ ${#files[@]} -eq 0 ]; then echo "no python files"; exit 0; fi
+          python scripts/check_no_emoji.py "${files[@]}"
+
+  tests:
+    name: api tests (pytest)
+    runs-on: ubuntu-latest
+
+    # A real PostgreSQL, not SQLite and not a mock. Most of what this suite
+    # protects lives in the database - row-level security policies, the
+    # triggers carrying the accountant's rules, CHECK constraints - and none
+    # of it exists anywhere else to be tested against.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: dixpertia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The superuser URL. The suite provisions the two least-privileged roles
+      # from it and points the application at the app role, because a
+      # superuser bypasses row-level security and would make every policy test
+      # pass while proving nothing.
+      TEST_DATABASE_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia_test
+      SECRET_KEY: ci-secret-key-at-least-32-characters-long
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the suite
+        # The schema is built by `alembic upgrade head` inside the session
+        # fixture, from an empty schema, so a migration that only works on an
+        # existing database cannot pass here by accident.
+        run: pytest -q
+
+  postgres-config:
+    name: postgres server config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The production server's PostgreSQL settings and pg_hba.conf (#158),
+      # parsed by the same major version: a typo fails here, not at the
+      # server's restart.
+      - name: Parse deploy/postgres with PostgreSQL 17
+        run: docker run --rm -v "$PWD/deploy/postgres:/conf:ro" postgres:17 bash /conf/ci-check.sh
+
+  frontend:
+    name: frontend (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Runtime dependencies only: build tools are not shipped to users. The
+      # baseline was cleaned in #142; a new high or critical finding fails the
+      # job instead of piling up unnoticed.
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  ui-checks:
+    name: ui checks (accessibility + mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The two browser checks (#181): axe-core plus a keyboard pass on every
+    # screen in light and dark (#31), and no screen wider than a 390px phone
+    # (#130). They need the whole app, so this job builds it: a database with
+    # the least-privileged roles, the migrations, realistic data, one account
+    # per role, the API, and the production build of the frontend.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: dixpertia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SUPERUSER_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia
+      SECRET_KEY: ci-secret-key-at-least-32-characters-long
+      REMINDERS_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt playwright==1.48.0
+          python -m playwright install --with-deps chromium
+          npm ci
+
+      - name: Generate throwaway passwords
+        # New for every run and masked in the log: nothing to leak or reuse.
+        run: |
+          for name in APP_PASSWORD OWNER_PASSWORD ADMIN_PASSWORD ACCOUNTANT_PASSWORD EMPLOYEE_PASSWORD; do
+            value=$(openssl rand -hex 16)
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+
+      - name: Provision the database (db/README.md)
+        run: |
+          python db/setup_roles.py --superuser-url "$SUPERUSER_URL" \
+            --app-password "$APP_PASSWORD" --owner-password "$OWNER_PASSWORD" > /dev/null
+          echo "DATABASE_URL=postgresql://dixpertia_app:$APP_PASSWORD@localhost:5432/dixpertia" >> "$GITHUB_ENV"
+          echo "SCHEMA_DATABASE_URL=postgresql://dixpertia_owner:$OWNER_PASSWORD@localhost:5432/dixpertia" >> "$GITHUB_ENV"
+
+      - name: Migrate, grant, seed
+        run: |
+          alembic upgrade head
+          python db/setup_roles.py --superuser-url "$SUPERUSER_URL" \
+            --app-password "$APP_PASSWORD" --owner-password "$OWNER_PASSWORD" > /dev/null
+          python seed_users.py --email admin@ci.dixpertia.tn --password "$ADMIN_PASSWORD" --role admin
+          python seed_users.py --email accountant@ci.dixpertia.tn --password "$ACCOUNTANT_PASSWORD" --role accountant
+          python seed_users.py --email employee@ci.dixpertia.tn --password "$EMPLOYEE_PASSWORD" --role employee
+          # Each account its employee record, as a real one has.
+          python -c "import os, psycopg2; c = psycopg2.connect(os.environ['SUPERUSER_URL']); c.autocommit = True; c.cursor().execute(\"INSERT INTO employees (user_id, job_title, hired_on, annual_entitlement_days) SELECT id, 'Consultant', '2024-01-01', 21 FROM users WHERE email LIKE '%@ci.dixpertia.tn' ON CONFLICT (user_id) DO NOTHING\")"
+
+      - name: Start the API and the built frontend
+        run: |
+          nohup uvicorn main:app --port 8000 > api.log 2>&1 &
+          npm run build
+          # vite preview serves dist/ and proxies /api to the API, as in dev. It
+          # listens on "localhost", which is ::1 on the runner: poll that name.
+          nohup npx vite preview --port 3000 --strictPort > web.log 2>&1 &
+          for _ in $(seq 60); do
+            curl -sf http://127.0.0.1:8000/openapi.json > /dev/null && curl -sf http://localhost:3000/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "The app did not start"; cat api.log web.log; exit 1
+
+      - name: Seed screens with data, through the API
+        # Tables with rows: the sideways scroll #130 fixed only showed with data.
+        run: |
+          python scripts/seed_ui_data.py --api http://127.0.0.1:8000             --admin "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --accountant "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --employee "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Accessibility (axe-core and keyboard, light and dark)
+        run: |
+          python scripts/check_accessibility.py --browser chromium --screenshots ui-failures \
+            --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD" \
+            --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Mobile overflow (390px, light and dark)
+        if: success() || failure()
+        run: |
+          python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures \
+            --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD" \
+            --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Mobile overflow in French (390px, light and dark)
+        # French runs longer than English: a label that fits in one can
+        # overflow in the other (#135).
+        if: success() || failure()
+        run: |
+          python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures --locale fr             --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: Keep the screenshots and logs of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-check-failures
+          path: |
+            ui-failures/
+            api.log
+            web.log
+          retention-days: 7
+
+  hygiene:
+    name: pre-commit hygiene
+    runs-on: ubuntu-latest
+    # Blocking since the whole-tree whitespace sweep of #51: the tree is clean,
+    # so any failure here is a regression introduced by the change under test.
+    # (Before #51 this job ran with continue-on-error and only reported debt.)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install pre-commit
+        run: pip install pre-commit==3.8.0
+
+      - name: Run hooks on files changed by this PR
+        if: github.event_name == 'pull_request'
+        run: |
+          pre-commit run \
+            --from-ref origin/${{ github.base_ref }} \
+            --to-ref HEAD \
+            --show-diff-on-failure
+
+      - name: Run hooks on the whole tree
+        if: github.event_name == 'push'
+        run: pre-commit run --all-files --show-diff-on-failure

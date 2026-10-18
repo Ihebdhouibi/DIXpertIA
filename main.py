@@ -1,25 +1,161 @@
-import os
-import json
-import secrets
-import string
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends
+import asyncio
+import contextlib
+import logging
+from contextlib import asynccontextmanager
+from datetime import date, datetime
+from typing import List, Literal, Optional
+from fastapi import FastAPI, Depends, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
-from jose import JWTError, jwt
-import bcrypt
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import text
+from sqlalchemy.orm import Session, joinedload
+from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
+
+from app.core.config import settings
+from app.core.identity import clear_identity, set_identity
+from app.schemas.api import (
+    ActivationSentOut,
+    EmployeeOut,
+    LoginOut,
+    MessageOut,
+    UserCreatedOut,
+    LeaveRequestCreate,
+    LeaveRequestOut,
+    PayslipOut,
+    UserOut,
+)
+from app.core.database import SessionLocal, get_db
+from app.core.deps import get_current_user, session_identity
+from app.core.security import (
+    burn_password_check,
+    create_access_token,
+    hash_password,
+    password_problem,
+    unusable_password_hash,
+    verify_password,
+)
+# app.models imports every model module, which is what populates SQLAlchemy's
+# registry so relationship("Payslip") and friends can resolve. See its docstring.
+import app.models  # noqa: F401
+from app.models.user import User
+from app.models.leaves import LeaveRequest, LeaveStatus
+from app.models.payroll import Payslip
+from app.models.employee import Employee
+from app.routers import accounting, audit, contact, dashboard, invoicing, notifications
+from app.i18n import ApiError, set_locale, t
+from app.services import accounts, throttle
+from app.services.audit import record_event
+from app.services.email import send_email
+from app.services.reminders import reminder_loop
 
 load_dotenv()
 
-app = FastAPI()
+# Log through the stdlib rather than print(). The previous debug prints carried
+# emoji, which raise UnicodeEncodeError on Windows consoles using cp1252 and
+# turned every login into a 500. Keep all log messages ASCII-only.
+log = logging.getLogger("dixpertia")
 
-# --- CORS (allow frontend) ---
+# --- Authentication by default ---
+# Every route requires a valid access token, except the explicit allow-list
+# below: a route that forgets to declare authentication is closed, not open
+# (#55). Role checks are still declared per route. FastAPI's own documentation
+# routes (/docs, /redoc, /openapi.json) are not API routes and are not affected.
+PUBLIC_PATHS = frozenset({
+    "/api/login",
+    "/api/forgot-password",
+    "/api/reset-password",
+    "/api/activate",
+    # The website's contact form (#98): anonymous, rate limited in the database.
+    "/api/contact",
+})
+_optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
+
+
+async def require_authentication(request: Request, token: Optional[str] = Depends(_optional_bearer)) -> None:
+    """Reject any request to a non-public route that has no valid access token.
+
+    Also publishes the caller's identity for row-level security (#43). The
+    account's state is read through auth_session(), a SECURITY DEFINER
+    function (#76): users is under row-level security, and no identity is set
+    yet at this point, so a plain query would see no row.
+
+    Declared async deliberately. As a sync dependency FastAPI runs this in a
+    worker thread, where ContextVar.set() mutates that worker's copy of the
+    context and the endpoint - dispatched to a different worker - never sees
+    it. Awaited on the event loop, the value is in the context that is copied
+    into the endpoint's worker. Verified: as a sync def, every insert was
+    rejected by the policies because the role arrived as NULL.
+    """
+    clear_identity()
+    # The language of this request's messages (#135): what the UI sends in
+    # Accept-Language, French without one. Set before anything can refuse.
+    set_locale(request.headers.get("accept-language"))
+    if request.url.path in PUBLIC_PATHS:
+        return
+    identity = await run_in_threadpool(_identity_for, token) if token else None
+    if identity is None:
+        raise ApiError(401, "auth.not_authenticated", headers={"WWW-Authenticate": "Bearer"})
+    set_identity(*identity)
+
+
+def _identity_for(token: str) -> Optional[tuple[str, str]]:
+    """(user id, role) if the token may still be used, else None (#62).
+
+    The token's signature alone is not enough any more: the account must be
+    active and activated, and the token issued under its current
+    token_version, so deactivation or a role or password change revokes
+    sessions at once. Checked here, before any route, so a route that never
+    loads the current user is covered as well.
+
+    Its own short session, not the request's: that one must not begin a
+    transaction before the identity is set, or the policies would see none.
+    The role published for row-level security is the account's, not the
+    token's claim.
+    """
+    db = SessionLocal()
+    try:
+        return session_identity(token, db)
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Start the reminder job with the API (#134), and stop it with it."""
+    task = asyncio.create_task(reminder_loop()) if settings.REMINDERS_ENABLED else None
+    yield
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(dependencies=[Depends(require_authentication)], lifespan=lifespan)
+
+
+@app.exception_handler(ApiError)
+async def _api_error(_request: Request, exc: ApiError) -> JSONResponse:
+    """A catalog error (#135): its message in the request's language, and its
+    key in `code`, so the UI and the tests recognise it without parsing text."""
+    return JSONResponse(status_code=exc.status_code, headers=exc.headers,
+                        content={"detail": exc.detail, "code": exc.code})
+
+# NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
+# declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
+# registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a
+# "rh" role and a `User.employee_profile` relationship that this data model does
+# not have. Mounting it needs those reconciled first.
+app.include_router(invoicing.router, prefix="/api")
+app.include_router(accounting.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
+app.include_router(contact.public, prefix="/api")
+app.include_router(contact.admin, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
@@ -28,286 +164,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_FILE = os.path.join(os.getcwd(), 'db.json')
+# --- Authentication helpers ---
+# Hashing, tokens and the "may this token still be used" check live in
+# app.core.security and app.core.deps (#62). main.py kept its own copies of
+# them, so a rule added in one place was missing from the other.
 
-# --- Password hashing (direct bcrypt) ---
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-
-def get_password_hash(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-# --- JWT settings ---
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# --- Email sending (SMTP) ---
-def send_email(to_email: str, subject: str, body: str):
-    try:
-        smtp_host = os.getenv("SMTP_HOST")
-        smtp_port = int(os.getenv("SMTP_PORT", 587))
-        smtp_user = os.getenv("SMTP_USER")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        from_email = os.getenv("SMTP_FROM", "no-reply@dixpertia.com")
-
-        if not smtp_host or not smtp_user or not smtp_password:
-            print("⚠️ SMTP credentials missing. Email not sent.")
-            return False
-
-        msg = MIMEMultipart()
-        msg['From'] = from_email
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.send_message(msg)
-
-        print(f"✅ Email sent to {to_email}")
-        return True
-    except Exception as e:
-        print(f"❌ Email error: {e}")
-        return False
-
-# --- Initial seed data (unchanged) ---
-initial_payslips = [
-  { "id": 'PS-001', "period": 'September 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Sep 30, 2024' },
-  { "id": 'PS-002', "period": 'August 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Aug 31, 2024' },
-  { "id": 'PS-003', "period": 'July 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jul 31, 2024' },
-  { "id": 'PS-004', "period": 'June 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jun 30, 2024' },
-  { "id": 'PS-005', "period": 'May 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'May 31, 2024' },
-  { "id": 'PS-006', "period": 'April 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Apr 30, 2024' },
-  { "id": 'PS-007', "period": 'March 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Mar 31, 2024' },
-  { "id": 'PS-008', "period": 'February 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Feb 29, 2024' },
-  { "id": 'PS-009', "period": 'January 2024', "grossPay": 8450.00, "netPay": 6218.00, "issuedOn": 'Jan 31, 2024' }
-]
-
-initial_leave_requests = [
-  {
-    "id": 'LR-001',
-    "employeeId": 'EMP-01',
-    "employeeName": 'Alice Smith',
-    "department": 'Engineering',
-    "type": 'Annual Leave',
-    "dates": 'Oct 12 - Oct 16, 2024',
-    "duration": 5,
-    "status": 'Approved',
-    "reason": 'Family trip to the mountains'
-  },
-  {
-    "id": 'LR-002',
-    "employeeId": 'EMP-02',
-    "employeeName": 'John Doe',
-    "department": 'Marketing',
-    "type": 'Sick Leave',
-    "dates": 'Sep 01, 2024',
-    "duration": 1,
-    "status": 'Approved',
-    "reason": 'Medical appointment'
-  },
-  {
-    "id": 'LR-003',
-    "employeeId": 'EMP-02',
-    "employeeName": 'John Doe',
-    "department": 'Marketing',
-    "type": 'Personal Day',
-    "dates": 'Nov 20, 2024',
-    "duration": 1,
-    "status": 'Pending',
-    "reason": 'Urgent family matter'
-  }
-]
-
-initial_team_members = [
-  {
-    "id": 'TM-001',
-    "firstName": 'Sarah',
-    "lastName": 'Jenkins',
-    "email": 'sarah.j@dixpertia.com',
-    "role": 'Senior Developer',
-    "status": 'Active',
-    "avatarUrl": 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=150&auto=format&fit=crop'
-  },
-  {
-    "id": 'TM-002',
-    "firstName": 'Marcus',
-    "lastName": 'Rodriguez',
-    "email": 'm.rodriguez@dixpertia.com',
-    "role": 'Project Manager',
-    "status": 'Active',
-    "initials": 'MR'
-  },
-  {
-    "id": 'TM-003',
-    "firstName": 'David',
-    "lastName": 'Chen',
-    "email": 'd.chen@dixpertia.com',
-    "role": 'System Administrator',
-    "status": 'Inactive',
-    "avatarUrl": 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=150&auto=format&fit=crop'
-  },
-  {
-    "id": 'TM-004',
-    "firstName": 'Amina',
-    "lastName": 'Khalid',
-    "email": 'a.khalid@dixpertia.com',
-    "role": 'Security Analyst',
-    "status": 'Active',
-    "initials": 'AK'
-  },
-  {
-    "id": 'TM-005',
-    "firstName": 'John',
-    "lastName": 'Doe',
-    "email": 'john.doe@dixpertia.com',
-    "role": 'Junior Developer',
-    "status": 'Active',
-    "avatarUrl": 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=150&auto=format&fit=crop'
-  },
-  {
-    "id": 'TM-006',
-    "firstName": 'Alice',
-    "lastName": 'Smith',
-    "email": 'alice.smith@dixpertia.com',
-    "role": 'DevOps Engineer',
-    "status": 'Active',
-    "initials": 'AS'
-  }
-]
-
-initial_invoices = [
-  {
-    "id": 'INV-2024-001',
-    "client": 'Acme Corp',
-    "clientInitials": 'AC',
-    "amount": 12450.00,
-    "dateIssued": 'Oct 12, 2024',
-    "dueDate": 'Nov 11, 2024',
-    "status": 'Sent',
-    "items": [
-      { "description": 'Cloud Infrastructure Setup', "qty": 1, "price": 5000.00, "total": 5000.00 },
-      { "description": 'Security Audit Phase 1', "qty": 1, "price": 3450.00, "total": 3450.00 },
-      { "description": 'Enterprise Support (Monthly)', "qty": 2, "price": 2000.00, "total": 4000.00 }
-    ]
-  },
-  {
-    "id": 'INV-2024-002',
-    "client": 'Global Tech',
-    "clientInitials": 'G',
-    "amount": 8200.00,
-    "dateIssued": 'Oct 15, 2024',
-    "dueDate": 'Oct 25, 2024',
-    "status": 'Overdue',
-    "items": [
-      { "description": 'React Frontend Development', "qty": 40, "price": 150.00, "total": 6000.00 },
-      { "description": 'Figma UX Design Consultation', "qty": 10, "price": 220.00, "total": 2200.00 }
-    ]
-  },
-  {
-    "id": 'INV-2024-003',
-    "client": 'Stark Industries',
-    "clientInitials": 'S',
-    "amount": 45000.00,
-    "dateIssued": 'Oct 01, 2024',
-    "dueDate": 'Oct 31, 2024',
-    "status": 'Paid',
-    "items": [
-      { "description": 'AI Logic Model Training & Validation', "qty": 1, "price": 30000.00, "total": 30000.00 },
-      { "description": 'Kubernetes Cluster Provisioning', "qty": 3, "price": 5000.00, "total": 15000.00 }
-    ]
-  },
-  {
-    "id": 'INV-2024-004',
-    "client": 'Wayne Ent.',
-    "clientInitials": 'W',
-    "amount": 3500.00,
-    "dateIssued": '-',
-    "dueDate": '-',
-    "status": 'Draft',
-    "items": [
-      { "description": 'Security Patch Compliance Audit', "qty": 1, "price": 3500.00, "total": 3500.00 }
-    ]
-  }
-]
-
-default_db = {
-  "payslips": initial_payslips,
-  "leaveRequests": initial_leave_requests,
-  "teamMembers": initial_team_members,
-  "invoices": initial_invoices,
-  "users": []
-}
-
-# --- DB helpers ---
-def read_db():
-    try:
-        if not os.path.exists(DB_FILE):
-            with open(DB_FILE, 'w', encoding='utf-8') as f:
-                json.dump(default_db, f, indent=2)
-            return default_db
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error reading DB: {e}")
-        return default_db
-
-def write_db(data):
-    try:
-        with open(DB_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        print(f"Error writing DB: {e}")
-
-# --- JWT helpers ---
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def decode_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    db = read_db()
-    user = next((u for u in db.get('users', []) if u['id'] == payload.get('sub')), None)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != 'admin':
+        raise ApiError(403, "auth.admin_required")
+    return current_user
 
 # --- Pydantic models ---
-class LeaveRequestCreate(BaseModel):
-    employeeId: str
-    employeeName: str
-    department: Optional[str] = 'Operations'
-    type: Optional[str] = 'Annual Leave'
-    dates: Optional[str] = 'Oct 20, 2024'
-    duration: Optional[int] = 1
-    reason: Optional[str] = ''
-
 class RejectLeaveRequest(BaseModel):
     comment: Optional[str] = ''
 
-class TeamMemberCreate(BaseModel):
-    firstName: str
-    lastName: str
-    email: Optional[str] = None
-    role: Optional[str] = 'Contributor'
-    status: Optional[str] = 'Active'
-    initials: Optional[str] = None
-    avatarUrl: Optional[str] = None
+class EmployeeCreate(BaseModel):
+    """An employee record for an existing login account.
+
+    Replaces TeamMemberCreate. team_members duplicated names, e-mail and a
+    free-text role from users with no foreign key, so the two could describe
+    the same person differently (#60). Identity now lives once, on the user.
+    """
+
+    userId: str
+    jobTitle: Optional[str] = None
+    hiredOn: date
+    # No default: contractual days per year is a per-person term (#60).
+    annualEntitlementDays: int = Field(ge=0, le=365)
 
 class InvoiceItem(BaseModel):
     description: str
@@ -325,17 +208,35 @@ class InvoiceCreate(BaseModel):
     status: Optional[str] = 'Sent'
     items: Optional[List[InvoiceItem]] = []
 
+Role = Literal["admin", "employee", "accountant"]
+
+Locale = Literal["fr", "en"]
+
 class UserCreate(BaseModel):
     email: EmailStr
     firstName: str
     lastName: str
-    role: str   # "admin", "employee", or "accountant"
+    role: Role
+    # The language of the activation e-mail and of the account (#135).
+    locale: Locale = "fr"
+
+class UserUpdate(BaseModel):
+    """What the admin may change on an account (#62). All optional; the e-mail
+    is the login identity and is not changed here."""
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    role: Optional[Role] = None
+    isActive: Optional[bool] = None
+    locale: Optional[Locale] = None
+
+class LocaleUpdate(BaseModel):
+    """The signed-in account's own language (#135)."""
+    locale: Locale
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-# --- NEW: Forgot / Reset Password models ---
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -343,249 +244,520 @@ class ResetPasswordRequest(BaseModel):
     token: str
     newPassword: str
 
+class ActivateRequest(BaseModel):
+    token: str
+    newPassword: str
+
+
+def _require_acceptable(password: str) -> None:
+    problem = password_problem(password)
+    if problem:
+        key, params = problem
+        raise ApiError(422, key, **params)
+
+
+def _account_by_email(db: Session, email: str):
+    """The account for an e-mail, hash included, or None (#76).
+
+    Through auth_account_by_email(): sign-in and forgot-password run before
+    anyone is identified, so row-level security would hide every row from a
+    plain query, and the application role cannot read the hash column at all.
+    The row is read-only, not an ORM object.
+    """
+    return db.execute(text("SELECT * FROM auth_account_by_email(:e)"), {"e": email}).first()
+
+
 # --- Auth endpoints ---
-@app.post('/api/login')
-def login(req: LoginRequest):
-    db = read_db()
-    print(f"🔍 Login attempt for email: {req.email}")
-    user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
+# Every public route is limited per address (#175), declared on the route so
+# that a public route added later shows whether it has a limit.
+PUBLIC_LIMIT = [Depends(throttle.limit_public_requests)]
+
+
+@app.post('/api/login', response_model=LoginOut, dependencies=PUBLIC_LIMIT)
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Exchange e-mail and password for an access token.
+
+    Every refusal is the same 401 and costs the same time (#62): an unknown
+    e-mail still runs one bcrypt check against a dummy hash, and an inactive or
+    not yet activated account is refused only after its password is checked.
+    Answering faster, or differently, for those would tell a caller which
+    e-mails have accounts and in what state.
+
+    Guessing is limited (#175). Each attempt is counted before the password
+    is checked, so parallel guesses cannot all slip under a limit; a success
+    takes its attempts back. Too many failures from one address: 429. Too
+    many on one e-mail: locked, with the same 401 as a wrong password - the
+    lock applies to unknown e-mails alike, so it reveals nothing.
+    """
+    from_ip = throttle.hit(db, throttle.LOGIN_IP, throttle.ip_key(request),
+                           settings.LOGIN_MAX_FAILURES_PER_IP, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    if from_ip < 0:
+        db.commit()
+        log.info("Login refused: too many failures from one address")
+        raise throttle.too_many(-from_ip)
+    account = throttle.email_key(req.email)
+    on_account = throttle.hit(db, throttle.LOGIN_ACCOUNT, account,
+                              settings.LOGIN_MAX_FAILURES, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    # Counted now, whatever happens next.
+    db.commit()
+    if on_account < 0:
+        log.info("Login refused: account locked")
+        raise ApiError(401, "auth.invalid_credentials")
+
+    user = _account_by_email(db, req.email)
+    if user is None:
+        burn_password_check(req.password)
+        ok = False
+    else:
+        ok = verify_password(req.password, user.hashedPassword) and user.isActive and user.isVerified
+    if not ok:
+        log.info("Login refused")
+        raise ApiError(401, "auth.invalid_credentials")
+    throttle.forget(db, from_ip)
+    throttle.clear(db, throttle.LOGIN_ACCOUNT, account)
+    db.commit()
+    log.info("Login OK for %s (role=%s)", user.id, user.role)
+    token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
+    return LoginOut(access_token=token, user=UserOut.from_orm_row(user))
+
+
+def _send_activation(user: User, token: str) -> bool:
+    """In the new account's language (#135), which the admin chose at creation."""
+    body = t("email.activation.body", user.locale, name=user.firstName,
+             link=accounts.link(accounts.ACTIVATION, token))
+    return send_email(user.email, t("email.activation.subject", user.locale), body)
+
+
+# require_admin as a dependency rather than a check inside the body: FastAPI
+# validates the request model before the handler runs, so an in-body role check
+# let a non-admin get a 422 describing the schema before being refused.
+# Authorisation should be decided before anything else is (#57).
+@app.post('/api/users', status_code=201, response_model=UserCreatedOut, dependencies=[Depends(require_admin)])
+def create_user(req: UserCreate, db: Session = Depends(get_db)):
+    """Create an account and e-mail its owner an activation link (#62).
+
+    No password is chosen here and none is returned: the temporary password
+    used to travel in this response and in a plain e-mail. The account cannot
+    log in until its owner sets a password through the link. If the e-mail
+    cannot be sent, activationEmailSent says so and the admin can send it
+    again with POST /api/users/{id}/activation.
+    """
+    if db.query(User).filter(User.email == req.email).first():
+        raise ApiError(400, "user.email_taken")
+    # No id: the database allocates it from users_id_seq (#85).
+    user = User(
+        email=req.email,
+        firstName=req.firstName,
+        lastName=req.lastName,
+        role=req.role,
+        hashedPassword=unusable_password_hash(),
+        isActive=True,
+        isVerified=False,
+        createdAt=datetime.utcnow(),
+        locale=req.locale,
+    )
+    db.add(user)
+    db.flush()
+    token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
+    record_event(db, "user.created", "user", user.id, after={"role": user.role, "isActive": True})
+    db.commit()
+    db.refresh(user)
+    # After the commit: the link must not reach anyone for an account that
+    # was rolled back.
+    sent = _send_activation(user, token)
+    return UserCreatedOut(id=user.id, email=user.email, activationEmailSent=sent)
+
+
+@app.post('/api/users/{user_id}/activation', response_model=ActivationSentOut,
+          dependencies=[Depends(require_admin)])
+def resend_activation(user_id: str, db: Session = Depends(get_db)):
+    """Send a new activation link; the previous one stops working."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise ApiError(404, "user.not_found")
+    if user.isVerified:
+        raise ApiError(409, "user.already_activated")
+    token = accounts.issue_token(db, user.id, accounts.ACTIVATION)
+    record_event(db, "user.activation_sent", "user", user.id)
+    db.commit()
+    return ActivationSentOut(id=user.id, activationEmailSent=_send_activation(user, token))
+
+
+@app.post('/api/activate', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
+def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
+    """Set the first password through the activation link, and activate."""
+    _require_acceptable(req.newPassword)
+    # One call spends the link, sets the password, activates the account and
+    # revokes its sessions, inside the database (#76).
+    user_id = accounts.spend_token(db, req.token, accounts.ACTIVATION, hash_password(req.newPassword))
+    if user_id is None:
+        db.rollback()
+        raise ApiError(400, "auth.invalid_link")
+    record_event(db, "user.activated", "user", user_id)
+    db.commit()
+    return MessageOut(message=t("account.activated"))
+
+
+def _apply_user_update(db: Session, admin: User, user: User, changes: dict) -> dict:
+    """Apply the admin's changes to an account; returns the fields changed.
+
+    Revokes the account's sessions (token_version) on deactivation and on a
+    role change, so neither waits for the token to expire.
+
+    An admin cannot demote or deactivate themselves. That is also what keeps
+    at least one admin: the caller is an active admin, and only ever changes
+    someone else.
+    """
+    changed = {k: v for k, v in changes.items() if v is not None and getattr(user, k) != v}
+    if not changed:
+        return {}
+    if user.id == admin.id and ('role' in changed or changed.get('isActive') is False):
+        raise ApiError(409, "user.cannot_change_self")
+    before = {k: getattr(user, k) for k in changed}
+    for field, value in changed.items():
+        setattr(user, field, value)
+    if 'role' in changed or changed.get('isActive') is False:
+        user.token_version += 1
+    if changed.get('isActive') is False:
+        action = "user.deactivated"
+    elif changed.get('isActive') is True:
+        action = "user.reactivated"
+    elif 'role' in changed:
+        action = "user.role_changed"
+    else:
+        action = "user.updated"
+    record_event(db, action, "user", user.id, before=before, after=changed)
+    return changed
+
+
+@app.patch('/api/users/{user_id}', response_model=UserOut)
+def update_user(user_id: str, req: UserUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Change an account's name, role or status (#62). One audit event."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise ApiError(404, "user.not_found")
+    _apply_user_update(db, admin, user, req.model_dump())
+    db.commit()
+    db.refresh(user)
+    return UserOut.from_orm_row(user)
+
+
+@app.post('/api/users/{user_id}/deactivate', response_model=UserOut)
+def deactivate_user(user_id: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Block an account at once, including the sessions it already holds.
+
+    There is no delete: payslips and leave requests reference the account and
+    payroll must be kept, so a departure is a deactivation (#62).
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        raise ApiError(404, "user.not_found")
+    _apply_user_update(db, admin, user, {"isActive": False})
+    db.commit()
+    db.refresh(user)
+    return UserOut.from_orm_row(user)
+
+
+@app.post('/api/forgot-password', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """E-mail a single-use reset link. The answer never says whether the
+    e-mail has an account, and an inactive or not yet activated account gets
+    no link: activation has its own.
+
+    At most RESET_MAILS_PER_HOUR links per account (#175). Past it nothing is
+    sent and the answer is unchanged: the form cannot flood an inbox."""
+    answer = MessageOut(message=t("account.reset_sent"))
+    user = _account_by_email(db, req.email)
+    if user is None or not user.isActive or not user.isVerified:
+        return answer
+    sent_lately = throttle.hit(db, throttle.RESET_MAIL, throttle.email_key(req.email),
+                               settings.RESET_MAILS_PER_HOUR, 3600)
+    if sent_lately < 0:
+        db.commit()
+        log.info("Password reset not sent: hourly limit for the account")
+        return answer
+    token = accounts.issue_token(db, user.id, accounts.RESET)
+    # The token itself never goes in the trail.
+    record_event(db, "user.password_reset_requested", "user", user.id)
+    db.commit()
+    # In the account's language (#135), not the language of the page the
+    # request came from: the account owner reads it.
+    body = t("email.reset.body", user.locale, name=user.firstName, link=accounts.link(accounts.RESET, token))
+    send_email(user.email, t("email.reset.subject", user.locale), body)
+    return answer
+
+
+@app.post('/api/reset-password', response_model=MessageOut, dependencies=PUBLIC_LIMIT)
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Set a new password with a reset link. Spends the token, and revokes
+    every session the account holds: whoever had the old password is out."""
+    _require_acceptable(req.newPassword)
+    user_id = accounts.spend_token(db, req.token, accounts.RESET, hash_password(req.newPassword))
+    if user_id is None:
+        db.rollback()
+        raise ApiError(400, "auth.invalid_link")
+    record_event(db, "user.password_reset", "user", user_id)
+    db.commit()
+    return MessageOut(message=t("account.password_updated"))
+
+# --- Data endpoints ---
+# GET /api/data used to return every table (all users, invoices, leave requests,
+# and team members) to any authenticated user, whatever their role. It
+# was removed in #55; per-entity endpoints with explicit response schemas replace
+# it as the UI needs them (#65).
+
+@app.get('/api/me', response_model=UserOut)
+def read_me(current_user: User = Depends(get_current_user)):
+    """The signed-in user, resolved from the bearer token.
+
+    Exists so the browser never has to store the user (#65). Previously the
+    whole user object was kept in localStorage and trusted on reload, which
+    meant the client decided its own role: editing one key in devtools was
+    enough to render the admin screens. The server refused the admin *actions*,
+    so nothing could actually be done - but the UI lied, and the fix is for the
+    identity to come from the token on every load.
+    """
+    return UserOut.from_orm_row(current_user)
+
+
+@app.put('/api/me/locale', response_model=UserOut)
+def set_my_locale(req: LocaleUpdate, current_user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    """Save the signed-in account's language (#135): the UI's toggle calls this,
+    so e-mails and notifications follow the choice on every device.
+
+    Through auth_set_locale(), which changes that one column of the caller's own
+    row: only the admin may update users otherwise (#76).
+    """
+    db.execute(text("SELECT auth_set_locale(:l)"), {"l": req.locale})
+    db.commit()
+    db.refresh(current_user)
+    return UserOut.from_orm_row(current_user)
+
+
+# Every list endpoint is paginated and capped, as the invoice ones are (#61).
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+
+
+@app.get('/api/leave-requests', response_model=List[LeaveRequestOut])
+def list_leave_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Leave requests the caller is allowed to see.
+
+    No role check here on purpose. The row-level security policy added in #74
+    already decides it: an admin sees every row, and everyone else sees the
+    rows belonging to their own employee record. An accountant therefore sees
+    their own leave and nobody else's - they are an employee with an
+    entitlement like anyone else, and the decision on #10 was that they do not
+    get the leave *administration* screen, not that they cannot see their own.
+
+    Repeating the rule in Python would mean two places to keep in step, and the
+    one that actually holds is the database.
+    """
+    rows = (
+        db.query(LeaveRequest)
+        .options(joinedload(LeaveRequest.employee).joinedload(Employee.user))
+        .order_by(LeaveRequest.date_debut.desc(), LeaveRequest.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [LeaveRequestOut.from_orm_row(r, r.employee) for r in rows]
+
+
+@app.get('/api/payslips', response_model=List[PayslipOut])
+def list_payslips(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Payslips the caller is allowed to see.
+
+    Scoped by the same row-level security policy: an employee sees their own,
+    admin and accountant see all. Verified by db/verify_rls.py, which proves an
+    employee asking directly for someone else's payslip gets no rows.
+    """
+    rows = (
+        db.query(Payslip)
+        .options(joinedload(Payslip.employee).joinedload(Employee.user))
+        .order_by(Payslip.periode.desc(), Payslip.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [PayslipOut.from_orm_row(r) for r in rows]
+
+
+@app.get('/api/employees', response_model=List[EmployeeOut])
+def list_employees(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """The team: employee records with the name from their login account.
+
+    joinedload, not lazy access: the serialiser reads employee.user for every
+    row, which without it is one query per employee (#61).
+    """
+    rows = (
+        db.query(Employee)
+        .options(joinedload(Employee.user))
+        .order_by(Employee.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [EmployeeOut.from_orm_row(r) for r in rows]
+
+
+@app.get('/api/users', response_model=List[UserOut])
+def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    """Login accounts. Admin only.
+
+    Checked here as well as by row-level security on `users` (#76), which lets
+    the accountant read every account too: this list is the admin's.
+    """
+    if current_user.role != 'admin':
+        raise ApiError(403, "auth.admin_required")
+    rows = (
+        db.query(User)
+        .order_by(User.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [UserOut.from_orm_row(r) for r in rows]
+
+
+@app.post('/api/leave-requests', status_code=201, response_model=LeaveRequestOut)
+def create_leave_request(
+    req: LeaveRequestCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a leave request for the authenticated employee.
+
+    Previously this assigned camelCase attributes (employeeId, dates, status)
+    that do not exist on the LeaveRequest model, so SQLAlchemy raised
+    TypeError and the endpoint returned 500 on every call. The request body is
+    now translated to the real columns by LeaveRequestCreate.to_orm_kwargs
+    (#37).
+    """
+    if req.endDate < req.startDate:
+        raise ApiError(422, "leave.end_before_start")
+
+    # Leave belongs to the employee record, not the login account (#60), so the
+    # caller is resolved through employees. A user with no employee record
+    # cannot request leave - which is correct: an admin account that is not an
+    # employee has no entitlement.
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        raise ApiError(409, "leave.no_employee_record")
+
+    leave = LeaveRequest(employee_id=employee.id, **req.to_orm_kwargs())
+    db.add(leave)
+    db.commit()
+    db.refresh(leave)
+    return LeaveRequestOut.from_orm_row(leave, employee)
+
+@app.post('/api/leave-requests/{req_id}/approve', response_model=LeaveRequestOut)
+def approve_leave_request(req_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Approve a leave request.
+
+    Previously this set `leave.status`, a name the model does not have, so
+    SQLAlchemy tracked nothing and commit() wrote nothing - the endpoint
+    reported success while leaving the row untouched (AUDIT-DB-013). It now
+    writes `statut`, and records who approved it.
+    """
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
+    if not leave:
+        raise ApiError(404, "leave.not_found")
+    record_event(db, "leave_request.approved", "leave_request", leave.id,
+                 before={"statut": leave.statut}, after={"statut": LeaveStatus.APPROUVE})
+    leave.statut = LeaveStatus.APPROUVE
+    leave.valide_par_id = admin.id
+    db.commit()
+    db.refresh(leave)
+    employee = db.query(Employee).filter(Employee.id == leave.employee_id).first()
+    return LeaveRequestOut.from_orm_row(leave, employee)
+
+@app.post('/api/leave-requests/{req_id}/reject', response_model=LeaveRequestOut)
+def reject_leave_request(
+    req_id: int,
+    body: RejectLeaveRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Reject a leave request. Same defect as approve: it set `status` and
+    `rejectionReason`, neither of which is a column, so nothing was written."""
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == req_id).first()
+    if not leave:
+        raise ApiError(404, "leave.not_found")
+    record_event(db, "leave_request.rejected", "leave_request", leave.id,
+                 before={"statut": leave.statut},
+                 after={"statut": LeaveStatus.REFUSE, "comment": body.comment or ''})
+    leave.statut = LeaveStatus.REFUSE
+    leave.commentaire_validation = body.comment or ''
+    leave.valide_par_id = admin.id
+    db.commit()
+    db.refresh(leave)
+    employee = db.query(Employee).filter(Employee.id == leave.employee_id).first()
+    return LeaveRequestOut.from_orm_row(leave, employee)
+
+@app.post('/api/employees', status_code=201, response_model=EmployeeOut)
+def create_employee(req: EmployeeCreate, _admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Attach an employee record to an existing login account.
+
+    Answers with the same EmployeeOut as the list, instead of a dict built
+    by hand (#77).
+    """
+    user = db.query(User).filter(User.id == req.userId).first()
     if not user:
-        print("❌ User not found")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    print(f"✅ User found, role: {user['role']}")
-    print(f"Stored hash: {user['hashedPassword']}")
-    if not verify_password(req.password, user['hashedPassword']):
-        print("❌ Password verification failed")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    print("✅ Password verified")
-    token = create_access_token(data={"sub": user['id'], "role": user['role']})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {k: v for k, v in user.items() if k != 'hashedPassword'}
-    }
+        raise ApiError(404, "user.not_found")
+    if db.query(Employee).filter(Employee.user_id == req.userId).first():
+        raise ApiError(409, "employee.already_exists")
 
-@app.post('/api/users', status_code=201)
-def create_user(req: UserCreate, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Only administrators can create users")
-    db = read_db()
-    if 'users' not in db:
-        db['users'] = []
-    # Duplicate email check removed – multiple users can share the same email
-    alphabet = string.ascii_letters + string.digits
-    temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
-    hashed = get_password_hash(temp_password)
-    new_user = {
-        "id": f"USR-{len(db['users'])+1:03d}",
-        "email": req.email,
-        "firstName": req.firstName,
-        "lastName": req.lastName,
-        "role": req.role,
-        "hashedPassword": hashed,
-        "isActive": True,
-        "isVerified": False,
-        "createdAt": datetime.now().isoformat()
-    }
-    db['users'].append(new_user)
-    write_db(db)
+    employee = Employee(
+        user_id=req.userId,
+        job_title=req.jobTitle,
+        hired_on=req.hiredOn,
+        annual_entitlement_days=req.annualEntitlementDays,
+    )
+    db.add(employee)
+    db.flush()
+    record_event(db, "employee.created", "employee", employee.id, after={
+        "user_id": employee.user_id, "job_title": employee.job_title,
+        "hired_on": employee.hired_on, "annual_entitlement_days": employee.annual_entitlement_days,
+    })
+    db.commit()
+    db.refresh(employee)
+    return EmployeeOut.from_orm_row(employee)
 
-    # Send email via SMTP
-    email_body = f"""
-Hello {req.firstName},
+# NOTE: an older POST /api/invoices lived here. It was unreachable - the
+# invoicing router is registered first, so it won by registration order - and
+# it wrote camelCase attributes (client, clientInitials, amount, dateIssued)
+# that the Invoice model does not have, so it would have raised TypeError had
+# it ever been called. The single handler is now app/routers/invoicing.py,
+# which is admin-only (#59).
 
-Your DIXpertIA employee account has been created.
 
-Login email: {req.email}
-Temporary password: {temp_password}
 
-Please log in and change your password immediately.
-
-Regards,
-DIXpertIA Team
-"""
-    send_email(req.email, "Your DIXpertIA Account Credentials", email_body)
-
-    return {
-        "message": "User created successfully",
-        "id": new_user['id'],
-        "email": req.email,
-        "tempPassword": temp_password
-    }
-
-# --- NEW: Forgot Password ---
-@app.post('/api/forgot-password')
-def forgot_password(req: ForgotPasswordRequest):
-    db = read_db()
-    user = next((u for u in db.get('users', []) if u['email'] == req.email), None)
-    if not user:
-        # Return 200 even if user not found to avoid email enumeration
-        return {"message": "If your email is registered, you will receive a password reset link."}
-
-    # Generate reset token (JWT with short expiry)
-    expiry = datetime.utcnow() + timedelta(hours=1)
-    token_data = {"sub": user['id'], "exp": expiry, "purpose": "reset"}
-    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
-
-    # Save token and expiry to the user record
-    user['resetToken'] = token
-    user['resetTokenExpiry'] = expiry.isoformat()
-    write_db(db)
-
-    # Send email with reset link
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    reset_link = f"{frontend_url}/reset-password?token={token}"
-    email_body = f"""
-Hello {user['firstName']},
-
-You requested a password reset for your DIXpertIA account.
-
-Click the link below to set a new password (valid for 1 hour):
-
-{reset_link}
-
-If you did not request this, please ignore this email.
-
-Regards,
-DIXpertIA Team
-"""
-    send_email(user['email'], "Password Reset Request", email_body)
-
-    return {"message": "If your email is registered, you will receive a password reset link."}
-
-# --- NEW: Reset Password ---
-@app.post('/api/reset-password')
-def reset_password(req: ResetPasswordRequest):
-    db = read_db()
-    # Decode token
-    try:
-        payload = jwt.decode(req.token, SECRET_KEY, algorithms=[ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=400, detail="Reset token has expired.")
-    except jwt.JWTError:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-
-    user_id = payload.get('sub')
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-
-    user = next((u for u in db.get('users', []) if u['id'] == user_id), None)
-    if not user:
-        raise HTTPException(status_code=400, detail="User not found.")
-
-    # Verify token matches stored token
-    if user.get('resetToken') != req.token:
-        raise HTTPException(status_code=400, detail="Invalid token.")
-
-    # Check expiry
-    expiry = user.get('resetTokenExpiry')
-    if expiry:
-        expiry_dt = datetime.fromisoformat(expiry)
-        if datetime.utcnow() > expiry_dt:
-            raise HTTPException(status_code=400, detail="Token has expired.")
-
-    # Update password
-    hashed = get_password_hash(req.newPassword)
-    user['hashedPassword'] = hashed
-    # Clear reset token fields
-    user.pop('resetToken', None)
-    user.pop('resetTokenExpiry', None)
-    write_db(db)
-
-    return {"message": "Password updated successfully."}
-
-# --- Existing endpoints (payslips, leave, invoices, team) ---
-@app.get('/api/data')
-def get_data():
-    return read_db()
-
-@app.post('/api/leave-requests', status_code=201)
-def create_leave_request(req: LeaveRequestCreate):
-    db = read_db()
-    created_req = {
-        "id": f"LR-00{len(db['leaveRequests']) + 1}",
-        "employeeId": req.employeeId,
-        "employeeName": req.employeeName,
-        "department": req.department,
-        "type": req.type,
-        "dates": req.dates,
-        "duration": req.duration,
-        "status": 'Pending',
-        "reason": req.reason
-    }
-    db['leaveRequests'] = [created_req] + db['leaveRequests']
-    write_db(db)
-    return created_req
-
-@app.post('/api/leave-requests/{req_id}/approve')
-def approve_leave_request(req_id: str):
-    db = read_db()
-    found = False
-    new_requests = []
-    for item in db['leaveRequests']:
-        if item['id'] == req_id:
-            found = True
-            item['status'] = 'Approved'
-        new_requests.append(item)
-    if not found:
-        raise HTTPException(status_code=404, detail="Leave request not found")
-    db['leaveRequests'] = new_requests
-    write_db(db)
-    return {"message": "Leave request approved successfully"}
-
-@app.post('/api/leave-requests/{req_id}/reject')
-def reject_leave_request(req_id: str, body: RejectLeaveRequest):
-    db = read_db()
-    found = False
-    new_requests = []
-    for item in db['leaveRequests']:
-        if item['id'] == req_id:
-            found = True
-            item['status'] = 'Rejected'
-            item['rejectionReason'] = body.comment or ''
-        new_requests.append(item)
-    if not found:
-        raise HTTPException(status_code=404, detail="Leave request not found")
-    db['leaveRequests'] = new_requests
-    write_db(db)
-    return {"message": "Leave request rejected successfully"}
-
-@app.post('/api/team-members', status_code=201)
-def create_team_member(req: TeamMemberCreate):
-    db = read_db()
-    email = req.email or f"{req.firstName.lower()}.{req.lastName.lower()}@dixpertia.com"
-    initials = req.initials or f"{req.firstName[0]}{req.lastName[0]}".upper()
-    created_emp = {
-        "id": f"TM-00{len(db['teamMembers']) + 1}",
-        "firstName": req.firstName,
-        "lastName": req.lastName,
-        "email": email,
-        "role": req.role,
-        "status": 'Active',
-        "initials": initials,
-        "avatarUrl": req.avatarUrl
-    }
-    db['teamMembers'] = [created_emp] + db['teamMembers']
-    write_db(db)
-    return created_emp
-
-@app.post('/api/invoices', status_code=201)
-def create_invoice(req: InvoiceCreate):
-    db = read_db()
-    from datetime import datetime, timedelta
-    date_issued = req.dateIssued or datetime.now().strftime('%b %d, %Y')
-    due_date = req.dueDate or (datetime.now() + timedelta(days=30)).strftime('%b %d, %Y')
-    client_initials = req.clientInitials or req.client[:2].upper()
-    created_inv = {
-        "id": req.id or f"INV-2024-00{len(db['invoices']) + 1}",
-        "client": req.client,
-        "clientInitials": client_initials,
-        "amount": req.amount,
-        "dateIssued": date_issued,
-        "dueDate": due_date,
-        "status": req.status,
-        "items": [item.dict() for item in req.items] if req.items else []
-    }
-    db['invoices'] = [created_inv] + db['invoices']
-    write_db(db)
-    return created_inv
+@app.api_route('/logs', methods=['GET', 'POST', 'OPTIONS'])
+def logs(request: Request):
+    return []
+# NOTE: a second POST /logs handler was declared here. The api_route above
+# already registers POST, so it won by registration order and this one was
+# unreachable - the same duplicate-route pattern as GET /api/data (#35) and
+# POST /api/invoices (#59).

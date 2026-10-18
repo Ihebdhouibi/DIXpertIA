@@ -1,123 +1,120 @@
-# DIXpertIA – Enterprise IT Solutions Portal
+# DIXpertIA - Enterprise IT Solutions Portal
 
-## 📖 Overview
+## Overview
 
-DIXpertIA is a full‑stack employee portal and admin dashboard for an IT services company.  
-It features:
+DIXpertIA is a full-stack employee portal and admin dashboard for an IT services company.
 
-- Public corporate homepage with **Services**, **About**, and a full **Contact** page (with form + FAQ).
-- Authentication (login/register) with role‑based views:
-  - **Employee**: view payslips, submit leave requests, see team directory.
-  - **Admin (HR)**: manage invoices, approve/reject leave requests, manage team members.
-- Dynamic **notifications** (in English) that respect user roles:
-  - Leave requests trigger a notification **only for admins**.
-  - Approval/rejection triggers a notification **only for the employee**.
-- Fully responsive UI with a persistent sidebar, mobile drawer, and notification bell.
+- Public corporate homepage (Services, About, Contact with form + FAQ).
+- Authentication with role-based access:
+  - **Employee**: payslips, leave requests, team directory.
+  - **Accountant**: payslips, invoices, users (read-only).
+  - **Admin (HR)**: invoices, projects, users, team, approve/reject leave.
+- Dynamic role-aware notifications.
+- Responsive UI: sidebar, mobile drawer, notification bell.
 
----
-
-## 🧰 Tech Stack
+## Tech Stack
 
 ### Frontend
-- **React 18** with **TypeScript**
-- **Vite** – fast dev server and build tool
-- **Tailwind CSS** – utility‑first styling (custom design tokens)
-- **Lucide React** – icon library
-- **Motion (Framer Motion)** – animations
-- **LocalStorage** – client‑side data persistence (prototype/demo)
+- React 18 + TypeScript
+- Vite
+- Tailwind CSS (custom design tokens)
+- Lucide React, Motion
 
-### Backend (FastAPI – Python)
-- **FastAPI** – REST API framework
-- **Uvicorn** – ASGI server
-- **Pydantic** – data validation
-- **SQLAlchemy** (optional – present in `app/` structure) – ORM
-- **Alembic** – database migrations
-- **JSON file** (`db.json`) – current storage (mock data)
+### Backend
+- FastAPI + Uvicorn
+- Pydantic v2
+- SQLAlchemy 2
+- Alembic (migrations)
+- PostgreSQL 17
+- ReportLab (PDF generation)
+- JWT (python-jose) + bcrypt (passlib)
 
-### Gateway & Proxy
-- **Node.js** + **Express** – serves the React build and proxies `/api` calls to the FastAPI backend.
-- **Vite middleware** – serves the frontend in development.
+## Project Structure
 
-### Database (future / optional)
-- The `app/` folder contains SQLAlchemy models and Alembic migrations for PostgreSQL/MySQL, but the current active backend uses `main.py` with JSON storage.
+    app/
+      core/       config, database, security, deps, identity
+      models/     SQLAlchemy models
+      routers/    API endpoints
+      schemas/    Pydantic schemas
+      services/   PDF generators
+    alembic/      Database migrations
+    db/           Role setup SQL, verification scripts, README
+    src/          React frontend
+    main.py       FastAPI entry point
+    seed_users.py Seeds an initial user
+    db/README.md  Verified database procedure
 
----
+## Setup
 
-## 📁 Project Structure
-├── app/ # Modular FastAPI backend (SQLAlchemy, models, routers)
-│ ├── core/ # config, database, security
-│ ├── models/ # SQLAlchemy models
-│ ├── routers/ # API endpoints
-│ └── schemas/ # Pydantic schemas
-├── alembic/ # Database migrations
-├── src/ # React frontend
-│ ├── components/ # All UI components (PayslipsView, LeaveRequestsView, TeamView, InvoicesView, Homepage, Registration, Sidebar)
-│ ├── App.tsx # Main app with state & notifications
-│ ├── data.ts # Initial seed data
-│ └── types.ts # TypeScript types
-├── main.py # Single‑file FastAPI entry point (used in production)
-├── server.ts # Node.js gateway (Express + Vite middleware)
-├── package.json # Node dependencies
-├── requirements.txt # Python dependencies
-├── .env.example # (removed) template for environment variables
-└── README.md # Short intro
+The verified database procedure lives in `db/README.md`. Summary:
 
----
+### 1. Install PostgreSQL 17 and create the database
 
-## 🔧 Setup & Running
+    CREATE DATABASE dixpertia;
 
-### Prerequisites
-- Node.js (v18+)
-- Python 3.12+ (with pip)
-- (Optional) PostgreSQL if you want to use the `app/` backend.
+### 2. Create the least-privilege roles
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/Ihebduhobi/DIXpertIA.git
-cd DIXpertIA
+    python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:5432/dixpertia
 
+Record the two URLs it prints; they go into `.env`.
 
+### 3. Create the virtual environment
 
+    python -m venv .venv
+    .venv\Scripts\activate          # Windows
+    source .venv/bin/activate       # macOS / Linux
+    pip install -r requirements-dev.txt
 
-### 2. Install frontend dependencies
-'''bash
-npm install  
+### 4. Configure .env
 
-### 3. Install Python dependencies
-'''bash
-pip install -r requirements.txt
-##4. Run the full stack (development)
-''bash
-npm run dev
+    copy .env.example .env
 
+Set at minimum `DATABASE_URL`, `SECRET_KEY` (>= 32 chars), and
+`SCHEMA_DATABASE_URL`. Generate a key with:
 
-### 🌐 Public Homepage & Navigation
-Unauthenticated users see the corporate homepage (Homepage.tsx).
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-Click "Employee Login" to enter the authentication flow (register / login).
+### 5. Build the schema
 
-After login, the user is redirected to their role‑appropriate dashboard:
+    alembic upgrade head
 
-Employee → Payslips
+### 6. Re-run role grants (tables now exist, DELETE grants apply)
 
-Admin → Invoices
+    python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:5432/dixpertia --app-password <from step 2> --owner-password <from step 2>
 
-The sidebar includes a "Home" button (without logging out) that returns to the public homepage while keeping the session active.
+### 7. Seed the first administrator
 
-The homepage shows a "Go to Dashboard" button for logged‑in users.
+    python seed_users.py --email admin@dixpertia.tn
 
-### 🔔 Notifications System
-Notifications are stored in localStorage and persist across sessions.
+### 8. Run the apps
 
-Each notification has a targetRole ('admin' or 'employee') to control visibility.
+Backend (terminal 1):
 
-Leave request creation → notification targetRole: 'admin' (only admins see it).
+    uvicorn main:app --reload --port 8000
 
-Leave approval/rejection → notification targetRole: 'employee' (only the employee sees it).
+Frontend (terminal 2):
 
-The bell icon shows an unread count.
+    npm install
+    npm run dev
 
-The popover displays the last 10 notifications with timestamps.
+Frontend: http://localhost:3000 - Backend docs: http://localhost:8000/docs
 
-Clicking a notification with link: 'team' switches to the Team tab (for quick approval).
+### 9. Enable pre-commit hooks
 
+    pip install pre-commit
+    pre-commit install
+
+## Database rules
+
+Never edit the database by hand, and never use `Base.metadata.create_all()`.
+Schema changes go through Alembic:
+
+    alembic revision --autogenerate -m "short description"
+    alembic upgrade head      # apply
+    alembic downgrade -1      # roll back one revision
+    alembic check             # fail if models and database have drifted
+
+## Environment Variables
+
+See `.env.example`. Required: `DATABASE_URL`, `SECRET_KEY`.
+There are no fallbacks: the process refuses to start without them.

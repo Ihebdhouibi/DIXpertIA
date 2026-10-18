@@ -1,0 +1,20 @@
+{
+  "name": "DI Xpertia — Ink & Signal Lime",
+  "colors": {
+    "ink": "#101314",
+    "lime": "#C6F24E",
+    "limeDeep": "#5C7A0A",
+    "paper": "#F3F2EE",
+    "inkMuted": "rgba(16,19,20,.62)",
+    "hairline": "rgba(16,19,20,.14)"
+  },
+  "fonts": {
+    "display": "Space Grotesk",
+    "mono": "JetBrains Mono"
+  },
+  "rules": [
+    "Un seul accent par vue",
+    "#C6F24E ne porte jamais de texte courant — utiliser #5C7A0A sur papier",
+    "Respiration du logo = hauteur du curseur"
+  ]
+}
