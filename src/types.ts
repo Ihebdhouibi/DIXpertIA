@@ -83,6 +83,11 @@ export interface Client {
   adresse?: string;
   /** The language this client's invoices print in (#135, #192). */
   locale?: 'fr' | 'en';
+  /** A client abroad: an export of services, without VAT, in a foreign currency (#195). */
+  export?: boolean;
+  devise?: 'TND' | 'EUR' | 'USD' | 'GBP';
+  /** A foreign VAT number or a matricule fiscal, printed on invoices when filled. */
+  identifiant_fiscal?: string | null;
 }
 
 export interface InvoiceItem {
@@ -123,6 +128,9 @@ export interface Invoice {
   supplierReference?: string | null;
   amountHT: number;
   amountTTC: number;
+  /** The invoice's currency, fixed when it was created, and whether it is an export (#195). */
+  currency?: string;
+  export?: boolean;
   dateIssued: string;
   dueDate: string;
   /** The due date as YYYY-MM-DD, for a date input; `dueDate` is for display. */

@@ -80,13 +80,13 @@ export default function InvoiceEditDialog({ invoice, onClose, onSaved }: Invoice
     >
       <form id="edit-invoice-form" onSubmit={submit} className="flex flex-col gap-5" noValidate>
         {error && <FormAlert>{error}</FormAlert>}
-        <InvoiceLinesEditor lines={lines} onChange={setLines} />
+        <InvoiceLinesEditor lines={lines} onChange={setLines} exportOfServices={Boolean(invoice?.export)} />
         <Field label={t('invoices.dueDate')}>
           {({ id }) => (
             <Input id={id} type="date" required value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           )}
         </Field>
-        <InvoiceLinesTotals lines={lines} />
+        <InvoiceLinesTotals lines={lines} currency={invoice?.currency ?? 'TND'} />
       </form>
     </Dialog>
   );

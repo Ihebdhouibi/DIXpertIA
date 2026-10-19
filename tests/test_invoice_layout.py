@@ -176,3 +176,39 @@ def test_the_downloaded_pdf_carries_the_lines_detail_and_unit(client, identities
     pdf = pdf_text(client.get(f"/api/invoices/{invoice['id']}/download", headers=admin).content)
     assert b"Payroll module" in pdf and b"days" in pdf
     assert b"Page 1 / 1" in pdf and b"DRAFT" in pdf
+
+
+# --- Export of services (#195) -------------------------------------------------------
+
+def test_an_export_invoice_prints_the_mention_instead_of_the_vat_rows():
+    items = [line(qty=8, price=450, rate=0), line(qty=1, price=Decimal("1200.5"), rate=0)]
+    pdf = render("en", items, total=Decimal("4800.50"), currency="USD", export=True,
+                 client_tax_id="GB 123456789", export_mention="Export of services - VAT not applicable")
+    assert b"Export of services - VAT not applicable" in pdf
+    assert b"VAT 0%" not in pdf and b" on " not in pdf  # no per-rate rows
+    assert b"TOTAL DUE 4,800.50 USD" in pdf and b"1,200.50" in pdf
+    assert b"four thousand eight hundred dollars and fifty cents" in pdf
+    assert b"VAT No. GB 123456789" in pdf
+
+
+def test_the_export_mention_comes_from_the_settings():
+    from app.core.config import settings
+
+    pdf = render("fr", [line(rate=0)], total=Decimal(100), currency="EUR", export=True)
+    assert settings.EXPORT_MENTION_FR.split(" — ")[0].encode() in pdf
+    assert "N° TVA".encode() not in pdf  # no tax ID given, no line
+
+
+def test_a_domestic_client_tax_id_reads_mf():
+    pdf = render("fr", client_tax_id="1234567A/A/M/000")
+    assert b"MF 1234567A/A/M/000" in pdf
+
+
+@pytest.mark.parametrize("value,locale,words", [
+    (Decimal("250.01"), "en", "two hundred fifty pounds and one penny"),
+    (Decimal("2.50"), "fr", "deux livres sterling et cinquante pence"),
+])
+def test_pounds_in_words(value, locale, words):
+    from app.services.amount_in_words import amount_in_words
+
+    assert amount_in_words(value, "GBP", locale) == words

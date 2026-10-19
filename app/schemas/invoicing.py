@@ -3,11 +3,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.invoicing import (
     InvoiceProcessingStatus,
 )
+
+
+Currency = Literal["TND", "EUR", "USD", "GBP"]
 
 
 class ClientBase(BaseModel):
@@ -17,6 +20,28 @@ class ClientBase(BaseModel):
     adresse: str = ""
     # The language the client's invoices are printed in (#135).
     locale: Literal["fr", "en"] = "fr"
+    # A client abroad, billed for an export of services without VAT, and the
+    # currency their invoices are in (#195).
+    export: bool = False
+    devise: Currency = "TND"
+    # A foreign VAT number or a matricule fiscal; printed only when filled.
+    identifiant_fiscal: str | None = None
+
+
+def export_currency_problem(export: bool, devise: str) -> bool:
+    """This release's rule (#195): an export client always pays in a foreign
+    currency. Mirrors ck_clients_export_in_foreign_currency; lifting the rule
+    is removing both."""
+    return bool(export) and devise == "TND"
+
+
+def _tax_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if len(value) > 50:
+        raise ValueError("the tax ID is at most 50 characters")
+    return value or None
 
 
 def _client_name(value: str) -> str:
@@ -50,11 +75,18 @@ class ClientCreate(ClientBase):
 
     _name = field_validator("nom")(_client_name)
     _mail = field_validator("email")(_client_email)
+    _tax = field_validator("identifiant_fiscal")(_tax_id)
 
     @field_validator("telephone", "adresse")
     @classmethod
     def _trim(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def _export_in_foreign_currency(self):
+        if export_currency_problem(self.export, self.devise):
+            raise ValueError("an export client pays in a foreign currency (EUR, USD or GBP)")
+        return self
 
 
 class ClientUpdate(BaseModel):
@@ -65,6 +97,15 @@ class ClientUpdate(BaseModel):
     telephone: str | None = Field(default=None, max_length=30)
     adresse: str | None = Field(default=None, max_length=500)
     locale: Literal["fr", "en"] | None = None
+    export: bool | None = None
+    devise: Currency | None = None
+    # "" clears it; omitted leaves it as it is.
+    identifiant_fiscal: str | None = None
+
+    @field_validator("identifiant_fiscal")
+    @classmethod
+    def _tax(cls, value: str | None) -> str | None:
+        return None if value is None else (_tax_id(value) or "")
 
     @field_validator("nom")
     @classmethod

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -70,6 +71,11 @@ class AccountingPeriod(Base):
     total_ttc_outgoing = Column(Numeric(12, 2))
     total_ht_incoming = Column(Numeric(12, 2))
     total_ttc_incoming = Column(Numeric(12, 2))
+    # Since #195 invoices are in TND, EUR, USD or GBP. The four columns above
+    # hold the TND part; this holds every currency the month used, one entry
+    # each with the same four totals (amounts as strings, exact). Never one
+    # sum across currencies: dollars added to dinars mean nothing.
+    totals_by_currency = Column(JSONB)
 
     closed_by = relationship("User")
 

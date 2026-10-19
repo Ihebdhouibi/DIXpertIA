@@ -3,17 +3,27 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class CurrencyAmount(BaseModel):
+    """An amount in one currency (#195): never added to another currency's."""
+    currency: str
+    amount: float
+
+
 class StatusFigure(BaseModel):
     """One invoice status: how many, and for how much (TTC)."""
     status: str
     count: int
+    # The TND part only, since #195; `amounts` has every currency.
     amount: float = 0.0
+    amounts: list[CurrencyAmount] = Field(default_factory=list)
 
 
 class DirectionTotal(BaseModel):
     """How many invoices one way, and for how much (TTC)."""
     count: int
+    # The TND part only, since #195; `amounts` has every currency.
     amount: float
+    amounts: list[CurrencyAmount] = Field(default_factory=list)
 
 
 class InvoiceFigures(BaseModel):

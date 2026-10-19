@@ -35,6 +35,9 @@ CURRENCIES = {
     "USD": {"digits": 2,
             "fr": (("dollar", "dollars"), ("cent", "cents")),
             "en": (("dollar", "dollars"), ("cent", "cents"))},
+    "GBP": {"digits": 2,
+            "fr": (("livre sterling", "livres sterling"), ("penny", "pence")),
+            "en": (("pound", "pounds"), ("penny", "pence"))},
 }
 
 

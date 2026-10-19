@@ -151,5 +151,13 @@ class Settings:
     SELLER_IBAN: str = _text("SELLER_IBAN")
     SELLER_BIC: str = _text("SELLER_BIC")
 
+    # The VAT exemption mention printed on an export invoice (#195), in the
+    # client's language. Code de la TVA art. 3-I (a service used abroad is
+    # outside its scope) and 11-I (export operations carry a mention).
+    EXPORT_MENTION_FR: str = _text(
+        "EXPORT_MENTION_FR", "Exportation de services — TVA non applicable (art. 3 et 11 du Code de la TVA)")
+    EXPORT_MENTION_EN: str = _text(
+        "EXPORT_MENTION_EN", "Export of services — VAT not applicable (art. 3 and 11, Tunisian VAT Code)")
+
 
 settings = Settings()

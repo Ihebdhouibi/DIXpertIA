@@ -112,6 +112,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "A client named '{name}' already exists.",
         "fr": "Un client nommé « {name} » existe déjà."},
     "client.not_found": {"en": "Client not found", "fr": "Client introuvable"},
+    "client.export_needs_foreign_currency": {
+        "en": "An export client pays in a foreign currency (EUR, USD or GBP), not in TND.",
+        "fr": "Un client export paie en devise (EUR, USD ou GBP), pas en TND."},
+    "invoice.export_line_vat": {
+        "en": "Line {n}: an export of services carries no VAT; set its rate to 0%.",
+        "fr": "Ligne {n} : une exportation de services ne porte pas de TVA ; mettez son taux à 0 %."},
     "supplier_invoice.duplicate": {
         "en": "Invoice '{ref}' from this supplier has already been recorded.",
         "fr": "La facture « {ref} » de ce fournisseur est déjà enregistrée."},
@@ -249,6 +255,13 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "Invoice {0} is no longer a draft and its lines cannot be changed; correct it with a new document.",
         "fr": "La facture {0} n'est plus un brouillon et ses lignes ne peuvent pas être modifiées ; "
               "corrigez-la par un nouveau document."},
+    "db.currency_is_fixed": {
+        "en": "The currency and export status of invoice {0} are set when it is created; they cannot change.",
+        "fr": "La devise et le statut export de la facture {0} sont fixés à sa création ; "
+              "ils ne peuvent pas être modifiés."},
+    "db.export_no_vat": {
+        "en": "Invoice {0} is an export of services: its lines carry no VAT.",
+        "fr": "La facture {0} est une exportation de services : ses lignes ne portent pas de TVA."},
     "db.review_history_append_only": {
         "en": "The review history is append-only.",
         "fr": "L'historique de vérification ne peut qu'être complété."},
@@ -409,6 +422,7 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.meta.status": {"en": "Status", "fr": "Statut"},
     "pdf.meta.currency": {"en": "Currency", "fr": "Devise"},
     "pdf.tax_id": {"en": "Tax ID", "fr": "MF"},
+    "pdf.client_vat": {"en": "VAT No.", "fr": "N° TVA"},
     "pdf.rne": {"en": "RNE", "fr": "RNE"},
     "pdf.country": {"en": "Tunisia", "fr": "Tunisie"},
     "pdf.col.description": {"en": "Description", "fr": "Désignation"},
@@ -600,6 +614,9 @@ _DB_FORMATS = {
     "invoice % is no longer a draft and its lines cannot be changed; correct it with a new document":
         "db.lines_not_draft",
     "the review history is append-only": "db.review_history_append_only",
+    "the currency and export status of invoice % are set when it is created; they cannot change":
+        "db.currency_is_fixed",
+    "invoice % is an export of services; its lines carry no VAT": "db.export_no_vat",
     "an invoice is never approved or rejected by the person who created it": "db.no_self_review",
     "invoice % dated % would come before %, which is numbered lower but dated %. "
     "Invoice numbers must follow issue dates": "db.number_before_date",
