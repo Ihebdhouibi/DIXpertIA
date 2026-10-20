@@ -41,6 +41,15 @@ if [ "$config_errors" != "0" ] || [ "$hba_errors" != "0" ]; then
     exit 1
 fi
 
+# Start after Docker at boot (#183): docker_gwbridge, and its 172.18.0.1, only
+# exist once Docker is up. Ordering only: PostgreSQL does not require Docker.
+install -d /etc/systemd/system/$SERVICE.service.d
+cat > /etc/systemd/system/$SERVICE.service.d/after-docker.conf <<'EOF'
+[Unit]
+After=docker.service
+EOF
+systemctl daemon-reload
+
 systemctl restart "$SERVICE"
 
 psql_super <<'SQL'

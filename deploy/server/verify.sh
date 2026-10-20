@@ -36,7 +36,11 @@ OPEN="$(ufw status | awk '/ALLOW|LIMIT/ && !/\(v6\)/ {print $1}' | sort -u | tr 
 if [ "$OPEN" = "22/tcp 443/tcp 80/tcp " ]; then ok "ufw opens only 22, 80, 443"; else fail "ufw opens: $OPEN"; fi
 check "incoming denied by default" "ufw status verbose | grep -q 'deny (incoming)'"
 # Docker bypasses ufw: what actually listens on a public address is what counts.
-PUBLIC="$(ss -tlnH | awk '{print $4}' | grep -vE '^(127\.|\[::1\]|::1)' | sed -E 's/.*:([0-9]+)$/\1/' | sort -nu | tr '\n' ' ')"
+# Loopback and Docker's private bridges (172.16.0.0/12: PostgreSQL listens on
+# docker_gwbridge for the API's container, #183) are not public.
+PUBLIC="$(ss -tlnH | awk '{print $4}' \
+  | grep -vE '^(127\.|\[::1\]|::1|172\.(1[6-9]|2[0-9]|3[01])\.)' \
+  | sed -E 's/.*:([0-9]+)$/\1/' | sort -nu | tr '\n' ' ')"
 case " $PUBLIC" in
   *" 5432 "*) fail "PostgreSQL listens on a public address" ;;
   *) ok "PostgreSQL not on a public address" ;;

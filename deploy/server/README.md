@@ -97,9 +97,9 @@ It ends with the server's **SSH host key fingerprints**. Copy them into the tabl
 
 | Key | Fingerprint (SHA256) |
 |---|---|
-| ED25519 | *to record after step 4* |
-| ECDSA | *to record after step 4* |
-| RSA | *to record after step 4* |
+| ED25519 | `SHA256:uB5PWyEkXq2k4gm3+AgkiveJq+3tIJT6OjGeyk0fLY8` |
+| ECDSA | `SHA256:sWVYxYe7XWSit/2QN8+dM/ZQT9bcP4ioa3G2fxNOzvA` |
+| RSA (3072) | `SHA256:calKChrAovJVkCBV6cp0ax1CZ+zVhW+61kRVTmW++WA` |
 
 ## Decisions
 
