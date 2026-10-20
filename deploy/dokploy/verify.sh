@@ -5,7 +5,9 @@
 #
 # Read-only, apart from one throwaway container that checks the API's path to
 # PostgreSQL.
-set -uo pipefail
+# No pipefail: each check asks `... | grep -q`, and under pipefail grep's early
+# exit on a match makes the producer fail (SIGPIPE), so a pass would read as a FAIL.
+set -u
 
 failures=0
 ok()   { echo "ok    $1"; }

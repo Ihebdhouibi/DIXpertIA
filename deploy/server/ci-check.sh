@@ -25,7 +25,7 @@ failures=0
 for setting in "permitrootlogin no" "passwordauthentication no" "kbdinteractiveauthentication no" \
                "authenticationmethods publickey" "allowusers dixadmin" "maxauthtries 3" \
                "x11forwarding no" "allowtcpforwarding local"; do
-  if echo "$EFFECTIVE" | grep -qix "$setting"; then
+  if grep -qix "$setting" <<< "$EFFECTIVE"; then
     echo "ok    $setting"
   else
     echo "FAIL  $setting (got: $(echo "$EFFECTIVE" | grep -i "^${setting%% *} " || echo unset))"
