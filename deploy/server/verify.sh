@@ -5,7 +5,9 @@
 #
 # Read-only. Ends with the server's SSH host key fingerprints, to record in
 # the README so anyone connecting for the first time can check them.
-set -uo pipefail
+# No pipefail: each check asks `... | grep -q`, and under pipefail grep's early
+# exit on a match makes the producer fail (SIGPIPE), so a pass would read as a FAIL.
+set -u
 
 ADMIN_USER="${ADMIN_USER:-dixadmin}"
 failures=0
@@ -22,7 +24,7 @@ check "$ADMIN_USER has an authorised key" \
       "grep -qE '^(ssh-ed25519|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh.com) ' ~$ADMIN_USER/.ssh/authorized_keys"
 
 SSHD="$(sshd -T 2>/dev/null)"
-want() { echo "$SSHD" | grep -qix "$1"; }
+want() { grep -qix "$1" <<< "$SSHD"; }
 for setting in "permitrootlogin no" "passwordauthentication no" "kbdinteractiveauthentication no" \
                "pubkeyauthentication yes" "authenticationmethods publickey" "allowusers $ADMIN_USER" \
                "maxauthtries 3" "x11forwarding no"; do

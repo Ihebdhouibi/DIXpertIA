@@ -17,10 +17,15 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo."; exit 1; }
 
 # --- The server is hardened first (#172) ------------------------------------------
-ufw status | grep -q '^Status: active' || { echo "Refused: the firewall is off. Run deploy/server first."; exit 1; }
-sshd -T | grep -qix 'passwordauthentication no' \
+# Captured, then searched. Never `sshd -T | grep -q` under pipefail: grep stops
+# at the first match, sshd is cut off mid-output (SIGPIPE, exit 141), and the
+# pipeline "fails" although the setting is there.
+UFW="$(ufw status)"
+SSHD="$(sshd -T)"
+grep -q '^Status: active' <<< "$UFW" || { echo "Refused: the firewall is off. Run deploy/server first."; exit 1; }
+grep -qix 'passwordauthentication no' <<< "$SSHD" \
   || { echo "Refused: SSH still accepts passwords. Run deploy/server/03-ssh-lockdown.sh first."; exit 1; }
-sshd -T | grep -qix 'permitrootlogin no' \
+grep -qix 'permitrootlogin no' <<< "$SSHD" \
   || { echo "Refused: SSH still accepts root. Run deploy/server/03-ssh-lockdown.sh first."; exit 1; }
 echo "ok    server hardened"
 

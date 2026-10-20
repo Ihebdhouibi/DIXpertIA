@@ -35,7 +35,7 @@ echo "ok    unattended security upgrades on"
 # --- Swap: 2 GB ------------------------------------------------------------------
 # There was none, so a memory spike (an image build next to the running apps,
 # #184) would have the kernel kill processes instead of slowing down.
-if swapon --show=NAME --noheadings | grep -q .; then
+if [ -n "$(swapon --show=NAME --noheadings)" ]; then
   echo "ok    swap already present"
 else
   fallocate -l 2G /swapfile
