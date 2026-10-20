@@ -28,8 +28,12 @@ if ! grep -qE '^(ssh-ed25519|ecdsa-sha2-nistp256|sk-ssh-ed25519@openssh.com) ' "
   echo "Refused: $ADMIN_USER has no authorised key."; exit 1
 fi
 # A key login by the admin, recently: sshd logs the method. (Not $SSH_CONNECTION:
-# sudo clears the environment, so the script never sees it.)
-if ! { journalctl -u ssh --since "-12h" --no-pager -q 2>/dev/null; cat /var/log/auth.log 2>/dev/null; } \
+# sudo clears the environment, so the script never sees it.) Searched by the
+# program that logs it, not by unit: once a login is accepted, pam_systemd
+# moves that sshd process into the user's session, so `journalctl -u ssh`
+# does not show the line. sshd-session is its name from OpenSSH 9.8.
+if ! { journalctl -t sshd -t sshd-session --since "12 hours ago" --no-pager -q 2>/dev/null
+       cat /var/log/auth.log 2>/dev/null; } \
      | grep -q "Accepted publickey for $ADMIN_USER "; then
   echo "Refused: no key login by $ADMIN_USER in the last 12 hours. Sign in with your key, then run this again."
   exit 1
