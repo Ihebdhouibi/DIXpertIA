@@ -48,5 +48,12 @@ check "no error once restarted" "0" "$(sql < /conf/config-errors.sql)"
 # overridden on the command line to keep the container off the network.
 check "listen_addresses in dixpertia.conf" "localhost,172.18.0.1" "$(run "postgres -D $DATA -C listen_addresses" 2>/dev/null || true)"
 
+# The staging cluster (#184): staging.conf read last moves the port and the
+# memory, and parses. postgres -C reads every file and fails on an error.
+install -o postgres -m 0600 /conf/staging.conf "$DATA/zz-staging.conf"
+echo "include 'zz-staging.conf'" >> "$DATA/postgresql.conf"
+check "staging.conf: port" "5433" "$(run "postgres -D $DATA -C port" 2>/dev/null || true)"
+check "staging.conf: shared_buffers" "32768" "$(run "postgres -D $DATA -C shared_buffers" 2>/dev/null || true)"
+
 run "pg_ctl -D $DATA -w stop" >/dev/null
 exit "$failures"
