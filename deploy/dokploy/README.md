@@ -80,7 +80,7 @@ In Dokploy: **Projects → Create project** `DIXpertIA`. Inside it, create two *
 First connect GitHub: **Settings → Git → GitHub** → install the Dokploy GitHub App **on the DIXpertIA repository only** (not "all repositories").
 
 ### `api`
-- **Source:** GitHub, repository `Ihebdhouibi/DIXpertIA`, branch `develop`.
+- **Source:** GitHub, repository `Ihebdhouibi/DIXpertIA`, branch **`deployment`**.
 - **Build type:** Dockerfile, path `Dockerfile`.
 - **Environment.** Replace `<...>`, and generate the secret with `openssl rand -base64 48`:
 
@@ -131,7 +131,7 @@ It prints a generated password **once**. Sign in at **https://102-204-207-34.ssl
 
 ## Updating
 
-- **Redeploy:** Dokploy redeploys on a push to `develop` once **Auto deploy** is on for both applications, or with the **Deploy** button. Migrations run by themselves.
+- **Redeploy:** the server deploys the **`deployment`** branch, never `develop` directly. To ship, open a PR from `develop` into `deployment` (CI runs on it) and merge it. Dokploy then redeploys if **Auto deploy** is on for both applications; otherwise use the **Deploy** button. Migrations run by themselves.
 - **Dokploy itself:** use its own update button (**Settings → Server**). Then re-run `install.sh`'s permission fix: `sudo chmod 0750 /etc/dokploy`.
 - **Docker:** the installer holds the Docker packages (`apt-mark hold`), so unattended upgrades skip them. Once a month:
   ```bash
