@@ -64,7 +64,9 @@ def test_exact_past_the_old_200_invoice_cap(client, admin, bill):
         bill(ttc=10)
     invoices = summary(client, admin)["invoices"]
     assert invoices["count"] == 205
-    assert invoices["suppliers"] == {"count": 205, "amount": pytest.approx(2050)}
+    # Since #195 each total also comes per currency, in `amounts`.
+    assert invoices["suppliers"] == {"count": 205, "amount": pytest.approx(2050),
+                                     "amounts": [{"currency": "TND", "amount": pytest.approx(2050)}]}
 
 
 def test_counts_and_amounts_come_from_the_same_rows(client, admin, bill):
@@ -82,7 +84,7 @@ def test_every_status_is_listed_in_order_zeros_included(client, admin):
     assert [s["status"] for s in invoices["byStatus"]] == ["Draft", "Sent", "Paid", "Overdue", "Cancelled"]
     assert [p["status"] for p in invoices["byProcessing"]] == ["Pending", "Processed", "Completed", "Archived"]
     assert invoices["count"] == 0
-    assert invoices["clients"] == invoices["suppliers"] == {"count": 0, "amount": 0}
+    assert invoices["clients"] == invoices["suppliers"] == {"count": 0, "amount": 0, "amounts": []}
 
 
 def test_overdue_is_derived_as_in_the_invoice_list(client, admin, bill, database):
@@ -118,8 +120,10 @@ def test_client_and_supplier_totals_are_kept_apart(client, admin, bill):
         assert draft(client, admin, customer, amount).status_code == 200
     bill(ttc=119)
     invoices = summary(client, admin)["invoices"]
-    assert invoices["clients"] == {"count": 2, "amount": pytest.approx(1785)}, "1500 HT at 19% VAT"
-    assert invoices["suppliers"] == {"count": 1, "amount": pytest.approx(119)}
+    tnd = [{"currency": "TND", "amount": pytest.approx(1785)}]
+    assert invoices["clients"] == {"count": 2, "amount": pytest.approx(1785), "amounts": tnd}, "1500 HT at 19% VAT"
+    assert invoices["suppliers"] == {"count": 1, "amount": pytest.approx(119),
+                                     "amounts": [{"currency": "TND", "amount": pytest.approx(119)}]}
     assert invoices["count"] == 3
 
 

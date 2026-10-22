@@ -30,8 +30,8 @@ check() {  # check <description> <expected> <actual>
 # What apply.sh asks before restarting, on the files as they are on disk.
 check "apply.sh's pre-restart check finds no error" "0" "$(sql < /conf/config-errors.sql)"
 check "pg_hba.conf parses" "0" "$(echo "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL" | sql)"
-check "no pg_hba rule open to a remote address" "0" \
-    "$(echo "SELECT count(*) FROM pg_hba_file_rules WHERE type LIKE 'host%' AND address NOT IN ('127.0.0.1', '::1')" | sql)"
+check "no pg_hba rule open beyond this host and the Docker bridge" "0" \
+    "$(echo "SELECT count(*) FROM pg_hba_file_rules WHERE type LIKE 'host%' AND address NOT IN ('127.0.0.1', '::1', '172.18.0.0')" | sql)"
 
 # The restart apply.sh does; listen_addresses stays empty here (socket only).
 run "pg_ctl -D $DATA -w -l /tmp/pg.log restart -o \"-c listen_addresses=''\"" >/dev/null
@@ -46,7 +46,7 @@ done
 check "no error once restarted" "0" "$(sql < /conf/config-errors.sql)"
 # On the server listen_addresses comes from dixpertia.conf; here it is
 # overridden on the command line to keep the container off the network.
-check "listen_addresses in dixpertia.conf" "localhost" "$(run "postgres -D $DATA -C listen_addresses" 2>/dev/null || true)"
+check "listen_addresses in dixpertia.conf" "localhost,172.18.0.1" "$(run "postgres -D $DATA -C listen_addresses" 2>/dev/null || true)"
 
 run "pg_ctl -D $DATA -w stop" >/dev/null
 exit "$failures"

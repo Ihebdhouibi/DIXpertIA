@@ -200,6 +200,9 @@ class InvoiceItemOut(BaseModel):
     total: float
     # The VAT rate, so a draft can be edited without losing it (#125).
     vatRate: float
+    # Optional, printed on the PDF under the description and the quantity (#194).
+    detail: str | None = None
+    unit: str | None = None
 
 
 class InvoiceOut(BaseModel):
@@ -237,6 +240,9 @@ class InvoiceOut(BaseModel):
     supplierReference: Optional[str] = None
     amountHT: float
     amountTTC: float
+    # The invoice's currency, and whether it is an export of services (#195).
+    currency: str = "TND"
+    export: bool = False
     dateIssued: str
     dueDate: str
     # The due date as YYYY-MM-DD, for a date input; `dueDate` is for display.
@@ -293,6 +299,8 @@ class InvoiceOut(BaseModel):
             supplierReference=row.supplier_reference,
             amountHT=float(row.montant_ht or Decimal(0)),
             amountTTC=float(row.montant_ttc or Decimal(0)),
+            currency=getattr(row, "devise", None) or "TND",
+            export=bool(getattr(row, "export", False)),
             # In the request's language (#135); the ISO forms below are for inputs.
             dateIssued=format_date(row.date_emission) or "-",
             dueDate=format_date(row.date_echeance) or "-",
@@ -310,6 +318,8 @@ class InvoiceOut(BaseModel):
                     price=float(i.prix_unitaire or 0),
                     total=float((i.quantite or 0) * (i.prix_unitaire or 0)),
                     vatRate=float(i.taux_tva if i.taux_tva is not None else 0),
+                    detail=i.detail,
+                    unit=i.unite,
                 )
                 for i in row.items
             ],
@@ -423,6 +433,11 @@ class ActivationSentOut(BaseModel):
 
 class MessageOut(BaseModel):
     message: str
+
+
+class HealthOut(BaseModel):
+    """GET /api/health (#185): "ok", or "unavailable" with a 503."""
+    status: str
 
 
 class NotificationsUpdatedOut(BaseModel):

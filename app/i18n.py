@@ -112,6 +112,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "A client named '{name}' already exists.",
         "fr": "Un client nommé « {name} » existe déjà."},
     "client.not_found": {"en": "Client not found", "fr": "Client introuvable"},
+    "client.export_needs_foreign_currency": {
+        "en": "An export client pays in a foreign currency (EUR, USD or GBP), not in TND.",
+        "fr": "Un client export paie en devise (EUR, USD ou GBP), pas en TND."},
+    "invoice.export_line_vat": {
+        "en": "Line {n}: an export of services carries no VAT; set its rate to 0%.",
+        "fr": "Ligne {n} : une exportation de services ne porte pas de TVA ; mettez son taux à 0 %."},
     "supplier_invoice.duplicate": {
         "en": "Invoice '{ref}' from this supplier has already been recorded.",
         "fr": "La facture « {ref} » de ce fournisseur est déjà enregistrée."},
@@ -249,6 +255,13 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "Invoice {0} is no longer a draft and its lines cannot be changed; correct it with a new document.",
         "fr": "La facture {0} n'est plus un brouillon et ses lignes ne peuvent pas être modifiées ; "
               "corrigez-la par un nouveau document."},
+    "db.currency_is_fixed": {
+        "en": "The currency and export status of invoice {0} are set when it is created; they cannot change.",
+        "fr": "La devise et le statut export de la facture {0} sont fixés à sa création ; "
+              "ils ne peuvent pas être modifiés."},
+    "db.export_no_vat": {
+        "en": "Invoice {0} is an export of services: its lines carry no VAT.",
+        "fr": "La facture {0} est une exportation de services : ses lignes ne portent pas de TVA."},
     "db.review_history_append_only": {
         "en": "The review history is append-only.",
         "fr": "L'historique de vérification ne peut qu'être complété."},
@@ -396,17 +409,42 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "{message}\n\nOpen DI Xpertia: {url}\n",
         "fr": "{message}\n\nOuvrir DI Xpertia : {url}\n"},
 
-    # Invoice PDF
-    "pdf.tagline": {
-        "en": "Enterprise IT Solutions & Infrastructure Services",
-        "fr": "Solutions informatiques et services d'infrastructure pour les entreprises"},
+    # Invoice PDF (#194: the Claude Design layout in design/invoice-v2/)
     "pdf.invoice": {"en": "INVOICE", "fr": "FACTURE"},
     "pdf.draft": {"en": "DRAFT", "fr": "BROUILLON"},
-    "pdf.date": {"en": "Date", "fr": "Date"},
-    "pdf.billed_to": {"en": "BILLED TO", "fr": "FACTURÉ À"},
-    "pdf.due_date": {"en": "DUE DATE", "fr": "ÉCHÉANCE"},
-    "pdf.status": {"en": "Status", "fr": "Statut"},
-    "pdf.description": {"en": "Description", "fr": "Désignation"},
+    "pdf.draft_note": {"en": "Number assigned on approval", "fr": "Numéro attribué à la validation"},
+    "pdf.seller": {"en": "From", "fr": "Émetteur"},
+    "pdf.bill_to": {"en": "Bill to", "fr": "Facturé à"},
+    "pdf.document": {"en": "Invoice", "fr": "Facture"},
+    "pdf.meta.number": {"en": "Number", "fr": "Numéro"},
+    "pdf.meta.issued": {"en": "Issue date", "fr": "Date d’émission"},
+    "pdf.meta.due": {"en": "Due date", "fr": "Échéance"},
+    "pdf.meta.status": {"en": "Status", "fr": "Statut"},
+    "pdf.meta.currency": {"en": "Currency", "fr": "Devise"},
+    "pdf.tax_id": {"en": "Tax ID", "fr": "MF"},
+    "pdf.client_vat": {"en": "VAT No.", "fr": "N° TVA"},
+    "pdf.rne": {"en": "RNE", "fr": "RNE"},
+    "pdf.country": {"en": "Tunisia", "fr": "Tunisie"},
+    "pdf.col.description": {"en": "Description", "fr": "Désignation"},
+    "pdf.col.qty": {"en": "Qty", "fr": "Qté"},
+    "pdf.col.unit_price": {"en": "Unit excl. VAT", "fr": "PU HT"},
+    "pdf.col.vat": {"en": "VAT", "fr": "TVA"},
+    "pdf.col.total": {"en": "Total excl. VAT", "fr": "Total HT"},
+    "pdf.no_items": {"en": "No items.", "fr": "Aucune ligne."},
+    "pdf.total_ht": {"en": "Total excl. VAT", "fr": "Total HT"},
+    "pdf.vat_row": {"en": "VAT {rate}", "fr": "TVA {rate}"},
+    "pdf.vat_base": {"en": "on {base}", "fr": "sur {base}"},
+    "pdf.net": {"en": "Total due", "fr": "Net à payer"},
+    "pdf.in_words": {"en": "Amount due:", "fr": "Arrêtée la présente facture à la somme de"},
+    "pdf.terms": {"en": "Payment terms", "fr": "Conditions de paiement"},
+    "pdf.terms_text": {"en": "Bank transfer, by {due} at the latest.",
+                       "fr": "Virement bancaire, au plus tard le {due}."},
+    "pdf.bank": {"en": "Bank details", "fr": "Coordonnées bancaires"},
+    "pdf.bank.name": {"en": "Bank", "fr": "Banque"},
+    "pdf.bank.holder": {"en": "Account holder", "fr": "Titulaire"},
+    "pdf.carry": {"en": "Continued on page {n} →", "fr": "Suite page {n} →"},
+    "pdf.continued": {"en": "INVOICE {number} · continued", "fr": "FACTURE {number} · suite"},
+    "pdf.page": {"en": "Page {n} / {total}", "fr": "Page {n} / {total}"},
     # The public contact form (#98)
     "contact.received": {
         "en": "Thank you, your message has been sent. We will get back to you shortly.",
@@ -433,22 +471,6 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "Une nouvelle demande est arrivée par le formulaire de contact du site (n° {id}).\n\n"
               "Nom : {name}\nE-mail : {email}\nSujet : {topic}\n\n{message}\n\n"
               "Répondez à cet e-mail pour répondre à {name}. Toutes les demandes : {link}"},
-    "pdf.qty": {"en": "Qty", "fr": "Qté"},
-    "pdf.price": {"en": "Unit price", "fr": "Prix unitaire"},
-    "pdf.total": {"en": "Total", "fr": "Total"},
-    # Short: the totals sit in a one-inch column, and a longer label wraps.
-    "pdf.subtotal": {"en": "Subtotal", "fr": "Total HT"},
-    "pdf.vat": {"en": "VAT", "fr": "TVA"},
-    "pdf.grand_total": {"en": "Total due", "fr": "Total TTC"},
-    "pdf.draft_note": {
-        "en": "Draft - number assigned on approval", "fr": "Brouillon - numéro attribué à l'approbation"},
-    "pdf.no_items": {"en": "No items.", "fr": "Aucune ligne."},
-    "pdf.footer": {
-        "en": "This invoice is automatically generated by DI Xpertia.<br/>"
-              "For any questions, please contact billing@dixpertia.com",
-        "fr": "Cette facture est générée automatiquement par DI Xpertia.<br/>"
-              "Pour toute question, contactez billing@dixpertia.com"},
-    "pdf.generated_on": {"en": "Generated on {date}, {time}", "fr": "Générée le {date} à {time}"},
     "pdf.status.brouillon": {"en": "Draft", "fr": "Brouillon"},
     "pdf.status.envoyee": {"en": "Sent", "fr": "Envoyée"},
     "pdf.status.payee": {"en": "Paid", "fr": "Payée"},
@@ -592,6 +614,9 @@ _DB_FORMATS = {
     "invoice % is no longer a draft and its lines cannot be changed; correct it with a new document":
         "db.lines_not_draft",
     "the review history is append-only": "db.review_history_append_only",
+    "the currency and export status of invoice % are set when it is created; they cannot change":
+        "db.currency_is_fixed",
+    "invoice % is an export of services; its lines carry no VAT": "db.export_no_vat",
     "an invoice is never approved or rejected by the person who created it": "db.no_self_review",
     "invoice % dated % would come before %, which is numbered lower but dated %. "
     "Invoice numbers must follow issue dates": "db.number_before_date",

@@ -12,6 +12,7 @@ import {
   blankLine,
   problemWithLines,
   toLineInputs,
+  withoutVat,
 } from './InvoiceLinesEditor';
 
 /**
@@ -66,6 +67,14 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
     setError(null);
     setIdempotencyKey(newIdempotencyKey());
   }, [open]);
+
+  // An export client (#195): no VAT on any line, amounts in the client's currency.
+  const chosen = clients.find((c) => String(c.id) === clientId);
+  const exportOfServices = Boolean(chosen?.export);
+  const chooseClient = (id: string) => {
+    setClientId(id);
+    if (clients.find((c) => String(c.id) === id)?.export) setLines((current) => withoutVat(current));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +136,7 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
           hint={clients.length === 0 ? t('invoices.create.noClients') : undefined}
         >
           {({ id, describedBy }) => (
-            <Select id={id} aria-describedby={describedBy} required value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            <Select id={id} aria-describedby={describedBy} required value={clientId} onChange={(e) => chooseClient(e.target.value)}>
               <option value="">{t('invoices.create.chooseClient')}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.nom}</option>
@@ -135,13 +144,13 @@ export default function InvoiceCreateDialog({ open, clients, onClose, onCreated 
             </Select>
           )}
         </Field>
-        <InvoiceLinesEditor lines={lines} onChange={setLines} />
+        <InvoiceLinesEditor lines={lines} onChange={setLines} exportOfServices={exportOfServices} />
         <Field label={t('invoices.dueDate')}>
           {({ id }) => (
             <Input id={id} type="date" required min={today()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           )}
         </Field>
-        <InvoiceLinesTotals lines={lines} />
+        <InvoiceLinesTotals lines={lines} currency={chosen?.devise ?? 'TND'} />
       </form>
     </Dialog>
   );

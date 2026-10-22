@@ -41,7 +41,7 @@ import InvoiceHistory from './InvoiceHistory';
 import Button from './ui/Button';
 import { Field, Input, Select } from './ui/Field';
 import { useConfirm, useToast, ToastTone } from './ui/feedback';
-import { formatTND } from '../format';
+import { formatMoney } from '../format';
 import { labelOf, useLocale, useT, type MessageKey } from '../i18n';
 
 interface InvoicesViewProps {
@@ -191,9 +191,9 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const formatDirection = (inv: Invoice) =>
     t(inv.direction === 'incoming' ? 'invoices.direction.incoming' : 'invoices.direction.outgoing');
 
-  // TND, not USD: DI Xpertia is a Tunisian company and invoices in dinars,
-  // with the dinar's three decimal places, in the language showing.
-  const formatCurrency = formatTND;
+  // Each invoice in its own currency, fixed when it was created (#195): dinars
+  // with three decimals, EUR, USD and GBP with two. Never converted.
+  const formatCurrency = (value: number, inv: Invoice) => formatMoney(value, inv.currency ?? 'TND');
 
   // --- Columns ---------------------------------------------------------------
   // meta.numeric right-aligns a column in mono; ids 'date' and 'amount' are the
@@ -267,7 +267,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         accessorFn: (inv) => inv.amountTTC,
         header: t('invoices.col.amount'),
         meta: { numeric: true },
-        cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountTTC)}</span>,
+        cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountTTC, row.original)}</span>,
       },
       {
         id: 'date',
@@ -695,14 +695,14 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                 <h3 className="mb-4 text-sm font-semibold text-on-surface">{t('invoices.summary')}</h3>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
                   <dt className={DETAIL_LABEL}>{t('invoices.exclVat')}</dt>
-                  <dd className="text-right font-mono tabular-nums text-on-surface">{formatCurrency(selectedInvoice.amountHT)}</dd>
+                  <dd className="text-right font-mono tabular-nums text-on-surface">{formatCurrency(selectedInvoice.amountHT, selectedInvoice)}</dd>
                   <dt className={DETAIL_LABEL}>{t('invoices.vat')}</dt>
                   <dd className="text-right font-mono tabular-nums text-on-surface">
-                    {formatCurrency(selectedInvoice.amountTTC - selectedInvoice.amountHT)}
+                    {formatCurrency(selectedInvoice.amountTTC - selectedInvoice.amountHT, selectedInvoice)}
                   </dd>
                   <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>{t('invoices.inclVat')}</dt>
                   <dd className="border-t border-outline-variant pt-3 text-right font-mono text-base font-semibold tabular-nums text-on-surface">
-                    {formatCurrency(selectedInvoice.amountTTC)}
+                    {formatCurrency(selectedInvoice.amountTTC, selectedInvoice)}
                   </dd>
                   <dt className={DETAIL_LABEL}>{t('invoices.issued')}</dt>
                   <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>

@@ -45,6 +45,7 @@ from app.schemas.invoicing import (
     SupplierCreate,
     SupplierInvoiceCreate,
     SupplierOut,
+    export_currency_problem,
 )
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
 
@@ -136,6 +137,11 @@ def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(g
     if client is None:
         raise ApiError(404, "client.not_found")
     changes = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if changes.get("identifiant_fiscal") == "":
+        changes["identifiant_fiscal"] = None  # cleared
+    # The rule holds on the client as it will be, not only on the fields sent.
+    if export_currency_problem(changes.get("export", client.export), changes.get("devise", client.devise)):
+        raise ApiError(422, "client.export_needs_foreign_currency")
     before = {k: getattr(client, k) for k in changes if getattr(client, k) != changes[k]}
     after = {k: changes[k] for k in before}
     if after:
@@ -233,6 +239,19 @@ def _allocate_invoice_number(db: Session, series: str, year: int) -> str:
         {"s": series, "y": year},
     ).scalar_one()
     return f"{series}-{year}-{allocated:04d}"
+
+
+def _check_export_lines(export: bool, items) -> None:
+    """An export of services carries no VAT (#195): name the first line that has some.
+
+    Refused rather than silently set to 0, so an invoice never changes without
+    the person typing it seeing why. Mirrors export_lines_carry_no_vat.
+    """
+    if not export:
+        return
+    for n, item in enumerate(items, start=1):
+        if item.taux_tva != 0:
+            raise ApiError(422, "invoice.export_line_vat", n=n)
 
 
 def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
@@ -343,6 +362,10 @@ def create_invoice(
         if existing:
             return InvoiceOut.from_orm_row(existing)
 
+    client = db.get(Client, payload.client_id)
+    if client is None:
+        raise ApiError(404, "client.not_found")
+    _check_export_lines(client.export, payload.items)
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
 
@@ -360,6 +383,10 @@ def create_invoice(
         direction=InvoiceDirection.OUTGOING,
         cree_par_id=current_user.id,
         idempotency_key=idempotency_key,
+        # Copied from the client and fixed from now on (invoice_currency_is_fixed):
+        # the invoice reprints as issued, whatever the client record becomes (#195).
+        devise=client.devise,
+        export=client.export,
     )
     db.add(invoice)
     db.flush()  # assigns invoice.id without committing
@@ -374,6 +401,7 @@ def create_invoice(
         "direction": invoice.direction, "client_id": invoice.client_id,
         "montant_ht": montant_ht, "montant_ttc": montant_ttc,
         "date_echeance": invoice.date_echeance, "lines": len(items_data),
+        "devise": invoice.devise, "export": invoice.export,
     })
 
     # Validate the response while the transaction can still be rolled back. If
@@ -533,6 +561,7 @@ def update_invoice(
     if payload.date_echeance < invoice.date_emission:
         raise ApiError(422, "invoice.due_before_issue")
 
+    _check_export_lines(invoice.export, payload.items)
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
     before = {"date_echeance": invoice.date_echeance, "montant_ht": invoice.montant_ht,
@@ -924,9 +953,14 @@ def _pdf_data(invoice: Invoice) -> dict:
     items = [
         {
             "description": item.designation,
-            "qty": float(item.quantite),
-            "price": float(item.prix_unitaire),
-            "total": float(item.quantite * item.prix_unitaire),
+            # Printed under the description and the quantity (#194).
+            "detail": item.detail,
+            "unit": item.unite,
+            "qty": item.quantite,
+            "price": item.prix_unitaire,
+            "total": item.quantite * item.prix_unitaire,
+            # One VAT row per rate on the PDF (#194).
+            "vat_rate": item.taux_tva if item.taux_tva is not None else 0,
         }
         for item in invoice.items
     ]
@@ -946,8 +980,16 @@ def _pdf_data(invoice: Invoice) -> dict:
         # As the API shows it: Overdue is derived from the due date (#117).
         "status": invoice.displayed_status().value,
         "items": items,
-        "subtotal": float(invoice.montant_ht),
-        "total": float(invoice.montant_ttc),
+        # The amounts the books hold: the PDF never computes a total of its own.
+        "subtotal": invoice.montant_ht,
+        "total": invoice.montant_ttc,
+        # Fixed on the invoice when it was created (#195): it reprints as issued.
+        "currency": invoice.devise or "TND",
+        "export": bool(invoice.export),
+        # A foreign VAT number or a matricule fiscal, printed only when filled.
+        "client_tax_id": getattr(party, "identifiant_fiscal", None) if party else None,
+        # A supplier's bill: the supplier issued it, DI Xpertia is billed (#40).
+        "incoming": invoice.direction == InvoiceDirection.INCOMING,
     }
 
 

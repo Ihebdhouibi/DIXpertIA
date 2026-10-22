@@ -12,17 +12,33 @@ import { getLocale } from './i18n';
 
 const TAG = { fr: 'fr-FR', en: 'en-US' } as const;
 
-const DINARS = {
-  fr: new Intl.NumberFormat(TAG.fr, { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
-  en: new Intl.NumberFormat(TAG.en, { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
-};
+/** The currencies an invoice can be in (#195), and their decimal places: the dinar has three. */
+export type Currency = 'TND' | 'EUR' | 'USD' | 'GBP';
+export const CURRENCIES: Currency[] = ['TND', 'EUR', 'USD', 'GBP'];
+const DECIMALS: Record<string, number> = { TND: 3, EUR: 2, USD: 2, GBP: 2 };
 
 /**
- * Dinar amounts. DI Xpertia is a Tunisian company and invoices in TND; the
- * dinar has three decimal places, so they are always shown.
+ * An amount in its currency, the way the invoice PDF writes it:
+ * '4,800.50 USD' / '4 800,50 USD', '1,234.500 TND'. Never converted.
  */
+export function formatMoney(value: number, currency: string = 'TND'): string {
+  const digits = DECIMALS[currency] ?? 2;
+  const number = new Intl.NumberFormat(TAG[getLocale()], { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return `${number.format(value)} ${currency}`;
+}
+
+/** Dinar amounts: payslips, and anything not tied to an invoice's currency. */
 export function formatTND(value: number): string {
-  return `${DINARS[getLocale()].format(value)} TND`;
+  return formatMoney(value, 'TND');
+}
+
+/**
+ * Totals in several currencies, side by side: '2 380,000 TND · 2 000,00 USD'.
+ * Never one sum: dollars added to dinars mean nothing (#195).
+ */
+export function formatAmounts(amounts: { currency: string; amount: number }[] | undefined, fallback = 0): string {
+  if (!amounts || amounts.length === 0) return formatMoney(fallback, 'TND');
+  return amounts.map((a) => formatMoney(a.amount, a.currency)).join(' · ');
 }
 
 /** A plain number, grouped the local way: 1,234.5 / 1 234,5. */

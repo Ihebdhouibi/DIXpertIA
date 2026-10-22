@@ -57,10 +57,19 @@ db.json
 !/design/DI Xpertia Logo Concepts/exports/palette/
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.css
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.json
-# Reference renders of the invoice PDF (#81), regenerated when it changes.
+# The invoice layout handoff from Claude Design (#194): spec and the HTML
+# references (support.js is their runtime). The raster exports stay local.
+!/design/invoice-v2/
+!/design/invoice-v2/README.md
+!/design/invoice-v2/reference/
+!/design/invoice-v2/reference/*
+!/design/invoice-v2/reference/assets/
+!/design/invoice-v2/reference/assets/*
+# Reference renders of the invoice PDF (#81, #194), regenerated when it changes.
 !/design/invoice-pdf/
 !/design/invoice-pdf/invoice-sample-fr.pdf
 !/design/invoice-pdf/invoice-sample-en-draft.pdf
+!/design/invoice-pdf/invoice-sample-two-page.pdf
 
 # Env backups
 .env.backup

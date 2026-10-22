@@ -184,6 +184,17 @@ export default defineMessages('invoices', {
     fr: 'Ligne {n}, prix unitaire HT en TND',
     en: 'Line {n} unit price, TND excl. VAT',
   },
+  'invoices.line.exportNote': {
+    fr: 'Exportation de services : aucune TVA sur les lignes, montants dans la devise du client.',
+    en: "Export of services: no VAT on the lines, amounts in the client's currency.",
+  },
+  'invoices.line.unit': { fr: 'Unité', en: 'Unit' },
+  'invoices.line.unitLabel': { fr: 'Ligne {n}, unité (jours, forfait…)', en: 'Line {n} unit (days, flat fee...)' },
+  'invoices.line.detail': {
+    fr: 'Détail (facultatif), imprimé sous la désignation',
+    en: 'Detail (optional), printed under the description',
+  },
+  'invoices.line.detailLabel': { fr: 'Ligne {n}, détail', en: 'Line {n} detail' },
   'invoices.line.vatLabel': { fr: 'Ligne {n}, taux de TVA', en: 'Line {n} VAT rate' },
   'invoices.line.removeLabel': { fr: 'Supprimer la ligne {n}', en: 'Remove line {n}' },
   'invoices.line.remove': { fr: 'Supprimer la ligne', en: 'Remove line' },
@@ -330,6 +341,29 @@ export default defineMessages('invoices', {
     fr: "Les factures de ce client sont imprimées dans cette langue, quel que soit l'utilisateur qui les télécharge.",
     en: 'Invoices for this client print in this language, whoever downloads them.',
   },
+  'invoices.clients.form.export': {
+    fr: "Client à l'export (exportation de services, sans TVA)",
+    en: 'Client abroad (export of services, no VAT)',
+  },
+  'invoices.clients.form.exportHint': {
+    fr: 'Ses factures ne portent pas de TVA, avec la mention légale, dans une devise étrangère.',
+    en: 'Their invoices carry no VAT, with the legal mention, in a foreign currency.',
+  },
+  'invoices.clients.form.currency': { fr: 'Devise des factures', en: 'Invoice currency' },
+  'invoices.clients.form.currencyHint': {
+    fr: 'Fixée sur chaque facture à sa création. Un client export paie en devise.',
+    en: 'Fixed on each invoice when it is created. An export client pays in a foreign currency.',
+  },
+  'invoices.clients.form.taxId': { fr: 'N° TVA / identifiant fiscal', en: 'VAT No. / tax ID' },
+  'invoices.clients.form.taxIdHint': {
+    fr: 'Facultatif. Imprimé sur les factures quand il est rempli.',
+    en: 'Optional. Printed on invoices when filled.',
+  },
+  'invoices.clients.form.exportNeedsCurrency': {
+    fr: 'Un client export paie en devise (EUR, USD ou GBP).',
+    en: 'An export client pays in a foreign currency (EUR, USD or GBP).',
+  },
+  'invoices.clients.export': { fr: 'Export', en: 'Export' },
   'invoices.clients.form.nameRequired': { fr: 'Le nom du client est obligatoire.', en: 'The client name is required.' },
   'invoices.clients.form.emailInvalid': { fr: "L'adresse e-mail n'est pas valide.", en: 'The email address is not valid.' },
   'invoices.clients.form.save': { fr: 'Enregistrer', en: 'Save' },

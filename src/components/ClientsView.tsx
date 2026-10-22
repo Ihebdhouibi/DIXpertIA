@@ -11,6 +11,7 @@ import Dialog from './ui/Dialog';
 import { Field, FormAlert, Input, Select, Textarea } from './ui/Field';
 import { useToast } from './ui/feedback';
 import { useDataStatus } from '../dataStatus';
+import { CURRENCIES, type Currency } from '../format';
 
 /**
  * Clients (#192): the people and companies we invoice, and the language their
@@ -20,7 +21,11 @@ import { useDataStatus } from '../dataStatus';
  */
 
 type Locale = 'fr' | 'en';
-const EMPTY = { nom: '', email: '', telephone: '', adresse: '', locale: 'fr' as Locale };
+const EMPTY = {
+  nom: '', email: '', telephone: '', adresse: '', locale: 'fr' as Locale,
+  // A client abroad (#195): no VAT, a foreign currency, an optional tax ID.
+  export: false, devise: 'TND' as Currency, identifiant_fiscal: '',
+};
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function ClientsView({ clients, onChanged }: { clients: Client[]; onChanged: () => Promise<void> }) {
@@ -42,7 +47,11 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
   const start = (client: Client | null) => {
     setEditing(client);
     setForm(client
-      ? { nom: client.nom, email: client.email ?? '', telephone: client.telephone ?? '', adresse: client.adresse ?? '', locale: client.locale ?? 'fr' }
+      ? {
+          nom: client.nom, email: client.email ?? '', telephone: client.telephone ?? '', adresse: client.adresse ?? '',
+          locale: client.locale ?? 'fr', export: Boolean(client.export), devise: client.devise ?? 'TND',
+          identifiant_fiscal: client.identifiant_fiscal ?? '',
+        }
       : EMPTY);
     setError(null);
     setOpen(true);
@@ -50,11 +59,18 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
 
   const set = (field: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
+  // Ticking export moves a TND client to a foreign currency: an export client
+  // pays in one for this release (#195). USD, which both current clients use.
+  const setExport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setForm((f) => ({ ...f, export: checked, devise: checked && f.devise === 'TND' ? 'USD' : f.devise }));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nom.trim()) return setError(t('invoices.clients.form.nameRequired'));
     if (form.email.trim() && !EMAIL.test(form.email.trim())) return setError(t('invoices.clients.form.emailInvalid'));
+    if (form.export && form.devise === 'TND') return setError(t('invoices.clients.form.exportNeedsCurrency'));
     setSaving(true);
     setError(null);
     try {
@@ -125,6 +141,12 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
                     <span className="font-mono text-caption font-semibold uppercase">{c.locale ?? 'fr'}</span>
                     {t(c.locale === 'en' ? 'invoices.clients.lang.en' : 'invoices.clients.lang.fr')}
                   </span>
+                  {c.export && (
+                    <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-outline-variant px-2.5 py-0.5 text-body-sm">
+                      {t('invoices.clients.export')}
+                      <span className="font-mono text-caption font-semibold">{c.devise}</span>
+                    </span>
+                  )}
                 </Td>
                 <Td numeric>
                   <Button variant="ghost" size="sm" onClick={() => start(c)} aria-label={t('invoices.clients.editLabel', { name: c.nom })}>
@@ -183,6 +205,38 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
               <Textarea id={id} rows={3} maxLength={500} value={form.adresse} onChange={set('adresse')} aria-describedby={describedBy} />
             )}
           </Field>
+          <label className="flex items-start gap-3 text-body-sm text-on-surface">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+              checked={form.export}
+              onChange={setExport}
+              aria-describedby="client-export-hint"
+            />
+            <span>
+              <span className="font-semibold">{t('invoices.clients.form.export')}</span>
+              <span id="client-export-hint" className="mt-0.5 block text-on-surface-variant">
+                {t('invoices.clients.form.exportHint')}
+              </span>
+            </span>
+          </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label={t('invoices.clients.form.currency')} hint={t('invoices.clients.form.currencyHint')}>
+              {({ id, describedBy }) => (
+                <Select id={id} value={form.devise} onChange={set('devise')} aria-describedby={describedBy}>
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c} disabled={form.export && c === 'TND'}>{c}</option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label={t('invoices.clients.form.taxId')} hint={t('invoices.clients.form.taxIdHint')}>
+              {({ id, describedBy }) => (
+                <Input id={id} maxLength={50} value={form.identifiant_fiscal} onChange={set('identifiant_fiscal')}
+                  aria-describedby={describedBy} className="font-mono" />
+              )}
+            </Field>
+          </div>
           <Field label={t('invoices.clients.form.language')} hint={t('invoices.clients.form.languageHint')}>
             {({ id, describedBy }) => (
               <Select id={id} value={form.locale} onChange={set('locale')} aria-describedby={describedBy}>
