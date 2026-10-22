@@ -8,12 +8,18 @@ failing whatever asked for it.
 
 import logging
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.core.config import settings
 
 log = logging.getLogger("dixpertia")
+
+# Port 465 speaks TLS from the first byte (SMTPS); any other port starts in
+# clear and must upgrade with STARTTLS before the password is sent.
+SMTPS_PORT = 465
+TIMEOUT_SECONDS = 20
 
 
 def email_configured() -> bool:
@@ -36,8 +42,17 @@ def send_email(to_email: str, subject: str, body: str, reply_to: str | None = No
             msg["Reply-To"] = reply_to
         msg.attach(MIMEText(body, "plain"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.starttls()
+        # A verified TLS connection, always: the mail server's certificate must
+        # match SMTP_HOST, or the password could be handed to an impostor.
+        # starttls() with no context checks nothing.
+        context = ssl.create_default_context()
+        if settings.SMTP_PORT == SMTPS_PORT:
+            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT,
+                                      context=context, timeout=TIMEOUT_SECONDS)
+        else:
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=TIMEOUT_SECONDS)
+            server.starttls(context=context)
+        with server:
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
 
