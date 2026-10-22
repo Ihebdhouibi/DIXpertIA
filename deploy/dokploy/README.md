@@ -80,7 +80,7 @@ In Dokploy: **Projects → Create project** `DIXpertIA`. Inside it, create two *
 First connect GitHub: **Settings → Git → GitHub** → install the Dokploy GitHub App **on the DIXpertIA repository only** (not "all repositories").
 
 ### `api`
-- **Source:** GitHub, repository `Ihebdhouibi/DIXpertIA`, branch **`deployment`**.
+- **Source:** GitHub, repository `Ihebdhouibi/DIXpertIA`, branch **`main`** for production (the `deployment` branch is staging's, see *Staging* below).
 - **Build type:** Dockerfile, path `Dockerfile`.
 - **Environment.** Replace `<...>`, and generate the secret with `openssl rand -base64 48`:
 
@@ -129,9 +129,53 @@ sudo docker exec -it $(sudo docker ps -q -f name=api | head -1) \
 
 It prints a generated password **once**. Sign in at **https://102-204-207-34.sslip.io** and check that `/api/health` answers `{"status":"ok"}`.
 
+## Staging (#184)
+
+Staging is a second pair of applications, `api-staging` and `web-staging`, at **`https://staging.dixpertia.tn`**. It uses its own database cluster on port 5433, with its own roles, and **invented data only** (GDPR).
+
+| | Production | Staging |
+|---|---|---|
+| Address | `dixpertia.tn`, `www.dixpertia.tn` | `staging.dixpertia.tn` |
+| Branch | `main` (a release) | `deployment` |
+| PostgreSQL | `17/main`, port 5432 | `17/staging`, port 5433 |
+| API docs | off | on (`API_DOCS=true`) |
+| E-mail | `contact@dixpertia.tn` | none: SMTP unset, so e-mails are logged, never sent to real people |
+
+1. **DNS:** an `A` record `staging` pointing to `102.204.207.34`.
+2. **Database:**
+   ```bash
+   sudo git -C /opt/dixpertia pull --ff-only
+   sudo bash /opt/dixpertia/deploy/postgres/staging.sh
+   sudo -u postgres python3 /opt/dixpertia/db/setup_roles.py \
+     --superuser-url "postgresql:///dixpertia?host=/var/run/postgresql&port=5433" | grep -o 'dixpertia_[a-z]*:[^@]*'
+   ```
+   The last command prints the **staging** passwords, once. They are different from production's.
+3. **`api-staging`:** set it up as `api` in step 6, with branch **`deployment`**, and this environment:
+   ```
+   DATABASE_URL=postgresql://dixpertia_app:<staging app password>@172.18.0.1:5433/dixpertia
+   SCHEMA_DATABASE_URL=postgresql://dixpertia_owner:<staging owner password>@172.18.0.1:5433/dixpertia
+   SECRET_KEY=<a new one: openssl rand -base64 48, never production's>
+   MIGRATE_ON_START=true
+   FORWARDED_ALLOW_IPS=10.0.1.0/24
+   WEB_CONCURRENCY=1
+   API_DOCS=true
+   FRONTEND_URL=https://staging.dixpertia.tn
+   ```
+   **Domain:** `staging.dixpertia.tn`, path `/api`, port `8000`, HTTPS with Let's Encrypt. Under **Advanced → Resources**, limit memory to **512 MB**, so a staging fault cannot starve production.
+4. **`web-staging`:** set it up as `web`, with branch **`deployment`** and build argument `FRONTEND_URL=https://staging.dixpertia.tn`.
+   - **Domain:** `staging.dixpertia.tn`, path `/`, port `8080`, HTTPS with Let's Encrypt.
+   - **Advanced → Security → Basic Auth:** a user name and password, so that only the team can open staging, and search engines can't index it.
+   - Put basic auth on `web-staging` **only, never on `api-staging`**: the app sends its own `Authorization: Bearer` header to the API, which basic auth would replace. The API is protected anyway: it requires sign-in, and its public routes are rate-limited.
+5. **Table grants and first admin:** steps 7 and 8, with `&port=5433` in the URL, the staging passwords, and `name=api-staging` in the `docker ps` filter.
+
+**The release flow:**
+1. Merge features into `develop`.
+2. Open a PR from `develop` into `deployment`. Merging it redeploys **staging**. Check it there.
+3. Open a PR from `deployment` into `main`, tag the release, and **Deploy** production.
+
 ## Updating
 
-- **Redeploy:** the server deploys the **`deployment`** branch, never `develop` directly. To ship, open a PR from `develop` into `deployment` (CI runs on it) and merge it. Dokploy then redeploys if **Auto deploy** is on for both applications; otherwise use the **Deploy** button. Migrations run by themselves.
+- **Redeploy:** nothing deploys from `develop` directly; see *the release flow* under *Staging*. Turn **Auto deploy** on for the staging applications only, so that production changes only when you click **Deploy**. Migrations run by themselves.
 - **Dokploy itself:** use its own update button (**Settings → Server**). Then re-run `install.sh`'s permission fix: `sudo chmod 0750 /etc/dokploy`.
 - **Docker:** the installer holds the Docker packages (`apt-mark hold`), so unattended upgrades skip them. Once a month:
   ```bash

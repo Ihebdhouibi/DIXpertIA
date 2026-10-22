@@ -39,6 +39,17 @@ The roles (`db/setup_roles.py`) and the schema (`alembic upgrade head`) come wit
 - **Memory:** `shared_buffers` 1 GB and `effective_cache_size` 4 GB, leaving room for the API on the same 7.8 GB.
 - **Logging:** every connection and disconnection, every schema change (`log_statement = ddl`), queries slower than 500 ms, and lock waits. Messages are in English (`lc_messages = 'C'`), which is what the application recognises and translates (#135, #161).
 
+## The staging cluster (#184)
+
+Staging has its own PostgreSQL **cluster**, `17/staging` on port **5433**, next to production's `17/main` on 5432. It is not a second database in the same cluster, because roles belong to the whole cluster and the migrations name `dixpertia_app` and `dixpertia_owner`. In one cluster, staging would share production's roles and their passwords. Here it has its own roles, passwords and data.
+
+```bash
+sudo bash /opt/dixpertia/deploy/postgres/staging.sh             # create it, apply the configuration
+sudo CLUSTER=staging bash /opt/dixpertia/deploy/postgres/verify.sh
+```
+
+`staging.conf` is read after `dixpertia.conf`. It changes only the port and the memory (256 MB of shared buffers instead of 1 GB); everything else is production's configuration, so staging tests the same rules. Both `apply.sh` and `verify.sh` take `CLUSTER=staging`.
+
 ## Logs
 
 Ubuntu's packaging writes them to `/var/log/postgresql/postgresql-17-main.log` and rotates them weekly (`/etc/logrotate.d/postgresql-common`).
