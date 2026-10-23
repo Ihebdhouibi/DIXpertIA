@@ -229,7 +229,9 @@ def disable(body: PasswordIn, db: Session = Depends(get_db), user: User = Depend
         raise ApiError(409, "mfa.required")
     account = db.execute(text("SELECT * FROM auth_account_by_email(:e)"), {"e": user.email}).first()
     if account is None or not verify_password(body.password, account.hashedPassword):
-        raise ApiError(401, "auth.invalid_credentials")
+        # 400, not 401: the UI reads a 401 on a signed-in request as an expired
+        # session and signs the user out (#220).
+        raise ApiError(400, "auth.wrong_current_password")
     if not mfa.remove(db, user.id):
         raise ApiError(409, "mfa.not_enabled")
     record_event(db, "user.mfa_disabled", "user", user.id)

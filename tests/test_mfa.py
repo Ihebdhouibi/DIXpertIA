@@ -209,7 +209,7 @@ def test_disabling_needs_the_password(client, database):
     email, token = session_for(client, database, "disable")
     _, _, fresh = enrol(client, token)
     wrong = client.post("/api/mfa/disable", headers=bearer(fresh), json={"password": "wrong-password"})
-    assert wrong.status_code == 401
+    assert wrong.status_code == 400 and wrong.json()["code"] == "auth.wrong_current_password"
     off = client.post("/api/mfa/disable", headers=bearer(fresh), json={"password": PASSWORD})
     assert off.status_code == 200
     assert client.get("/api/me", headers=bearer(fresh)).status_code == 401, "older sessions signed out"

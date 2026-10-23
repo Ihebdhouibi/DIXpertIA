@@ -1,7 +1,7 @@
 """two-factor authentication: TOTP secrets and recovery codes
 
 Revision ID: e9c3a1f7b204
-Revises: bc66d5b01ae9
+Revises: a4f8c2e6d1b3
 Create Date: 2026-10-23 12:00:00.000000
 
 #44: a second factor - a 6-digit code from an authenticator app - on top of
@@ -31,7 +31,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = 'e9c3a1f7b204'
-down_revision = 'bc66d5b01ae9'
+down_revision = 'a4f8c2e6d1b3'
 branch_labels = None
 depends_on = None
 
