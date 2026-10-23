@@ -61,6 +61,8 @@ TRUNCATED_BETWEEN_TESTS = (
     "notifications",
     "contact_requests",
     "auth_attempts",
+    "user_mfa_recovery",
+    "user_mfa",
     "invoice_reviews",
     "invoice_items",
     "invoices",

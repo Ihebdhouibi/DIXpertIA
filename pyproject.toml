@@ -30,6 +30,7 @@ select = [
 # leftover debugging, so T201 does not apply. Their *emoji* are still a problem
 # on Windows (cp1252 stdout) and are caught by the check-no-emoji hook instead.
 "seed_users.py" = ["T201"]
+"reset_mfa.py" = ["T201"]
 "migrate_data.py" = ["T201"]
 "insert_invoices.py" = ["T201"]
 # Same reasoning: the hook reports findings on stdout for pre-commit to display.

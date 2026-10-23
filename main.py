@@ -31,8 +31,11 @@ from app.schemas.api import (
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user, session_identity
 from app.core.security import (
+    MFA_CHALLENGE,
+    MFA_ENROL,
     burn_password_check,
     create_access_token,
+    create_purpose_token,
     hash_password,
     password_problem,
     unusable_password_hash,
@@ -45,9 +48,9 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, dashboard, invoicing, notifications
+from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
-from app.services import accounts, throttle
+from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.reminders import reminder_loop
@@ -73,6 +76,11 @@ PUBLIC_PATHS = frozenset({
     "/api/contact",
     # Container health check (#185): says only whether the database answers.
     "/api/health",
+    # The sign-in's second step (#44): each carries its own short-lived token,
+    # checked by the route, since there is no session yet.
+    "/api/mfa/verify",
+    "/api/mfa/enrol/setup",
+    "/api/mfa/enrol/confirm",
 })
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
@@ -168,6 +176,8 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(mfa_router.router, prefix="/api")
+app.include_router(mfa_router.public, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
@@ -369,6 +379,19 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     throttle.forget(db, from_ip)
     throttle.clear(db, throttle.LOGIN_ACCOUNT, account)
     db.commit()
+
+    # The second factor (#44): the password alone gives no session when it is
+    # on, or when the role requires it and it is not set up yet.
+    if mfa.enabled():
+        second = mfa.state(db, user.id)
+        if second is not None and second.enabled:
+            log.info("Login: password OK for %s, second factor next", user.id)
+            return LoginOut(mfaRequired=True,
+                            challengeToken=create_purpose_token(MFA_CHALLENGE, user.id, user.token_version))
+        if mfa.required_for(user.role):
+            log.info("Login: password OK for %s, enrolment required", user.id)
+            return LoginOut(mfaEnrolmentRequired=True,
+                            enrolToken=create_purpose_token(MFA_ENROL, user.id, user.token_version))
     log.info("Login OK for %s (role=%s)", user.id, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
     return LoginOut(access_token=token, user=UserOut.from_orm_row(user))

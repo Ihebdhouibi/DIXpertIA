@@ -69,6 +69,31 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.wrong_current_password": {
         "en": "Your current password is not correct.",
         "fr": "Votre mot de passe actuel est incorrect."},
+    # Two-factor authentication (#44).
+    "mfa.not_configured": {
+        "en": "Two-factor authentication is not available on this server.",
+        "fr": "L'authentification à deux facteurs n'est pas disponible sur ce serveur."},
+    "mfa.already_enabled": {
+        "en": "Two-factor authentication is already on for this account.",
+        "fr": "L'authentification à deux facteurs est déjà activée pour ce compte."},
+    "mfa.not_started": {
+        "en": "Start the set-up again: no code is expected yet.",
+        "fr": "Recommencez la configuration : aucun code n'est attendu pour le moment."},
+    "mfa.not_enabled": {
+        "en": "Two-factor authentication is not on for this account.",
+        "fr": "L'authentification à deux facteurs n'est pas activée pour ce compte."},
+    "mfa.wrong_code": {
+        "en": "This code is not valid. Enter the current code from your app.",
+        "fr": "Ce code n'est pas valide. Saisissez le code affiché actuellement dans votre application."},
+    "mfa.expired": {
+        "en": "This sign-in has expired. Sign in again.",
+        "fr": "Cette connexion a expiré. Connectez-vous à nouveau."},
+    "mfa.required": {
+        "en": "Your role requires two-factor authentication: it cannot be turned off.",
+        "fr": "Votre rôle exige l'authentification à deux facteurs : elle ne peut pas être désactivée."},
+    "mfa.reset_self": {
+        "en": "To turn off your own two-factor authentication, use your settings.",
+        "fr": "Pour désactiver votre propre authentification à deux facteurs, passez par vos paramètres."},
     "auth.too_many_requests": {
         "en": "Too many attempts. Please wait a few minutes and try again.",
         "fr": "Trop de tentatives. Patientez quelques minutes, puis réessayez."},
