@@ -130,6 +130,18 @@ class Settings:
     # contact) from one address per minute.
     PUBLIC_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_REQUESTS_PER_MINUTE", 20)
 
+    # Two-factor authentication (#44). The key encrypts each account's TOTP
+    # secret before it reaches the database, and keys the recovery codes'
+    # HMAC: a database dump alone can then mint no code. A Fernet key; keep a
+    # copy in the password vault, since losing it means every enrolled account
+    # must re-enrol. Empty: two-factor is off, and nobody is asked for it.
+    MFA_ENCRYPTION_KEY: str = (os.getenv("MFA_ENCRYPTION_KEY") or "").strip()
+    # The roles that must use it: signing in without it leads to enrolment.
+    MFA_REQUIRED_ROLES: frozenset = frozenset(
+        r.strip() for r in (os.getenv("MFA_REQUIRED_ROLES", "admin,accountant")).split(",") if r.strip())
+    # Wrong codes per account before code entry locks, for LOGIN_LOCKOUT_MINUTES.
+    MFA_MAX_FAILURES: int = _positive_int("MFA_MAX_FAILURES", 5)
+
     # /docs, /redoc and /openapi.json (#185). Off by default, so production
     # does not publish a map of every route; on in development and staging.
     API_DOCS: bool = _flag("API_DOCS", False)

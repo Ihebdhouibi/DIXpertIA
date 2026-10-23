@@ -3,9 +3,15 @@ import { User, Mail, Shield, Bell, Globe, Moon, Sun, Monitor, LogOut, Save, Key 
 import { User as UserType } from '../types';
 import { ThemePreference, setThemePreference, useThemePreference } from '../theme';
 import Button from './ui/Button';
-import { Field, Input, Select } from './ui/Field';
+import { Field, FormAlert, Input, Select } from './ui/Field';
+import { useToast } from './ui/feedback';
+import * as api from '../api';
+import TwoFactorSettings from './TwoFactorSettings';
 import { chooseLocale, useLocale, useT, type MessageKey } from '../i18n';
 import { ROLE_LABEL } from '../navigation';
+
+// The server's rule (#62); checked here too, to say so before sending.
+const MIN_PASSWORD_LENGTH = 12;
 
 const THEME_OPTIONS: { value: ThemePreference; label: MessageKey; icon: typeof Sun }[] = [
   { value: 'system', label: 'common.settings.theme.system', icon: Monitor },
@@ -26,6 +32,45 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
   const [pushNotifications, setPushNotifications] = useState(true);
   // The same choice as the FR / EN toggle; App saves it on the account (#135).
   const locale = useLocale();
+  const toast = useToast();
+
+  // Changing one's password (#220). The form used to send nothing at all.
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const changePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError(t('common.settings.passwordFillAll'));
+      return;
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(t('common.settings.passwordTooShort', { min: MIN_PASSWORD_LENGTH }));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(t('common.settings.passwordMismatch'));
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await api.auth.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast(t('common.settings.passwordChanged'));
+    } catch (error) {
+      // The server's own message, in the page's language: a wrong current
+      // password, a lockout with its wait (#220), or a password rule.
+      setPasswordError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col gap-6 animate-fade-in max-w-4xl">
@@ -151,23 +196,35 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
               <Key className="w-5 h-5 text-primary" />
               {t('common.settings.changePassword')}
             </h2>
-            <form className="flex flex-col gap-4 md:max-w-md" onSubmit={(e) => e.preventDefault()}>
+            <form className="flex flex-col gap-4 md:max-w-md" onSubmit={changePassword} noValidate>
+              {passwordError && <FormAlert>{passwordError}</FormAlert>}
               {/* Placeholders were the only labels; each field now has a real one. */}
               <Field label={t('common.settings.currentPassword')}>
-                {({ id }) => <Input id={id} type="password" autoComplete="current-password" />}
+                {({ id }) => (
+                  <Input id={id} type="password" autoComplete="current-password" value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)} />
+                )}
               </Field>
               <Field label={t('common.settings.newPassword')}>
-                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+                {({ id }) => (
+                  <Input id={id} type="password" autoComplete="new-password" value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)} />
+                )}
               </Field>
               <Field label={t('common.settings.confirmNewPassword')}>
-                {({ id }) => <Input id={id} type="password" autoComplete="new-password" />}
+                {({ id }) => (
+                  <Input id={id} type="password" autoComplete="new-password" value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)} />
+                )}
               </Field>
-              <Button type="submit" className="self-start">
+              <Button type="submit" className="self-start" loading={savingPassword}>
                 <Save className="w-4 h-4" aria-hidden="true" />
                 {t('common.settings.updatePassword')}
               </Button>
             </form>
           </div>
+
+          <TwoFactorSettings />
 
           {/* Danger Zone */}
           <div className="bg-surface-container-lowest rounded-xl border border-error/20 shadow-sm p-6">

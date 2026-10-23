@@ -53,18 +53,31 @@ def test_an_account_locks_after_too_many_failures(client, database, limits):
     assert [r.status_code for r in wrong] == [401, 401, 401]
 
     locked = sign_in(client, email)
-    assert locked.status_code == 401, "the right password is refused while locked"
-    assert locked.json() == wrong[0].json(), "a locked account says nothing a wrong password does not"
-    assert "Retry-After" not in locked.headers
+    assert locked.status_code == 429, "the right password is refused while locked"
+    # #220: it says it is a lockout, and for how long - not "wrong password",
+    # which told a locked-out user their right password was wrong.
+    assert locked.json()["code"] == "auth.locked"
+    assert 1 <= int(locked.headers["Retry-After"]) <= 15 * 60
 
 
 def test_an_unknown_email_locks_the_same_way(client, database, limits):
-    """Otherwise the lock itself would tell which e-mails have accounts."""
+    """Otherwise the lock itself would tell which e-mails have accounts: at
+    every attempt, an unknown e-mail gets exactly what an existing one gets."""
     limits(LOGIN_MAX_FAILURES=2)
-    email = f"nobody@{DOMAIN}"
-    answers = [sign_in(client, email, "guess").json() for _ in range(4)]
-    assert all(a == answers[0] for a in answers)
-    assert counted(database, "login_account") == 2, "counted like a real account, and no further while locked"
+    known = f"known@{DOMAIN}"
+    make_account(database, known)
+
+    def answers(email):
+        out = []
+        for _ in range(4):
+            response = sign_in(client, email, "guess")
+            out.append((response.status_code, response.json()["code"]))
+        return out
+
+    for_known, for_unknown = answers(known), answers(f"nobody@{DOMAIN}")
+    assert for_unknown == for_known
+    assert [status for status, _ in for_unknown] == [401, 401, 429, 429]
+    assert counted(database, "login_account") == 4, "counted like a real account, and no further while locked"
 
 
 def test_the_lock_lifts_when_the_failures_age_out(client, database, limits):
@@ -73,7 +86,7 @@ def test_the_lock_lifts_when_the_failures_age_out(client, database, limits):
     make_account(database, email)
     for _ in range(2):
         sign_in(client, email, "wrong-password")
-    assert sign_in(client, email).status_code == 401
+    assert sign_in(client, email).status_code == 429
     age_attempts(database, 16)
     assert sign_in(client, email).status_code == 200
 
@@ -84,7 +97,7 @@ def test_case_does_not_give_a_fresh_counter(client, database, limits):
     make_account(database, email)
     sign_in(client, email, "wrong-password")
     sign_in(client, email.upper(), "wrong-password")
-    assert sign_in(client, email).status_code == 401, "Case@ and case@ share one counter"
+    assert sign_in(client, email).status_code == 429, "Case@ and case@ share one counter"
 
 
 def test_a_success_resets_the_account_counter(client, database, limits):

@@ -48,6 +48,19 @@ ROUTES = [
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
     ("PUT", "/api/me/locale", AUTHENTICATED),
+    # Changing one's own password (#220).
+    ("POST", "/api/me/password", AUTHENTICATED),
+    # Two-factor authentication (#44): each account manages its own; the
+    # sign-in's second step is public, behind its own short-lived token.
+    ("GET", "/api/mfa", AUTHENTICATED),
+    ("POST", "/api/mfa/setup", AUTHENTICATED),
+    ("POST", "/api/mfa/confirm", AUTHENTICATED),
+    ("POST", "/api/mfa/recovery-codes", AUTHENTICATED),
+    ("POST", "/api/mfa/disable", AUTHENTICATED),
+    ("POST", "/api/mfa/verify", PUBLIC),
+    ("POST", "/api/mfa/enrol/setup", PUBLIC),
+    ("POST", "/api/mfa/enrol/confirm", PUBLIC),
+    ("POST", "/api/users/USR-999/mfa/reset", ADMIN_ONLY),
     ("GET", "/api/dashboard/summary", AUTHENTICATED),
 
     # --- notifications (#116): everyone has a list, scoped to their own rows -
@@ -116,7 +129,9 @@ ROUTES = [
 
 ROLES = ["anonymous", "employee", "accountant", "admin"]
 
-ALLOWED_THROUGH = {200, 201, 204, 400, 404, 409, 422}
+# 503: a route that got through and then said a feature is not configured
+# here (two-factor without its key, #44). A crash is a 500, still a failure.
+ALLOWED_THROUGH = {200, 201, 204, 400, 404, 409, 422, 503}
 REFUSED = {401, 403}
 
 

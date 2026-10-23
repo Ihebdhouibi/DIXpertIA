@@ -167,10 +167,44 @@ export interface InvoiceUpdate {
   items: InvoiceLineInput[];
 }
 
+/**
+ * /api/login's answer (#44): a session, or the next step of the sign-in.
+ * With a second factor, `mfaRequired` and a short-lived `challengeToken` for
+ * mfa.verify(); for a role that must enrol first, `mfaEnrolmentRequired` and an
+ * `enrolToken` for mfa.enrolSetup() / enrolConfirm(). Neither is a session.
+ */
 export interface LoginResult {
-  access_token: string;
+  access_token: string | null;
   token_type: string;
-  user: User;
+  user: User | null;
+  mfaRequired?: boolean;
+  challengeToken?: string | null;
+  mfaEnrolmentRequired?: boolean;
+  enrolToken?: string | null;
+}
+
+/** Two-factor set-up: the secret, once, as a QR code and as text (#44). */
+export interface MfaSetup {
+  secret: string;
+  otpauthUri: string;
+  /** An SVG data URI, drawn by the server: no QR library in the browser. */
+  qrCode: string;
+}
+
+/** Recovery codes, shown once; with a fresh session when enabling signed the older ones out. */
+export interface MfaRecoveryCodes {
+  recoveryCodes: string[];
+  access_token?: string | null;
+  user?: User | null;
+}
+
+export interface MfaStatus {
+  /** Whether this server has two-factor configured at all. */
+  available: boolean;
+  enabled: boolean;
+  /** The account's role requires it: it cannot be turned off. */
+  required: boolean;
+  recoveryCodesLeft: number;
 }
 
 export const auth = {
@@ -196,9 +230,62 @@ export const auth = {
    * user, so the client never decides its own role.
    */
   me: () => request<User>('/api/me'),
+  /**
+   * Change one's own password (#220). Signs every other session out; the
+   * answer carries a fresh token for this browser, which replaces the old one.
+   */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const { access_token } = await request<{ access_token: string }>('/api/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    setToken(access_token);
+  },
   /** Save the account's language, so its e-mails and other devices follow (#135). */
   setLocale: (locale: Locale) =>
     request<User>('/api/me/locale', { method: 'PUT', body: JSON.stringify({ locale }) }),
+};
+
+// --- Two-factor authentication (#44) ------------------------------------------
+//
+// The sign-in's second step (verify, enrolSetup, enrolConfirm) carries its own
+// short-lived token, since there is no session yet; the rest act on the
+// signed-in account. Enabling and disabling sign every other session out: the
+// answer's fresh token replaces this browser's.
+
+function keepSession(result: { access_token?: string | null }) {
+  if (result.access_token) setToken(result.access_token);
+}
+
+export const mfa = {
+  status: () => request<MfaStatus>('/api/mfa'),
+  setup: () => request<MfaSetup>('/api/mfa/setup', { method: 'POST' }),
+  confirm: async (code: string) => {
+    const result = await request<MfaRecoveryCodes>('/api/mfa/confirm', {
+      method: 'POST', body: JSON.stringify({ code }),
+    });
+    keepSession(result);
+    return result;
+  },
+  renewRecoveryCodes: (code: string) =>
+    request<MfaRecoveryCodes>('/api/mfa/recovery-codes', { method: 'POST', body: JSON.stringify({ code }) }),
+  disable: async (password: string) => {
+    keepSession(await request<{ access_token: string }>('/api/mfa/disable', {
+      method: 'POST', body: JSON.stringify({ password }),
+    }));
+  },
+  /** The admin, for someone's lost phone. */
+  reset: (userId: string) =>
+    request<void>(`/api/users/${encodeURIComponent(userId)}/mfa/reset`, { method: 'POST' }),
+
+  verify: (challengeToken: string, answer: { code?: string; recoveryCode?: string }) =>
+    request<LoginResult>('/api/mfa/verify', { method: 'POST', body: JSON.stringify({ challengeToken, ...answer }) }),
+  enrolSetup: (enrolToken: string) =>
+    request<MfaSetup>('/api/mfa/enrol/setup', { method: 'POST', body: JSON.stringify({ enrolToken }) }),
+  enrolConfirm: (enrolToken: string, code: string) =>
+    request<MfaRecoveryCodes>('/api/mfa/enrol/confirm', {
+      method: 'POST', body: JSON.stringify({ enrolToken, code }),
+    }),
 };
 
 // --- Business entities ------------------------------------------------------

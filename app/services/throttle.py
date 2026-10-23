@@ -38,6 +38,8 @@ from app.i18n import ApiError
 PUBLIC_IP = "public_ip"
 LOGIN_IP = "login_ip"
 LOGIN_ACCOUNT = "login_account"
+# Second-factor code attempts per account (#44).
+MFA_ACCOUNT = "mfa_account"
 RESET_MAIL = "reset_mail"
 
 
@@ -52,6 +54,10 @@ def ip_key(request: Request) -> str:
 def email_key(email: str) -> str:
     # Case folded: "Admin@x.tn" must not be a fresh counter for "admin@x.tn".
     return _key("email:" + email.strip().lower())
+
+
+def account_key(user_id: str) -> str:
+    return _key("account:" + user_id)
 
 
 def hit(db: Session, bucket: str, key: str, limit: int, window_seconds: int) -> int:

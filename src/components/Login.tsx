@@ -4,24 +4,31 @@ import AuthLayout from './ui/AuthLayout';
 import Button from './ui/Button';
 import { Field, FormAlert, Input } from './ui/Field';
 import LanguageToggle from './LanguageToggle';
+import MfaSignIn, { type MfaStep, type Session } from './MfaSignIn';
 import { useT } from '../i18n';
 
 interface LoginProps {
-  /** Resolves to the error to show, or null once signed in. */
-  onLogin: (email: string, password: string) => Promise<string | null>;
+  /**
+   * Resolves to the error to show, to the second step when the account has or
+   * needs two-factor authentication (#44), or to null once signed in.
+   */
+  onLogin: (email: string, password: string) => Promise<string | MfaStep | null>;
+  /** Ends the second step: the session it earned. */
+  onSession: (session: Session) => Promise<void>;
   onBackHome?: () => void;
   onForgotPassword: () => void;
 }
 
 // The forgot-password flow lives in ForgotPassword.tsx. This component used to
 // carry a second, unreachable copy of it (App always passes onForgotPassword).
-export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginProps) {
+export default function Login({ onLogin, onSession, onBackHome, onForgotPassword }: LoginProps) {
   const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const [signingIn, setSigningIn] = useState(false);
+  const [mfaStep, setMfaStep] = useState<MfaStep | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +42,19 @@ export default function Login({ onLogin, onBackHome, onForgotPassword }: LoginPr
     // was a genuine privilege escalation in the now-deleted Registration.tsx.
     // The role comes from the /api/login response.
     setSigningIn(true);
-    const failure = await onLogin(email, password);
+    const outcome = await onLogin(email, password);
     setSigningIn(false);
-    if (failure) setError(failure);
+    if (typeof outcome === 'string') setError(outcome);
+    else if (outcome) {
+      // The password has done its job; it is not kept for the second step.
+      setPassword('');
+      setMfaStep(outcome);
+    }
   };
+
+  if (mfaStep) {
+    return <MfaSignIn step={mfaStep} onSignedIn={onSession} onRestart={() => setMfaStep(null)} />;
+  }
 
   return (
     <AuthLayout

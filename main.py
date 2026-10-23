@@ -31,8 +31,11 @@ from app.schemas.api import (
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user, session_identity
 from app.core.security import (
+    MFA_CHALLENGE,
+    MFA_ENROL,
     burn_password_check,
     create_access_token,
+    create_purpose_token,
     hash_password,
     password_problem,
     unusable_password_hash,
@@ -45,9 +48,9 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, dashboard, invoicing, notifications
+from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
-from app.services import accounts, throttle
+from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.reminders import reminder_loop
@@ -73,6 +76,11 @@ PUBLIC_PATHS = frozenset({
     "/api/contact",
     # Container health check (#185): says only whether the database answers.
     "/api/health",
+    # The sign-in's second step (#44): each carries its own short-lived token,
+    # checked by the route, since there is no session yet.
+    "/api/mfa/verify",
+    "/api/mfa/enrol/setup",
+    "/api/mfa/enrol/confirm",
 })
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
@@ -168,6 +176,8 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(mfa_router.router, prefix="/api")
+app.include_router(mfa_router.public, prefix="/api")
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
@@ -299,6 +309,25 @@ def health(response: Response):
     return HealthOut(status="ok")
 
 
+def _locked(wait_seconds: int) -> ApiError:
+    """An e-mail locked by failed sign-ins (#220): how long, in minutes."""
+    return ApiError(429, "auth.locked", headers={"Retry-After": str(wait_seconds)},
+                    minutes=max(1, -(-wait_seconds // 60)))
+
+
+def _unlock(db: Session, user_id: str) -> None:
+    """Clear the account's failed sign-ins (#220), once its owner proved they
+    control it: a reset or an activation link was spent. Otherwise the new
+    password stays refused until the lock runs out."""
+    # The account's own row, as the account: users is under row-level security.
+    set_identity(user_id, None)
+    db.commit()
+    email = db.query(User.email).filter(User.id == user_id).scalar()
+    if email:
+        throttle.clear(db, throttle.LOGIN_ACCOUNT, throttle.email_key(email))
+        db.commit()
+
+
 # --- Auth endpoints ---
 # Every public route is limited per address (#175), declared on the route so
 # that a public route added later shows whether it has a limit.
@@ -318,8 +347,10 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     Guessing is limited (#175). Each attempt is counted before the password
     is checked, so parallel guesses cannot all slip under a limit; a success
     takes its attempts back. Too many failures from one address: 429. Too
-    many on one e-mail: locked, with the same 401 as a wrong password - the
-    lock applies to unknown e-mails alike, so it reveals nothing.
+    many on one e-mail: 429 too, saying the e-mail is locked and for how long
+    (#220). An unknown e-mail locks exactly the same way, so this reveals
+    nothing; answering "wrong password" instead told a locked-out user their
+    right password was wrong.
     """
     from_ip = throttle.hit(db, throttle.LOGIN_IP, throttle.ip_key(request),
                            settings.LOGIN_MAX_FAILURES_PER_IP, settings.LOGIN_LOCKOUT_MINUTES * 60)
@@ -334,7 +365,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     db.commit()
     if on_account < 0:
         log.info("Login refused: account locked")
-        raise ApiError(401, "auth.invalid_credentials")
+        raise _locked(-on_account)
 
     user = _account_by_email(db, req.email)
     if user is None:
@@ -348,6 +379,19 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     throttle.forget(db, from_ip)
     throttle.clear(db, throttle.LOGIN_ACCOUNT, account)
     db.commit()
+
+    # The second factor (#44): the password alone gives no session when it is
+    # on, or when the role requires it and it is not set up yet.
+    if mfa.enabled():
+        second = mfa.state(db, user.id)
+        if second is not None and second.enabled:
+            log.info("Login: password OK for %s, second factor next", user.id)
+            return LoginOut(mfaRequired=True,
+                            challengeToken=create_purpose_token(MFA_CHALLENGE, user.id, user.token_version))
+        if mfa.required_for(user.role):
+            log.info("Login: password OK for %s, enrolment required", user.id)
+            return LoginOut(mfaEnrolmentRequired=True,
+                            enrolToken=create_purpose_token(MFA_ENROL, user.id, user.token_version))
     log.info("Login OK for %s (role=%s)", user.id, user.role)
     token = create_access_token(data={"sub": user.id, "role": user.role, "ver": user.token_version})
     return LoginOut(access_token=token, user=UserOut.from_orm_row(user))
@@ -427,6 +471,7 @@ def activate_account(req: ActivateRequest, db: Session = Depends(get_db)):
         raise ApiError(400, "auth.invalid_link")
     record_event(db, "user.activated", "user", user_id)
     db.commit()
+    _unlock(db, user_id)
     return MessageOut(message=t("account.activated"))
 
 
@@ -530,6 +575,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         raise ApiError(400, "auth.invalid_link")
     record_event(db, "user.password_reset", "user", user_id)
     db.commit()
+    _unlock(db, user_id)
     return MessageOut(message=t("account.password_updated"))
 
 # --- Data endpoints ---
@@ -565,6 +611,49 @@ def set_my_locale(req: LocaleUpdate, current_user: User = Depends(get_current_us
     db.commit()
     db.refresh(current_user)
     return UserOut.from_orm_row(current_user)
+
+
+class PasswordChange(BaseModel):
+    currentPassword: str = Field(min_length=1, max_length=200)
+    newPassword: str = Field(min_length=1, max_length=200)
+
+
+class SessionOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+@app.post('/api/me/password', response_model=SessionOut)
+def change_my_password(req: PasswordChange, current_user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    """Change one's own password (#220), against the current one.
+
+    A wrong current password counts against the e-mail's sign-in limit (#175),
+    so this cannot be used to guess it. Every other session is signed out
+    (token_version); the answer carries a fresh one for this browser.
+    """
+    account_key = throttle.email_key(current_user.email)
+    attempt = throttle.hit(db, throttle.LOGIN_ACCOUNT, account_key,
+                           settings.LOGIN_MAX_FAILURES, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    db.commit()
+    if attempt < 0:
+        raise _locked(-attempt)
+    account = _account_by_email(db, current_user.email)
+    if account is None or not verify_password(req.currentPassword, account.hashedPassword):
+        # 400, not 401: the UI reads a 401 on a signed-in request as an expired
+        # session and signs the user out, for one mistyped character.
+        raise ApiError(400, "auth.wrong_current_password")
+    _require_acceptable(req.newPassword)
+    if not db.execute(text("SELECT auth_set_own_password(:u, :h)"),
+                      {"u": current_user.id, "h": hash_password(req.newPassword)}).scalar_one():
+        raise ApiError(401, "auth.not_authenticated")
+    throttle.clear(db, throttle.LOGIN_ACCOUNT, account_key)
+    record_event(db, "user.password_changed", "user", current_user.id)
+    db.commit()
+    db.refresh(current_user)
+    token = create_access_token(data={"sub": current_user.id, "role": current_user.role,
+                                      "ver": current_user.token_version})
+    return SessionOut(access_token=token)
 
 
 # Every list endpoint is paginated and capped, as the invoice ones are (#61).
