@@ -1,0 +1,10 @@
+[Unit]
+Description=DI Xpertia server checks every 5 minutes (#188)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
