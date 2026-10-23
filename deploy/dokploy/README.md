@@ -97,7 +97,15 @@ First connect GitHub: **Settings → Git → GitHub** → install the Dokploy Gi
 
   - **Never set `FORWARDED_ALLOW_IPS` to `*`.** A visitor could then fake their IP address and bypass the rate limits.
   - `API_DOCS=true` is for this test environment only.
-  - Leave SMTP unset until #186: e-mails are then logged, not sent.
+  - E-mail (#186), through Oxahost's mail server, which hands mail to MailChannels. The domain's SPF, DKIM and DMARC records must be in place (they are for dixpertia.tn), or Gmail refuses or bins the mail:
+    ```
+    SMTP_HOST=mailpro2.tn.oxa.host
+    SMTP_PORT=465
+    SMTP_USER=contact@dixpertia.tn
+    SMTP_PASSWORD=<contact mailbox password>
+    SMTP_FROM=DI Xpertia <contact@dixpertia.tn>
+    CONTACT_INBOX=contact@dixpertia.tn
+    ```
 - **Domain:** host `102-204-207-34.sslip.io`, path **`/api`**, container port **8000**, HTTPS on, certificate **Let's Encrypt**. Do **not** strip the path: the API's routes start with `/api`.
 
 ### `web`
@@ -123,7 +131,10 @@ Re-run the role setup with **the same two passwords**, so that the grants that n
 E-mail is not set up yet (#186), so activation links cannot be sent. Create the first admin directly in the API container:
 
 ```bash
-sudo docker exec -it $(sudo docker ps -q -f name=api | head -1) \
+# Dokploy names containers <project>-<app without dashes>-<random>: production's
+# API is dixpertia-api-..., staging's dixpertia-apistaging-... A bare "name=api"
+# matches both, so name the one you mean.
+sudo docker exec -it $(sudo docker ps -q -f name=dixpertia-api- | head -1) \
   python seed_users.py --email <your e-mail> --role admin
 ```
 
@@ -139,7 +150,7 @@ Staging is a second pair of applications, `api-staging` and `web-staging`, at **
 | Branch | `main` (a release) | `deployment` |
 | PostgreSQL | `17/main`, port 5432 | `17/staging`, port 5433 |
 | API docs | off | on (`API_DOCS=true`) |
-| E-mail | `contact@dixpertia.tn` | none: SMTP unset, so e-mails are logged, never sent to real people |
+| E-mail | `contact@dixpertia.tn` | the same mailbox, sender name **DI Xpertia (staging)**, links to staging only. The plan has one mailbox. |
 
 1. **DNS:** an `A` record `staging` pointing to `102.204.207.34`.
 2. **Database:**
@@ -166,7 +177,8 @@ Staging is a second pair of applications, `api-staging` and `web-staging`, at **
    - **Domain:** `staging.dixpertia.tn`, path `/`, port `8080`, HTTPS with Let's Encrypt.
    - **Advanced → Security → Basic Auth:** a user name and password, so that only the team can open staging, and search engines can't index it.
    - Put basic auth on `web-staging` **only, never on `api-staging`**: the app sends its own `Authorization: Bearer` header to the API, which basic auth would replace. The API is protected anyway: it requires sign-in, and its public routes are rate-limited.
-5. **Table grants and first admin:** steps 7 and 8, with `&port=5433` in the URL, the staging passwords, and `name=api-staging` in the `docker ps` filter.
+5. **E-mail:** the SMTP lines of step 6, with `SMTP_FROM=DI Xpertia (staging) <contact@dixpertia.tn>`. Staging only e-mails the team, and its links lead to staging only, because of its `FRONTEND_URL`. If the mailbox password changes, update it in **both** `api` and `api-staging`.
+6. **Table grants and first admin:** steps 7 and 8, with `&port=5433` in the URL, the staging passwords, and `name=dixpertia-apistaging-` in the `docker ps` filter.
 
 **The release flow:**
 1. Merge features into `develop`.
