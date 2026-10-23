@@ -34,6 +34,11 @@ def remove_created_users(database):
 
 
 @pytest.fixture
+def admin(identities):
+    return identities["admin"]["headers"]
+
+
+@pytest.fixture
 def limits(monkeypatch):
     from app.core.config import settings
 
