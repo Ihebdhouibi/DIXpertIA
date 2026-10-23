@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Client, Employee, LeaveRequest, Payslip, User } from './types';
 import * as api from './api';
 import Login from './components/Login';
+import type { MfaStep, Session } from './components/MfaSignIn';
 import Homepage from './components/Homepage';
 import { ThemeScope } from './theme';
 import { getLocale, hasChosenLocale, setAccountLocale, t as translateNow, useLocale, useT } from './i18n';
@@ -234,17 +235,25 @@ export default function App() {
   // Returns the error to show in the form, or null: a failed sign-in used to be
   // added to the in-app notifications, which are not on the sign-in screen, so
   // a wrong password showed nothing at all (#116).
-  const handleLogin = async (email: string, password: string): Promise<string | null> => {
+  const startSession = async ({ access_token, user }: Session) => {
+    api.setToken(access_token);
+    const appUser = user as AppUser;
+    adoptAccountLocale(appUser);
+    setCurrentUser(appUser);
+    setActiveTab('dashboard');
+    setShowHomepage(false);
+    setShowLogin(false);
+    await refresh(appUser);
+  };
+
+  const handleLogin = async (email: string, password: string): Promise<string | MfaStep | null> => {
     try {
       const data = await api.auth.login(email, password);
-      api.setToken(data.access_token);
-      const appUser = data.user as AppUser;
-      adoptAccountLocale(appUser);
-      setCurrentUser(appUser);
-      setActiveTab('dashboard');
-      setShowHomepage(false);
-      setShowLogin(false);
-      await refresh(appUser);
+      // A second factor (#44): no session yet, only a token for the next step.
+      if (data.mfaRequired && data.challengeToken) return { kind: 'challenge', token: data.challengeToken };
+      if (data.mfaEnrolmentRequired && data.enrolToken) return { kind: 'enrol', token: data.enrolToken };
+      if (!data.access_token || !data.user) return t('auth.somethingWrong');
+      await startSession({ access_token: data.access_token, user: data.user });
       return null;
     } catch (error) {
       return error instanceof api.ApiError ? error.message : t('auth.networkError');
@@ -545,6 +554,7 @@ export default function App() {
       <ThemeScope>
       <Login
         onLogin={handleLogin}
+        onSession={startSession}
         onBackHome={() => { setShowLogin(false); setShowHomepage(true); }}
         onForgotPassword={() => setShowForgotPassword(true)}
       />
