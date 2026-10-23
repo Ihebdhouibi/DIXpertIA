@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, UserX, UserCheck, Mail } from 'lucide-react';
+import { Plus, Edit, UserX, ShieldOff, UserCheck, Mail } from 'lucide-react';
 import { User, UserRole } from '../types';
 import * as api from '../api';
 import StatusBadge from './StatusBadge';
@@ -146,6 +146,26 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
     }
   };
 
+  // A lost phone (#44): the person signs in with the password alone, then sets
+  // two-factor up again. Not one's own: that would skip the second factor.
+  const handleResetMfa = async (user: User) => {
+    if (!isAdmin) return;
+    const name = `${user.firstName} ${user.lastName}`;
+    const ok = await confirm({
+      title: t('people.users.resetMfaTitle', { name }),
+      message: t('people.users.resetMfaMessage'),
+      confirmLabel: t('people.users.resetMfa'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.mfa.reset(user.id);
+      showToast(t('people.users.mfaReset', { name }), 'success');
+    } catch (error) {
+      showToast(failure(error, t('people.users.couldNotResetMfa')), 'error');
+    }
+  };
+
   const handleResendActivation = async (user: User) => {
     if (!isAdmin) return;
     try {
@@ -259,6 +279,17 @@ export default function UsersView({ users, userRole, currentUserId, onChanged }:
                         className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
                       >
                         <Mail className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    )}
+                    {u.isActive && u.isVerified && u.id !== currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetMfa(u)}
+                        aria-label={t('people.users.resetMfaName', { name: `${u.firstName} ${u.lastName}` })}
+                        title={t('people.users.resetMfa')}
+                        className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface cursor-pointer"
+                      >
+                        <ShieldOff className="w-4 h-4" aria-hidden="true" />
                       </button>
                     )}
                     {u.isActive && u.id !== currentUserId && (

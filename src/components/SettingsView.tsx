@@ -6,6 +6,7 @@ import Button from './ui/Button';
 import { Field, FormAlert, Input, Select } from './ui/Field';
 import { useToast } from './ui/feedback';
 import * as api from '../api';
+import TwoFactorSettings from './TwoFactorSettings';
 import { chooseLocale, useLocale, useT, type MessageKey } from '../i18n';
 import { ROLE_LABEL } from '../navigation';
 
@@ -222,6 +223,8 @@ export default function SettingsView({ user, onLogout }: SettingsViewProps) {
               </Button>
             </form>
           </div>
+
+          <TwoFactorSettings />
 
           {/* Danger Zone */}
           <div className="bg-surface-container-lowest rounded-xl border border-error/20 shadow-sm p-6">

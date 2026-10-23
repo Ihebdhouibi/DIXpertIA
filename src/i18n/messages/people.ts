@@ -138,6 +138,27 @@ export default defineMessages('people', {
   'people.users.colUser': { fr: 'Utilisateur', en: 'User' },
   'people.users.colRole': { fr: 'Rôle', en: 'Role' },
   'people.users.edit': { fr: 'Modifier {name}', en: 'Edit {name}' },
+  'people.users.resetMfa': { fr: "Réinitialiser l'authentification à deux facteurs", en: 'Reset two-factor authentication' },
+  'people.users.resetMfaName': {
+    fr: "Réinitialiser l'authentification à deux facteurs de {name}",
+    en: 'Reset two-factor authentication for {name}',
+  },
+  'people.users.resetMfaTitle': {
+    fr: "Réinitialiser l'authentification à deux facteurs de {name} ?",
+    en: 'Reset two-factor authentication for {name}?',
+  },
+  'people.users.resetMfaMessage': {
+    fr: "Pour un téléphone perdu ou changé. La personne se connectera avec son seul mot de passe, puis devra configurer à nouveau l'authentification à deux facteurs. Ses sessions ouvertes sont fermées. Vérifiez d'abord son identité par un autre moyen.",
+    en: 'For a lost or replaced phone. They will sign in with their password alone, then set two-factor authentication up again. Their open sessions are closed. Check who is asking by another means first.',
+  },
+  'people.users.mfaReset': {
+    fr: "L'authentification à deux facteurs de {name} a été réinitialisée.",
+    en: 'Two-factor authentication was reset for {name}.',
+  },
+  'people.users.couldNotResetMfa': {
+    fr: "Impossible de réinitialiser l'authentification à deux facteurs.",
+    en: 'Could not reset two-factor authentication.',
+  },
   'people.users.resend': { fr: "Renvoyer le lien d'activation", en: 'Resend activation link' },
   'people.users.resendTo': { fr: "Renvoyer le lien d'activation à {name}", en: 'Resend activation link to {name}' },
   'people.users.deactivateName': { fr: 'Désactiver {name}', en: 'Deactivate {name}' },

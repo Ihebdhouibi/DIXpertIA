@@ -29,6 +29,84 @@ export default defineMessages('auth', {
   'auth.login.forgot': { fr: 'Mot de passe oublié ?', en: 'Forgot password?' },
   'auth.login.submit': { fr: 'Se connecter', en: 'Sign in' },
 
+  // Two-factor authentication (#44): the sign-in's second step, and Settings.
+  'auth.mfa.challengeTitle': { fr: 'Vérification en deux étapes', en: 'Two-step verification' },
+  'auth.mfa.challengeSubtitle': {
+    fr: "Saisissez le code à 6 chiffres affiché par votre application d'authentification.",
+    en: 'Enter the 6-digit code shown in your authenticator app.',
+  },
+  'auth.mfa.enrolTitle': { fr: "Activez l'authentification à deux facteurs", en: 'Set up two-factor authentication' },
+  'auth.mfa.enrolSubtitle': {
+    fr: 'Votre rôle exige un second facteur. Configurez-le une fois pour accéder à votre espace.',
+    en: 'Your role requires a second factor. Set it up once to reach your portal.',
+  },
+  'auth.mfa.preparing': { fr: 'Préparation…', en: 'Preparing...' },
+  'auth.mfa.code': { fr: 'Code à 6 chiffres', en: '6-digit code' },
+  'auth.mfa.codeFormat': { fr: 'Saisissez les 6 chiffres du code.', en: 'Enter the 6 digits of the code.' },
+  'auth.mfa.recoveryCode': { fr: 'Code de secours', en: 'Recovery code' },
+  'auth.mfa.recoveryEmpty': { fr: 'Saisissez un de vos codes de secours.', en: 'Enter one of your recovery codes.' },
+  'auth.mfa.useRecovery': { fr: 'Téléphone perdu ? Utiliser un code de secours', en: 'Lost your phone? Use a recovery code' },
+  'auth.mfa.useApp': { fr: "Utiliser le code de l'application", en: 'Use the code from the app' },
+  'auth.mfa.verify': { fr: 'Vérifier', en: 'Verify' },
+  'auth.mfa.stepApp': {
+    fr: "Installez une application d'authentification (Google Authenticator, Microsoft Authenticator, Aegis…).",
+    en: 'Install an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis...).',
+  },
+  'auth.mfa.stepScan': { fr: "Scannez ce QR code avec l'application.", en: 'Scan this QR code with the app.' },
+  'auth.mfa.stepCode': { fr: "Saisissez le code qu'elle affiche.", en: 'Enter the code it shows.' },
+  'auth.mfa.qrAlt': {
+    fr: "QR code à scanner avec votre application d'authentification",
+    en: 'QR code to scan with your authenticator app',
+  },
+  'auth.mfa.cantScan': { fr: 'Impossible de scanner ?', en: "Can't scan it?" },
+  'auth.mfa.manualKey': { fr: "Saisissez cette clé dans l'application :", en: 'Enter this key in the app:' },
+  'auth.mfa.activate': { fr: 'Activer', en: 'Turn on' },
+  'auth.mfa.codesTitle': { fr: 'Codes de secours', en: 'Recovery codes' },
+  'auth.mfa.codesIntro': {
+    fr: 'Conservez ces codes en lieu sûr (un gestionnaire de mots de passe, par exemple). Chacun permet une connexion si vous perdez votre téléphone, une seule fois. Ils ne seront plus affichés.',
+    en: 'Keep these codes somewhere safe, such as a password manager. Each signs you in once if you lose your phone. They will not be shown again.',
+  },
+  'auth.mfa.copy': { fr: 'Copier', en: 'Copy' },
+  'auth.mfa.copied': { fr: 'Copiés', en: 'Copied' },
+  'auth.mfa.download': { fr: 'Télécharger', en: 'Download' },
+  'auth.mfa.codesKept': { fr: "J'ai conservé mes codes de secours.", en: 'I have kept my recovery codes.' },
+  'auth.mfa.continue': { fr: 'Continuer', en: 'Continue' },
+  'auth.mfa.done': { fr: 'Terminé', en: 'Done' },
+  'auth.mfa.settingsTitle': { fr: 'Authentification à deux facteurs', en: 'Two-factor authentication' },
+  'auth.mfa.statusOn': {
+    fr: 'Activée. Codes de secours restants : {left}.',
+    en: 'On. Recovery codes left: {left}.',
+  },
+  'auth.mfa.statusOff': {
+    fr: 'Désactivée. Ajoutez un code de votre téléphone à la connexion, en plus du mot de passe.',
+    en: 'Off. Add a code from your phone to the sign-in, on top of the password.',
+  },
+  'auth.mfa.statusRequired': {
+    fr: 'Exigée pour votre rôle. Activez-la maintenant.',
+    en: 'Required for your role. Turn it on now.',
+  },
+  'auth.mfa.enable': { fr: 'Activer', en: 'Turn on' },
+  'auth.mfa.enabled': {
+    fr: 'Authentification à deux facteurs activée. Vos autres sessions ont été fermées.',
+    en: 'Two-factor authentication is on. You are signed out everywhere else.',
+  },
+  'auth.mfa.renew': { fr: 'Nouveaux codes de secours', en: 'New recovery codes' },
+  'auth.mfa.renewIntro': {
+    fr: "Les anciens codes cesseront de fonctionner. Saisissez un code de l'application pour confirmer.",
+    en: 'The old codes will stop working. Enter a code from the app to confirm.',
+  },
+  'auth.mfa.disable': { fr: 'Désactiver', en: 'Turn off' },
+  'auth.mfa.disableIntro': {
+    fr: 'Votre compte ne sera plus protégé que par le mot de passe. Saisissez-le pour confirmer.',
+    en: 'Your account will be protected by the password alone. Enter it to confirm.',
+  },
+  'auth.mfa.passwordEmpty': { fr: 'Saisissez votre mot de passe.', en: 'Enter your password.' },
+  'auth.mfa.disabled': {
+    fr: 'Authentification à deux facteurs désactivée. Vos autres sessions ont été fermées.',
+    en: 'Two-factor authentication is off. You are signed out everywhere else.',
+  },
+  'auth.mfa.cancel': { fr: 'Annuler', en: 'Cancel' },
+
   // Forgotten password: asking for the link.
   'auth.forgot.title': { fr: 'Réinitialiser le mot de passe', en: 'Reset your password' },
   'auth.forgot.subtitle': {
