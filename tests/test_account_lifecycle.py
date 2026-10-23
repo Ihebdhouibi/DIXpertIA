@@ -240,7 +240,12 @@ def test_resending_the_activation_link_replaces_the_old_one(client, admin, mailb
 
 # --- Login time does not reveal whether an account exists ----------------------
 
-def test_login_takes_as_long_for_an_unknown_email(client, database):
+def test_login_takes_as_long_for_an_unknown_email(client, database, monkeypatch):
+    from app.core.config import settings
+
+    # Seven attempts per e-mail, to time them: out of reach of the lockout
+    # (#175, #220), which would answer 429 from the sixth and skip bcrypt.
+    monkeypatch.setattr(settings, "LOGIN_MAX_FAILURES", 50)
     make_account(database, f"timing@{DOMAIN}")
 
     def median_ms(email):

@@ -196,6 +196,17 @@ export const auth = {
    * user, so the client never decides its own role.
    */
   me: () => request<User>('/api/me'),
+  /**
+   * Change one's own password (#220). Signs every other session out; the
+   * answer carries a fresh token for this browser, which replaces the old one.
+   */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const { access_token } = await request<{ access_token: string }>('/api/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    setToken(access_token);
+  },
   /** Save the account's language, so its e-mails and other devices follow (#135). */
   setLocale: (locale: Locale) =>
     request<User>('/api/me/locale', { method: 'PUT', body: JSON.stringify({ locale }) }),

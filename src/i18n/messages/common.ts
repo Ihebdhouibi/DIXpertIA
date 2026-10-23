@@ -181,5 +181,18 @@ export default defineMessages('common', {
   'common.settings.newPassword': { fr: 'Nouveau mot de passe', en: 'New password' },
   'common.settings.confirmNewPassword': { fr: 'Confirmer le mot de passe', en: 'Confirm new password' },
   'common.settings.updatePassword': { fr: 'Mettre à jour', en: 'Update password' },
+  'common.settings.passwordFillAll': { fr: 'Remplissez les trois champs.', en: 'Fill in all three fields.' },
+  'common.settings.passwordMismatch': {
+    fr: 'Les deux nouveaux mots de passe ne correspondent pas.',
+    en: 'The two new passwords do not match.',
+  },
+  'common.settings.passwordTooShort': {
+    fr: 'Le nouveau mot de passe doit comporter au moins {min} caractères.',
+    en: 'The new password must be at least {min} characters.',
+  },
+  'common.settings.passwordChanged': {
+    fr: 'Mot de passe modifié. Vos autres sessions ont été fermées.',
+    en: 'Password changed. You are signed out everywhere else.',
+  },
   'common.settings.dangerZone': { fr: 'Zone sensible', en: 'Danger Zone' },
 });
