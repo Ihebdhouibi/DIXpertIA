@@ -40,6 +40,10 @@ def mfa_on(monkeypatch):
 def remove_created_users(database):
     yield
     with database.connect() as c:
+        # The accounts made here are actors of audit events (enabling, a
+        # recovery code...), which reference them. The trail is append-only, so
+        # it is emptied the way conftest empties it between tests: TRUNCATE.
+        c.execute(text("TRUNCATE audit_events"))
         for table in ("user_mfa_recovery", "user_mfa"):
             c.execute(text(f"DELETE FROM {table} WHERE user_id IN (SELECT id FROM users WHERE email LIKE :d)"),
                       {"d": f"%@{DOMAIN}"})

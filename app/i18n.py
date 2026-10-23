@@ -225,6 +225,12 @@ CATALOG: dict[str, dict[str, str]] = {
     "db.password_self_only": {
         "en": "Only the account itself can change its password.",
         "fr": "Seul le titulaire du compte peut changer son mot de passe."},
+    "db.mfa_self_only": {
+        "en": "Only the account itself can change its two-factor authentication.",
+        "fr": "Seul le titulaire du compte peut modifier son authentification à deux facteurs."},
+    "db.mfa_self_or_admin": {
+        "en": "Only the account itself or the admin can remove its two-factor authentication.",
+        "fr": "Seuls le titulaire du compte ou l'administrateur peuvent retirer son authentification à deux facteurs."},
     "db.refused": {
         "en": "The change was refused by a data rule.",
         "fr": "La modification a été refusée par une règle de données."},
@@ -679,6 +685,10 @@ _DB_FORMATS = {
     "audit event % cannot be changed or deleted: the audit trail is append-only": "db.audit_append_only",
     "An employee cannot validate their own leave request": "db.leave_self_validation",
     "password: only the account itself can change its password": "db.password_self_only",
+    # Two-factor authentication (#44): the functions refuse another account's.
+    "mfa: only the account itself can enrol": "db.mfa_self_only",
+    "mfa: only the account itself can renew its codes": "db.mfa_self_only",
+    "mfa: only the account itself or the admin": "db.mfa_self_or_admin",
 }
 
 
