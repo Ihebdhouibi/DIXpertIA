@@ -69,6 +69,31 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.wrong_current_password": {
         "en": "Your current password is not correct.",
         "fr": "Votre mot de passe actuel est incorrect."},
+    # Two-factor authentication (#44).
+    "mfa.not_configured": {
+        "en": "Two-factor authentication is not available on this server.",
+        "fr": "L'authentification à deux facteurs n'est pas disponible sur ce serveur."},
+    "mfa.already_enabled": {
+        "en": "Two-factor authentication is already on for this account.",
+        "fr": "L'authentification à deux facteurs est déjà activée pour ce compte."},
+    "mfa.not_started": {
+        "en": "Start the set-up again: no code is expected yet.",
+        "fr": "Recommencez la configuration : aucun code n'est attendu pour le moment."},
+    "mfa.not_enabled": {
+        "en": "Two-factor authentication is not on for this account.",
+        "fr": "L'authentification à deux facteurs n'est pas activée pour ce compte."},
+    "mfa.wrong_code": {
+        "en": "This code is not valid. Enter the current code from your app.",
+        "fr": "Ce code n'est pas valide. Saisissez le code affiché actuellement dans votre application."},
+    "mfa.expired": {
+        "en": "This sign-in has expired. Sign in again.",
+        "fr": "Cette connexion a expiré. Connectez-vous à nouveau."},
+    "mfa.required": {
+        "en": "Your role requires two-factor authentication: it cannot be turned off.",
+        "fr": "Votre rôle exige l'authentification à deux facteurs : elle ne peut pas être désactivée."},
+    "mfa.reset_self": {
+        "en": "To turn off your own two-factor authentication, use your settings.",
+        "fr": "Pour désactiver votre propre authentification à deux facteurs, passez par vos paramètres."},
     "auth.too_many_requests": {
         "en": "Too many attempts. Please wait a few minutes and try again.",
         "fr": "Trop de tentatives. Patientez quelques minutes, puis réessayez."},
@@ -200,6 +225,12 @@ CATALOG: dict[str, dict[str, str]] = {
     "db.password_self_only": {
         "en": "Only the account itself can change its password.",
         "fr": "Seul le titulaire du compte peut changer son mot de passe."},
+    "db.mfa_self_only": {
+        "en": "Only the account itself can change its two-factor authentication.",
+        "fr": "Seul le titulaire du compte peut modifier son authentification à deux facteurs."},
+    "db.mfa_self_or_admin": {
+        "en": "Only the account itself or the admin can remove its two-factor authentication.",
+        "fr": "Seuls le titulaire du compte ou l'administrateur peuvent retirer son authentification à deux facteurs."},
     "db.refused": {
         "en": "The change was refused by a data rule.",
         "fr": "La modification a été refusée par une règle de données."},
@@ -654,6 +685,10 @@ _DB_FORMATS = {
     "audit event % cannot be changed or deleted: the audit trail is append-only": "db.audit_append_only",
     "An employee cannot validate their own leave request": "db.leave_self_validation",
     "password: only the account itself can change its password": "db.password_self_only",
+    # Two-factor authentication (#44): the functions refuse another account's.
+    "mfa: only the account itself can enrol": "db.mfa_self_only",
+    "mfa: only the account itself can renew its codes": "db.mfa_self_only",
+    "mfa: only the account itself or the admin": "db.mfa_self_or_admin",
 }
 
 

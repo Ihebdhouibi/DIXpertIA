@@ -129,6 +129,11 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'auth_attempts') THEN
         REVOKE ALL ON TABLE public.auth_attempts FROM dixpertia_app;
     END IF;
+    -- The second factor (#44): secrets and recovery codes, through the
+    -- auth_mfa_*() functions only, like the counters above.
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'user_mfa') THEN
+        REVOKE ALL ON TABLE public.user_mfa, public.user_mfa_recovery FROM dixpertia_app;
+    END IF;
 END
 $$;
 

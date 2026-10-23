@@ -413,10 +413,21 @@ class UserOut(BaseModel):
 # tests/test_responses.py fails for a route that declares none.
 
 class LoginOut(BaseModel):
-    access_token: str
+    """A session, or the next step of the sign-in (#44).
+
+    With no second factor: access_token and user. With one: mfaRequired and a
+    short-lived challengeToken for /api/mfa/verify, and nothing else. For a
+    role that must enrol first: mfaEnrolmentRequired and an enrolToken for
+    /api/mfa/enrol/*. The two tokens are never accepted as a session.
+    """
+    access_token: Optional[str] = None
     # The OAuth 2 token type, always "bearer".
     token_type: str = "bearer"
-    user: UserOut
+    user: Optional[UserOut] = None
+    mfaRequired: bool = False
+    challengeToken: Optional[str] = None
+    mfaEnrolmentRequired: bool = False
+    enrolToken: Optional[str] = None
 
 
 class UserCreatedOut(BaseModel):

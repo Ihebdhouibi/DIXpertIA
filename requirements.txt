@@ -14,6 +14,10 @@ alembic==1.13.2
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
+# Two-factor authentication (#44): TOTP codes, and the enrolment QR code drawn
+# on the server, so the frontend needs no QR library. Both pure Python.
+pyotp==2.9.0
+segno==1.6.1
 email-validator==2.3.0
 
 # PDF generation (app/services/invoice_generator.py)

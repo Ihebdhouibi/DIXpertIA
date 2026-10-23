@@ -26,7 +26,7 @@ RUN pip install -r requirements.txt
 
 # Only what runs: the API, its migrations, the role setup and the first-admin
 # script. Tests, the frontend and documents stay out (.dockerignore).
-COPY main.py alembic.ini seed_users.py ./
+COPY main.py alembic.ini seed_users.py reset_mfa.py ./
 COPY app ./app
 COPY alembic ./alembic
 COPY db ./db

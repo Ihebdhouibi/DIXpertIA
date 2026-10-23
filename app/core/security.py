@@ -24,6 +24,11 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 ACCESS = "access"
+# The two short-lived steps of a sign-in with a second factor (#44). Neither
+# is an access token, so neither ever passes decode_access_token().
+MFA_CHALLENGE = "mfa_challenge"
+MFA_ENROL = "mfa_enrol"
+PURPOSE_MINUTES = {MFA_CHALLENGE: 5, MFA_ENROL: 15}
 
 # A new password must be at least this long (#62). bcrypt reads at most 72
 # bytes, so anything longer would be silently truncated: refused instead.
@@ -89,6 +94,24 @@ def decode_access_token(token: str) -> dict:
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     if payload.get("typ") != ACCESS:
         raise JWTError("not an access token")
+    return payload
+
+
+def create_purpose_token(purpose: str, user_id: str, token_version: int) -> str:
+    """A short-lived token for one step of a sign-in (#44): the code to type, or
+    the enrolment to finish. Carries the token_version, so a password change
+    or a deactivation in between makes it useless too."""
+    expire = datetime.utcnow() + timedelta(minutes=PURPOSE_MINUTES[purpose])
+    return jwt.encode({"sub": user_id, "ver": token_version, "typ": purpose, "exp": expire},
+                      settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_purpose_token(token: str, purpose: str) -> dict:
+    """The claims of a valid token of exactly that purpose. Raises JWTError
+    for anything else, an access token included."""
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    if payload.get("typ") != purpose:
+        raise JWTError("wrong token purpose")
     return payload
 
 
