@@ -71,7 +71,8 @@ openssl s_server -quiet -accept 8443 -cert "$W/cert.pem" -key "$W/key.pem" -www 
 server=$!
 for _ in $(seq 20); do (exec 3<>/dev/tcp/127.0.0.1/8443) 2>/dev/null && break; sleep 0.5; done
 run CERT_HOSTS=localhost:8443
-has "a certificate with 5 days left is a problem" "Certificate: localhost:8443 expires in 4 days" "$W/out"
+# 4 or 5: whether a second passed since the certificate was made.
+has "a certificate with 5 days left is a problem" "Certificate: localhost:8443 expires in [45] days" "$W/out"
 run CERT_HOSTS=localhost:8443 CERT_MIN_DAYS=3
 has "not under the threshold" "all checks passed" "$W/out"
 kill "$server"
