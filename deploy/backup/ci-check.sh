@@ -13,6 +13,9 @@ apt-get install -qq -y age >/dev/null
 
 failures=0
 check() { if [ "$2" = "$3" ]; then echo "ok    $1"; else echo "FAIL  $1: expected '$2', got '$3'"; failures=$((failures + 1)); fi; }
+B=/var/backups/dixpertia
+# Files in the backup folder matching a name pattern, counted with find.
+count() { find "$B" -maxdepth 1 -name "$1" | wc -l; }
 
 # A running cluster with a dixpertia database and a row to find again.
 DATA=/tmp/pgdata
@@ -32,9 +35,9 @@ install -m 0750 /conf/backup.sh /usr/local/sbin/dixpertia-backup
 
 # --- A backup, readable only with the private key ---------------------------------
 /usr/local/sbin/dixpertia-backup >/dev/null
-dump="$(ls /var/backups/dixpertia/dixpertia-*.dump.age | head -1)"
-check "a dump was written" "1" "$(ls /var/backups/dixpertia/dixpertia-*.dump.age | wc -l)"
-check "the roles were written" "1" "$(ls /var/backups/dixpertia/dixpertia-*.roles.sql.age | wc -l)"
+dump="$(find "$B" -maxdepth 1 -name 'dixpertia-*.dump.age' | head -1)"
+check "a dump was written" "1" "$(count 'dixpertia-*.dump.age')"
+check "the roles were written" "1" "$(count 'dixpertia-*.roles.sql.age')"
 check "the dump is encrypted, not a plain pg_dump" "age-encryption.org/v1" "$(head -c 21 "$dump")"
 check "readable by group dixbackup, not by others" "640 dixbackup" "$(stat -c '%a %G' "$dump")"
 age --decrypt -i /tmp/private.key -o /tmp/restore.dump "$dump"
@@ -46,11 +49,11 @@ check "LAST_SUCCESS written" "1" "$(test -s /var/backups/dixpertia/LAST_SUCCESS 
 
 # --- A failed night leaves no partial file ----------------------------------------------
 su postgres -c "pg_ctl -D $DATA -w stop" >/dev/null
-before="$(ls /var/backups/dixpertia | wc -l)"
+before="$(count '*')"
 if /usr/local/sbin/dixpertia-backup >/dev/null 2>&1; then failed=no; else failed=yes; fi
 check "a backup with the database down fails" "yes" "$failed"
-check "and leaves nothing behind" "$before" "$(ls /var/backups/dixpertia | wc -l)"
-check "no .part file" "0" "$(ls /var/backups/dixpertia | grep -c '\.part$' || true)"
+check "and leaves nothing behind" "$before" "$(count '*')"
+check "no .part file" "0" "$(count '*.part')"
 su postgres -c "pg_ctl -D $DATA -w -l /tmp/pg.log start -o '-c port=5432 -c listen_addresses='" >/dev/null
 
 # --- Retention: the newest 7 daily and 4 weekly ------------------------------------------
@@ -61,9 +64,9 @@ for day in $(seq -w 1 12); do
     done
 done
 /usr/local/sbin/dixpertia-backup >/dev/null
-check "7 daily dumps kept" "7" "$(ls /var/backups/dixpertia/dixpertia-daily-*.dump.age | wc -l)"
-check "7 daily role files kept" "7" "$(ls /var/backups/dixpertia/dixpertia-daily-*.roles.sql.age | wc -l)"
-check "4 weekly dumps kept" "4" "$(ls /var/backups/dixpertia/dixpertia-weekly-*.dump.age | wc -l)"
-check "the oldest daily went first" "0" "$(ls /var/backups/dixpertia | grep -c 'daily-20260101' || true)"
+check "7 daily dumps kept" "7" "$(count 'dixpertia-daily-*.dump.age')"
+check "7 daily role files kept" "7" "$(count 'dixpertia-daily-*.roles.sql.age')"
+check "4 weekly dumps kept" "4" "$(count 'dixpertia-weekly-*.dump.age')"
+check "the oldest daily went first" "0" "$(count 'dixpertia-daily-20260101-*')"
 
 exit "$failures"
