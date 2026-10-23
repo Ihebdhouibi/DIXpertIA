@@ -1,12 +1,14 @@
 # Database backups (#171)
 
-The production database is backed up every night on the server, **encrypted with your public key**, and pulled to your own machine. If the VPS disk dies, the latest backup plus your private key rebuild everything.
+The production database is backed up every night on the server, **encrypted with the backup holder's public key**, and pulled to the backup holder's machine. If the VPS disk dies, the latest backup plus the private key rebuild everything.
+
+**Who does what.** The **backup holder** keeps the copies on their own machine: steps 1, 3, 4 and 5. It is deliberately not the server admin, so the data does not depend on one person or one employer. The **server admin** runs step 2 on the server with the holder's two **public** keys. Neither needs the other's secrets.
 
 | Where | What |
 |---|---|
 | **Server**, `/var/backups/dixpertia` | `pg_dump` of `dixpertia` plus the roles, at **02:30**. The **last 7 daily and 4 weekly** backups are kept. Encrypted with [age](https://age-encryption.org): the server holds only the public key, so it **cannot read its own backups**. |
 | **Your machine**, `%USERPROFILE%\DIXpertIA-backups` | Pulled every day by a scheduled task, kept **90 days**. Still encrypted. |
-| **Your password manager** | The age **private** key. Without it, no backup can be restored. Keep a second copy somewhere safe, offline. |
+| **A shared company password vault** | The age **private** key. Without it, no backup can be restored. It must not exist only on the holder's machine: keep it in a vault that more than one person of the company can open (and a sealed offline copy), so a backup can be restored whoever is still there. |
 
 The backups contain payroll and personal data (GDPR). They are encrypted end to end, and the folder on your machine should be on a **BitLocker**-encrypted drive. If the machine is an employer's, use a personal one or an external drive.
 
@@ -14,7 +16,9 @@ Only production is backed up. Staging holds invented data.
 
 ---
 
-## 1. On your machine: two keys (once) [PowerShell]
+## 1. Backup holder: two keys (once) [PowerShell, on the holder's machine]
+
+The steps below assume this repository is cloned at `D:\Projects\DIXpertIA`. Adjust the path if it is elsewhere.
 
 **The encryption key (age):**
 ```powershell
@@ -22,7 +26,7 @@ winget install --id FiloSottile.age -e
 age-keygen -o $HOME\.dixpertia-backup-age.key
 ```
 `age-keygen` prints `Public key: age1…`; copy that line for step 2. The file `.dixpertia-backup-age.key` holds the **private** key (`AGE-SECRET-KEY-…`):
-- copy its content into your password manager now;
+- copy its content into the **shared company vault** now;
 - never put it on the server, in the repository or in a chat.
 
 **The download key (SSH)**, without a passphrase, so the scheduled task can use it unattended. The server only lets it download the backups:
@@ -31,7 +35,9 @@ ssh-keygen -t ed25519 -N '""' -f $HOME\.ssh\dixpertia_backup -C "dixpertia-backu
 Get-Content $HOME\.ssh\dixpertia_backup.pub
 ```
 
-## 2. On the server: install [SSH as dixadmin]
+## 2. Server admin: install [SSH as dixadmin]
+
+The holder sends the admin the two **public** keys from step 1: the `age1…` line and the `ssh-ed25519 …` line. Never the private ones.
 ```bash
 sudo git -C /opt/dixpertia pull --ff-only
 sudo bash /opt/dixpertia/deploy/backup/install.sh '<age1… public key>' '<ssh-ed25519 … backup public key>'
@@ -43,14 +49,14 @@ Both arguments are **public** keys. The script:
 - turns on the nightly timer;
 - makes a first backup. It ends with `backup ok: dixpertia-daily-….dump.age`.
 
-## 3. Pull once by hand [PowerShell]
+## 3. Backup holder: pull once by hand [PowerShell]
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\Projects\DIXpertIA\deploy\backup\pull-backups.ps1
 Get-ChildItem $HOME\DIXpertIA-backups
 ```
 The first time, SSH asks you to confirm the server's key. Check it is the ED25519 fingerprint in `deploy/server/README.md`, then type `yes`.
 
-## 4. Pull every day [PowerShell, as yourself]
+## 4. Backup holder: pull every day [PowerShell, as yourself]
 ```powershell
 $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Projects\DIXpertIA\deploy\backup\pull-backups.ps1"'
 $trigger = New-ScheduledTaskTrigger -Daily -At 9am
@@ -59,7 +65,7 @@ Register-ScheduledTask -TaskName "DIXpertIA backup pull" -Action $action -Trigge
 ```
 **StartWhenAvailable** means that if the machine is off at 9:00, the task runs as soon as it is back on. Each run writes one line to `%USERPROFILE%\DIXpertIA-backups\pull.log`.
 
-## 5. Prove a backup restores (now, then once a month) [PowerShell + Docker Desktop]
+## 5. Backup holder: prove a backup restores (now, then once a month) [PowerShell + Docker Desktop]
 A backup that has never been restored is a hope, not a backup. This restores the latest one into a **throwaway** PostgreSQL on your machine, never into production:
 ```powershell
 $latest = Get-ChildItem $HOME\DIXpertIA-backups -Filter "dixpertia-*.dump.age" | Sort-Object Name | Select-Object -Last 1
