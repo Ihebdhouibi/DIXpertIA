@@ -48,6 +48,8 @@ ROUTES = [
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
     ("PUT", "/api/me/locale", AUTHENTICATED),
+    # Changing one's own password (#220).
+    ("POST", "/api/me/password", AUTHENTICATED),
     ("GET", "/api/dashboard/summary", AUTHENTICATED),
 
     # --- notifications (#116): everyone has a list, scoped to their own rows -

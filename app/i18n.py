@@ -59,6 +59,16 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.forbidden": {"en": "Access denied", "fr": "Accès refusé"},
     "auth.admin_required": {"en": "Administrator role required", "fr": "Rôle administrateur requis"},
     "auth.invalid_credentials": {"en": "Invalid credentials", "fr": "Identifiants incorrects"},
+    # #220: a lockout says it is one, and for how long. The same for any
+    # e-mail, existing or not, so it reveals nothing.
+    "auth.locked": {
+        "en": "Too many failed attempts for this e-mail. Try again in {minutes} minutes, "
+              "or reset your password.",
+        "fr": "Trop de tentatives échouées pour cette adresse. Réessayez dans {minutes} minutes, "
+              "ou réinitialisez votre mot de passe."},
+    "auth.wrong_current_password": {
+        "en": "Your current password is not correct.",
+        "fr": "Votre mot de passe actuel est incorrect."},
     "auth.too_many_requests": {
         "en": "Too many attempts. Please wait a few minutes and try again.",
         "fr": "Trop de tentatives. Patientez quelques minutes, puis réessayez."},
@@ -187,6 +197,9 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "La facture {ref} appartient à un mois clôturé et ne peut pas être annulée ; "
               "corrigez-la par un avoir dans le mois ouvert."},
     "notification.not_found": {"en": "Notification not found", "fr": "Notification introuvable"},
+    "db.password_self_only": {
+        "en": "Only the account itself can change its password.",
+        "fr": "Seul le titulaire du compte peut changer son mot de passe."},
     "db.refused": {
         "en": "The change was refused by a data rule.",
         "fr": "La modification a été refusée par une règle de données."},
@@ -640,6 +653,7 @@ _DB_FORMATS = {
     "which keeps the row and the number": "db.never_deleted",
     "audit event % cannot be changed or deleted: the audit trail is append-only": "db.audit_append_only",
     "An employee cannot validate their own leave request": "db.leave_self_validation",
+    "password: only the account itself can change its password": "db.password_self_only",
 }
 
 
