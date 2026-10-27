@@ -13,7 +13,6 @@ interface SidebarProps {
   onLogout: () => void;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
-  onGoHome: () => void;
 }
 
 /*
@@ -32,15 +31,13 @@ export default function Sidebar({
   onLogout,
   isOpenMobile,
   setIsOpenMobile,
-  onGoHome,
 }: SidebarProps) {
   const t = useT();
   const navItems = navItemsFor(currentUser.role);
   const initials = `${currentUser.firstName[0] || 'U'}${currentUser.lastName[0] || ''}`;
 
-  const go = (id: string, isHome?: boolean) => {
-    if (isHome) onGoHome();
-    else setActiveTab(id);
+  const go = (id: string) => {
+    setActiveTab(id);
     setIsOpenMobile(false);
   };
 
@@ -48,7 +45,14 @@ export default function Sidebar({
     <div className="flex h-full flex-col gap-6 border-r border-outline-variant bg-surface-container-lowest px-4 py-5 select-none">
       {/* Clear space around the logo: at least the cursor's height (#27, kit rule). */}
       <div className="px-2.5 py-2.5">
-        <Wordmark size="sm" />
+        <button
+          type="button"
+          onClick={() => go('dashboard')}
+          className="cursor-pointer transition-opacity hover:opacity-80"
+          aria-label="Go to Dashboard"
+        >
+          <Wordmark size="sm" />
+        </button>
       </div>
 
       <div className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-3">
@@ -78,13 +82,13 @@ export default function Sidebar({
       </div>
 
       <nav aria-label={t('common.nav.main')} className="flex flex-1 flex-col gap-1">
-        {navItems.map(({ id, label, icon: Icon, isHome }) => {
-          const active = !isHome && activeTab === id;
+        {navItems.map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id;
           return (
             <button
               key={id}
               type="button"
-              onClick={() => go(id, isHome)}
+              onClick={() => go(id)}
               aria-current={active ? 'page' : undefined}
               className={`relative flex items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm transition-colors cursor-pointer ${
                 active
