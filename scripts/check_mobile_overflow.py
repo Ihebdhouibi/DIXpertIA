@@ -44,9 +44,9 @@ from playwright.sync_api import sync_playwright
 # the others are actions.
 NAMES = {
     "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
-           "skip": {"Home", "Sign out", "Close navigation", "Close"}},
+           "skip": {"DI Xpertia", "Sign out", "Close navigation", "Close"}},
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
-           "skip": {"Accueil", "Se déconnecter", "Fermer la navigation", "Fermer"}},
+           "skip": {"DI Xpertia", "Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
 
 

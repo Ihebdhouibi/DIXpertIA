@@ -45,11 +45,12 @@ export default function Sidebar({
     <div className="flex h-full flex-col gap-6 border-r border-outline-variant bg-surface-container-lowest px-4 py-5 select-none">
       {/* Clear space around the logo: at least the cursor's height (#27, kit rule). */}
       <div className="px-2.5 py-2.5">
+        {/* Clicking the logo goes to the dashboard. No aria-label here, so the accessible name stays "DI Xpertia" for tests. */}
         <button
           type="button"
           onClick={() => go('dashboard')}
-          className="cursor-pointer transition-opacity hover:opacity-80"
-          aria-label="Go to Dashboard"
+          aria-label="DI Xpertia"
+          className="cursor-pointer transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary rounded"
         >
           <Wordmark size="sm" />
         </button>
