@@ -44,9 +44,9 @@ from playwright.sync_api import sync_playwright
 # the others are actions.
 NAMES = {
     "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
-           "skip": {"sign out", "close navigation", "close"}},
+           "skip": {"DI Xpertia", "Sign out", "Close navigation", "Close"}},
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
-           "skip": {"se déconnecter", "fermer la navigation", "fermer"}},
+           "skip": {"DI Xpertia", "Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
 BRAND = re.compile(r"^DI\s*Xpertia$", re.I)
 
