@@ -25,6 +25,8 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
+import html
+from app.services.email_template import render_html_email
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -167,9 +169,36 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
         to, locale = recipients.get(r.user_id, (None, None))
         if not to:
             continue
-        body = t("email.reminder.body", locale,
-                 message=render_notification(r.kind, r.params, locale), url=settings.FRONTEND_URL)
-        if send_email(to, t("email.reminder.subject", locale), body):
+
+        # 1. Generate the notification message
+        message_text = render_notification(r.kind, r.params, locale)
+        if not message_text:
+            continue
+
+        # 2. Plain text version (fallback)
+        plain_body = t("email.reminder.body", locale, message=message_text, url=settings.FRONTEND_URL)
+
+        # 3. HTML version (with escaping for security)
+        safe_message = html.escape(message_text)
+        safe_url = html.escape(settings.FRONTEND_URL)
+
+        html_msg = t("email.reminder.html_message", locale, message=safe_message)
+        html_body = render_html_email(
+            lang=locale,
+            title=t("email.reminder.html_title", locale),
+            message_html=html_msg,
+            action_url=safe_url,
+            action_text=t("email.reminder.html_action", locale),
+            footer_text=t("email.reminder.html_footer", locale)
+        )
+
+        # 4. Send both versions
+        if send_email(
+            to_email=to,
+            subject=t("email.reminder.subject", locale),
+            plain_text=plain_body,
+            html_text=html_body
+        ):
             sent += 1
     return sent
 

@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import html
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Literal, Optional
@@ -53,6 +54,7 @@ from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
+from app.services.email_template import render_html_email
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -399,9 +401,31 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 def _send_activation(user: User, token: str) -> bool:
     """In the new account's language (#135), which the admin chose at creation."""
-    body = t("email.activation.body", user.locale, name=user.firstName,
-             link=accounts.link(accounts.ACTIVATION, token))
-    return send_email(user.email, t("email.activation.subject", user.locale), body)
+    link = accounts.link(accounts.ACTIVATION, token)
+
+    # 1. Plain text version
+    plain_body = t("email.activation.body", user.locale, name=user.firstName, link=link)
+
+    # 2. HTML version (#211), with escaping for the name
+    safe_name = html.escape(user.firstName)
+    html_msg = t("email.activation.html_message", user.locale, name=safe_name)
+
+    html_body = render_html_email(
+        lang=user.locale,
+        title=t("email.activation.html_title", user.locale),
+        message_html=html_msg,
+        action_url=link,
+        action_text=t("email.activation.html_action", user.locale),
+        footer_text=t("email.activation.html_footer", user.locale)
+    )
+
+    # 3. Send both parts
+    return send_email(
+        to_email=user.email,
+        subject=t("email.activation.subject", user.locale),
+        plain_text=plain_body,
+        html_text=html_body
+    )
 
 
 # require_admin as a dependency rather than a check inside the body: FastAPI
@@ -557,10 +581,25 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     # The token itself never goes in the trail.
     record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
-    # In the account's language (#135), not the language of the page the
-    # request came from: the account owner reads it.
-    body = t("email.reset.body", user.locale, name=user.firstName, link=accounts.link(accounts.RESET, token))
-    send_email(user.email, t("email.reset.subject", user.locale), body)
+    link = accounts.link(accounts.RESET, token)
+    plain_body = t("email.reset.body", user.locale, name=user.firstName, link=link)
+    safe_name = html.escape(user.firstName)
+    html_msg = t("email.reset.html_message", user.locale, name=safe_name)
+    html_body = render_html_email(
+        lang=user.locale,
+        title=t("email.reset.html_title", user.locale),
+        message_html=html_msg,
+        action_url=link,
+        action_text=t("email.reset.html_action", user.locale),
+        footer_text=t("email.reset.html_footer", user.locale)
+    )
+    send_email(
+        to_email=user.email,
+        subject=t("email.reset.subject", user.locale),
+        plain_text=plain_body,
+        html_text=html_body
+    )
+
     return answer
 
 
