@@ -221,8 +221,8 @@ def mailbox(app, monkeypatch):
 
     sent = []
 
-    def capture(to_email, subject, body):
-        sent.append({"to": to_email, "subject": subject, "body": body})
+    def capture(to_email, subject, body, html_text=None, reply_to=None, **kwargs):
+        sent.append({"to": to_email, "subject": subject, "body": body })
         return True
 
     monkeypatch.setattr(main, "send_email", capture)
