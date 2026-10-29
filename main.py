@@ -423,7 +423,7 @@ def _send_activation(user: User, token: str) -> bool:
     return send_email(
         to_email=user.email,
         subject=t("email.activation.subject", user.locale),
-        plain_text=plain_body,
+        body=plain_body,
         html_text=html_body
     )
 

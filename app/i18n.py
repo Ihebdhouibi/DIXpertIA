@@ -520,6 +520,66 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.status.payee": {"en": "Paid", "fr": "Payée"},
     "pdf.status.en_retard": {"en": "Overdue", "fr": "En retard"},
     "pdf.status.annulee": {"en": "Cancelled", "fr": "Annulée"},
+        # HTML E-mail components (#211)
+    "email.activation.html_title": {
+        "en": "Activate your DIXpertIA account",
+        "fr": "Activez votre compte DIXpertIA"
+    },
+    "email.activation.html_message": {
+        "en": "<p>Hello {name},</p>"
+              "<p>An account has been created for you on DIXpertIA.</p>"
+              "<p>Choose your password using the button below (valid for 72 hours).</p>",
+        "fr": "<p>Bonjour {name},</p>"
+              "<p>Un compte a été créé pour vous sur DIXpertIA.</p>"
+              "<p>Choisissez votre mot de passe en utilisant le bouton ci-dessous "
+              "(valable 72 heures).</p>"
+    },
+    "email.activation.html_action": {"en": "Activate my account", "fr": "Activer mon compte"},
+    "email.activation.html_footer": {
+        "en": "You receive this email because an account was created for you.",
+        "fr": "Vous recevez cet e-mail car un compte a été créé pour vous."
+    },
+
+    "email.reset.html_title": {"en": "Password reset request", "fr": "Réinitialisation de votre mot de passe"},
+    "email.reset.html_message": {
+        "en": "<p>Hello {name},</p>"
+              "<p>You requested a password reset for your DIXpertIA account.</p>"
+              "<p>Click the button below to set a new password (valid for 1 hour, once).</p>"
+              "<p>If you did not request this, you can safely ignore this email.</p>",
+        "fr": "<p>Bonjour {name},</p>"
+              "<p>Vous avez demandé la réinitialisation du mot de passe de votre compte DIXpertIA.</p>"
+              "<p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe "
+              "(valable 1 heure, une seule fois).</p>"
+              "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>"
+    },
+    "email.reset.html_action": {"en": "Choose a new password", "fr": "Choisir un nouveau mot de passe"},
+    "email.reset.html_footer": {
+        "en": "You receive this email because a password reset was requested for your account.",
+        "fr": "Vous recevez cet e-mail car une réinitialisation de mot de passe a été demandée."
+    },
+
+    "email.reminder.html_title": {"en": "DI Xpertia - Invoice reminder", "fr": "DI Xpertia - Rappel de facture"},
+    "email.reminder.html_message": {"en": "<p>{message}</p>", "fr": "<p>{message}</p>"},
+    "email.reminder.html_action": {"en": "Open DI Xpertia", "fr": "Ouvrir DI Xpertia"},
+    "email.reminder.html_footer": {"en": "This is an automated reminder.", "fr": "Ceci est un rappel automatique."},
+
+    "email.contact.html_title": {"en": "New enquiry from the website", "fr": "Nouvelle demande depuis le site"},
+    "email.contact.html_message": {
+        "en": "<p><strong>Name:</strong> {name}<br/>"
+              "<strong>Email:</strong> {email}<br/>"
+              "<strong>Topic:</strong> {topic}</p>"
+              "<p><strong>Message:</strong><br/>{message}</p>"
+              "<p><a href=\"{link}\">View all enquiries</a></p>",
+        "fr": "<p><strong>Nom :</strong> {name}<br/>"
+              "<strong>E-mail :</strong> {email}<br/>"
+              "<strong>Sujet :</strong> {topic}</p>"
+              "<p><strong>Message :</strong><br/>{message}</p>"
+              "<p><a href=\"{link}\">Voir toutes les demandes</a></p>"
+    },
+    "email.contact.html_footer": {
+        "en": "You receive this email because you are an administrator.",
+        "fr": "Vous recevez cet e-mail car vous êtes administrateur."
+    },
 }
 
 

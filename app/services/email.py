@@ -30,6 +30,7 @@ def email_configured() -> bool:
 def send_email(
     to_email: str,
     subject: str,
+    body: str,
     plain_text: str,
     html_text: str | None = None,
     reply_to: str | None = None

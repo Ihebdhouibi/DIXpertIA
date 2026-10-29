@@ -86,7 +86,7 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
     sent = send_email(
         to_email=settings.CONTACT_INBOX,
         subject=subject,
-        plain_text=body,
+        body=body,
         html_text=html_body,
         reply_to=email
     )

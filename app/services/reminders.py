@@ -196,7 +196,7 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
         if send_email(
             to_email=to,
             subject=t("email.reminder.subject", locale),
-            plain_text=plain_body,
+            body=plain_body,
             html_text=html_body
         ):
             sent += 1
