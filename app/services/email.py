@@ -31,7 +31,6 @@ def send_email(
     to_email: str,
     subject: str,
     body: str,
-    plain_text: str,
     html_text: str | None = None,
     reply_to: str | None = None
 ) -> bool:
@@ -48,11 +47,11 @@ def send_email(
         if html_text:
             msg = MIMEMultipart("alternative")
             # Attach text first, HTML second (clients pick the best one they can render)
-            msg.attach(MIMEText(plain_text, "plain", "utf-8"))
+            msg.attach(MIMEText(body, "plain", "utf-8"))
             msg.attach(MIMEText(html_text, "html", "utf-8"))
         else:
             msg = MIMEMultipart()
-            msg.attach(MIMEText(plain_text, "plain", "utf-8"))
+            msg.attach(MIMEText(body, "plain", "utf-8"))
 
         msg["From"] = settings.SMTP_FROM
         msg["To"] = to_email
