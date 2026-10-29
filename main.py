@@ -596,7 +596,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     send_email(
         to_email=user.email,
         subject=t("email.reset.subject", user.locale),
-        plain_text=plain_body,
+        body=plain_body,
         html_text=html_body
     )
 
