@@ -19,8 +19,11 @@ def inbox(monkeypatch):
     sent = []
     monkeypatch.setattr(settings, "CONTACT_INBOX", "inbox@dixpertia.test")
     monkeypatch.setattr(contact, "email_configured", lambda: True)
-    monkeypatch.setattr(contact, "send_email",
-                        lambda to, subject, body, reply_to=None: sent.append((to, subject, body, reply_to)) or True)
+    def mock_send(to_email, subject, body, html_text=None, reply_to=None, **kwargs):
+        sent.append((to_email, subject, body, reply_to))
+        return True
+
+    monkeypatch.setattr(contact, "send_email", mock_send)
     return sent
 
 

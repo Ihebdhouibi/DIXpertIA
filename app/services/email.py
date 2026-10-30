@@ -4,6 +4,7 @@ Moved out of main.py for #134 so the reminder job can use it too, and reading
 the settings module rather than os.getenv. Delivery is optional: with the SMTP
 settings empty, send_email() logs a warning and returns False instead of
 failing whatever asked for it.
+
 """
 
 import logging
@@ -26,21 +27,37 @@ def email_configured() -> bool:
     return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
 
 
-def send_email(to_email: str, subject: str, body: str, reply_to: str | None = None) -> bool:
-    """Send a plain-text e-mail. `reply_to` lets the recipient answer someone
-    else, such as a contact form's sender (#98); it must be a validated
-    address, since it goes into a header."""
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    html_text: str | None = None,
+    reply_to: str | None = None
+) -> bool:
+    """Send an e-mail, optionally with an HTML alternative.
+    `plain_text` is always required as a fallback (and to keep spam filters happy).
+    `html_text` is optional; when provided, the e-mail is sent as multipart/alternative.
+    `reply_to` lets the recipient answer someone else, such as a contact form's sender (#98).
+    """
     if not email_configured():
         log.warning("SMTP credentials missing. Email not sent.")
         return False
     try:
-        msg = MIMEMultipart()
+        # Use multipart/alternative if an HTML part is provided (#211)
+        if html_text:
+            msg = MIMEMultipart("alternative")
+            # Attach text first, HTML second (clients pick the best one they can render)
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+            msg.attach(MIMEText(html_text, "html", "utf-8"))
+        else:
+            msg = MIMEMultipart()
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+
         msg["From"] = settings.SMTP_FROM
         msg["To"] = to_email
         msg["Subject"] = subject
         if reply_to:
             msg["Reply-To"] = reply_to
-        msg.attach(MIMEText(body, "plain"))
 
         # A verified TLS connection, always: the mail server's certificate must
         # match SMTP_HOST, or the password could be handed to an impostor.
