@@ -44,20 +44,28 @@ from playwright.sync_api import sync_playwright
 # the others are actions.
 NAMES = {
     "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
-           "skip": {"Home", "Sign out", "Close navigation", "Close"}},
+           "skip": {"DI Xpertia", "Sign out", "Close navigation", "Close"}},
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
-           "skip": {"Accueil", "Se déconnecter", "Fermer la navigation", "Fermer"}},
+           "skip": {"DI Xpertia", "Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
+BRAND = re.compile(r"^DI\s*Xpertia$", re.I)
+
+
+def norm(text: str) -> str:
+    # collapses NBSP, newlines and repeated spaces
+    return " ".join(text.replace("\u00a0", " ").split())
 
 
 def screens_of(page, names: dict) -> list[str]:
     page.get_by_role("button", name=names["open"]).click()
     page.wait_for_timeout(400)
-    labels = [t.strip() for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
+    labels = [norm(t) for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    return [label for label in labels if label and label not in names["skip"]]
-
+    return [
+        label for label in labels
+        if label and not BRAND.match(label) and label.casefold() not in names["skip"]
+    ]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -93,7 +101,9 @@ def main() -> int:
                 for label in screens_of(page, names):
                     page.get_by_role("button", name=names["open"]).click()
                     page.wait_for_timeout(400)
-                    page.get_by_role("dialog").get_by_role("button", name=label, exact=True).first.click()
+                    page.get_by_role("dialog").get_by_role(
+                           "button", name=re.compile(rf"^\s*{re.escape(label)}\s*$")
+                    ).first.click()
                     page.wait_for_timeout(1800)
                     width = page.evaluate("document.documentElement.scrollWidth")
                     checked += 1

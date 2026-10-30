@@ -44,7 +44,7 @@ from playwright.sync_api import sync_playwright
 AXE_URL = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"
 AXE_SHA256 = "b511cd9dec01c76f4b2ad1723b66b6db37d4c2eb4ed199076e1829d9ee7b75e3"
 RULES = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]
-SKIP = {"Home", "Sign out"}
+SKIP = {"DI Xpertia", "Sign out"}
 
 RUN_AXE = """async (rules) => (await axe.run(document, {runOnly: rules})).violations
   .map(v => `${v.id} (${v.impact}): ${v.help} - ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(', ')}`)"""

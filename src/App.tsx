@@ -21,8 +21,8 @@ import ClientsView from './components/ClientsView';
 import SkipLink from './components/ui/SkipLink';
 import SettingsView from './components/SettingsView';
 import UsersView from './components/UsersView';
-import ForgotPassword from './components/ForgotPassword';   // NEW
-import ResetPassword from './components/ResetPassword';     // NEW
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 import { HelpCircle, AlertCircle } from 'lucide-react';
 
 interface Notification {
@@ -70,7 +70,7 @@ export default function App() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [showHomepage, setShowHomepage] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetToken, setResetToken] = useState<string | null>(null);
   // A reset link carries ?token=, an activation link ?activate= (#62). Both
   // open the same "choose a password" page, against different endpoints.
@@ -278,12 +278,6 @@ export default function App() {
     setShowLogin(false);
   };
 
-  // handleToggleRole is gone (#66). It rewrote the signed-in user's role, name
-  // and id in the browser and re-rendered the admin screens on top of mock
-  // data. The server always refused the admin actions, so nothing could be
-  // done with it - but it showed every employee an admin view of fictional
-  // numbers, which is worse than refusing outright.
-
   // --- Leave handlers ---
   //
   // Each one calls the API and then reloads from it, rather than editing local
@@ -337,11 +331,6 @@ export default function App() {
     }
   };
 
-  const handleGoHome = () => {
-    setShowHomepage(true);
-    setShowLogin(false);
-  };
-
   const handleGoToDashboard = () => {
     setShowHomepage(false);
     setShowLogin(false);
@@ -379,8 +368,6 @@ export default function App() {
             notifications={visibleNotifications}
             onMarkRead={(id) => notificationAction(() => api.notifications.read(id))}
             onMarkAllRead={() => notificationAction(api.notifications.readAll)}
-            // The view asks for confirmation (#106); asking here as well
-            // made "Clear all" prompt twice. Clearing is a soft dismissal.
             onClearAll={() => notificationAction(api.notifications.dismissAll)}
             onClearSelected={(ids) =>
               notificationAction(() => Promise.all(ids.map((id) => api.notifications.dismiss(id))))
@@ -408,8 +395,6 @@ export default function App() {
         return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;
 
       case 'leave-requests':
-        // Employees only. Hiding the sidebar entry is not enough on its own -
-        // activeTab can be reached by other paths, so the view guards too (#10).
         if (currentUser.role !== 'employee') {
           return (
             <div className="flex-1 flex flex-col gap-6 animate-fade-in">
@@ -425,7 +410,6 @@ export default function App() {
             leaveRequests={leaveRequests.filter(req => req.employeeId === myEmployeeId)}
             onAddRequest={handleAddLeaveRequest}
             userRole={currentUser.role}
-            currentEmployeeId={myEmployeeId}
           />
         );
 
@@ -440,8 +424,6 @@ export default function App() {
             </div>
           );
         }
-        // The view creates, edits and deactivates accounts through the API
-        // itself (#62) and asks for a reload once the server has accepted.
         return (
           <UsersView
             users={users}
@@ -504,11 +486,6 @@ export default function App() {
   // --- RENDERING LOGIC (NEW ORDER) ---
 
   // 0. Hold the first paint until the token has been checked.
-  //
-  // Without this a signed-in user sees the public homepage for a moment on
-  // every reload, because the session is restored asynchronously and
-  // showHomepage starts true. A password-reset link is exempt: it carries its
-  // own token in the URL and does not need a session.
   if (!sessionChecked && !resetToken) {
     return (
       <ThemeScope>
@@ -567,7 +544,6 @@ export default function App() {
   // in and the login form otherwise.
   if (!currentUser || showHomepage) {
     return (
-      // Themed since #165: the homepage follows the light/dark preference like the app.
       <ThemeScope>
         <Homepage onDashboardClick={currentUser ? handleGoToDashboard : () => setShowLogin(true)} />
       </ThemeScope>
@@ -585,7 +561,6 @@ export default function App() {
         onLogout={handleLogout}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
-        onGoHome={handleGoHome}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

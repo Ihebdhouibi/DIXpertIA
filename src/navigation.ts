@@ -1,4 +1,4 @@
-import { Bell, Building2, Calendar, FileText, Home, Inbox, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
+import { Bell, Building2, Calendar, FileText, Inbox, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { UserRole } from './types';
 import type { MessageKey, Params } from './i18n';
@@ -13,12 +13,9 @@ export interface NavItem {
   label: MessageKey;
   icon: LucideIcon;
   showFor?: UserRole[];
-  /** Leaves the app for the public homepage instead of switching tab. */
-  isHome?: boolean;
 }
 
 const ITEMS: NavItem[] = [
-  { id: 'home', label: 'common.nav.home', icon: Home, isHome: true },
   { id: 'dashboard', label: 'common.nav.dashboard', icon: LayoutDashboard },
   // Invoices: admin and accountant.
   { id: 'invoices', label: 'common.nav.invoices', icon: FileText, showFor: ['admin', 'accountant'] },
