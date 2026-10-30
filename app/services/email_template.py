@@ -7,6 +7,7 @@ It uses tables and inline CSS to ensure compatibility with major e-mail clients
 
 import html
 
+
 def render_html_email(
     lang: str,
     title: str,
@@ -24,19 +25,21 @@ def render_html_email(
         button_html = f"""
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
             <tr>
-                <td align="center" bgcolor="#1a2a6c" style="border-radius: 4px;">
+                <td align="center" bgcolor="#111827" style="border-radius: 6px;">
                     <a href="{html.escape(action_url)}" target="_blank"
-                       style="font-size: 16px; font-family: Helvetica, Arial, sans-serif;
+                       style="font-size: 15px;
+                              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                               color: #ffffff; text-decoration: none; padding: 14px 24px;
-                              border-radius: 4px; display: inline-block; font-weight: bold;">
+                              border-radius: 6px; display: inline-block;
+                              font-weight: bold;">
                         {html.escape(action_text)}
                     </a>
                 </td>
             </tr>
         </table>
-        <!-- Fallback link for clients that block buttons -->
-        <p style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;
-                  color: #555555; margin-top: 10px; word-break: break-all;">
+        <p style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                  font-size: 12px; color: #6b7280; margin-top: 10px;
+                  word-break: break-all;">
             {html.escape(action_url)}
         </p>
         """
@@ -51,19 +54,20 @@ def render_html_email(
     <title>{html.escape(title)}</title>
     <style>
         @media (prefers-color-scheme: dark) {{
-            .body-bg {{ background-color: #121212 !important; }}
-            .card-bg {{ background-color: #1e1e1e !important; }}
-            .text-main {{ color: #ffffff !important; }}
-            .text-muted {{ color: #aaaaaa !important; }}
-            .divider {{ border-color: #333333 !important; }}
+            .body-bg {{ background-color: #111827 !important; }}
+            .card-bg {{ background-color: #1f2937 !important; }}
+            .text-main {{ color: #f9fafb !important; }}
+            .text-muted {{ color: #9ca3af !important; }}
+            .divider {{ border-color: #374151 !important; }}
+            .logo-ink {{ color: #f9fafb !important; }}
         }}
     </style>
 </head>
 <body class="body-bg"
-      style="margin: 0; padding: 0; background-color: #f4f5f7;
-             font-family: Helvetica, Arial, sans-serif;">
+      style="margin: 0; padding: 0; background-color: #f3f4f6;
+             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-           border="0" style="background-color: #f4f5f7;">
+           border="0" style="background-color: #f3f4f6;">
         <tr>
             <td align="center" style="padding: 40px 10px;">
                 <!-- Main Card -->
@@ -76,12 +80,16 @@ def render_html_email(
                     <tr>
                         <td align="center"
                             style="padding: 30px 20px;
-                                   border-bottom: 1px solid #eaeaea;"
+                                   border-bottom: 1px solid #e5e7eb;"
                             class="divider">
-                            <div style="font-family: Helvetica, Arial, sans-serif;
-                                        font-size: 24px; font-weight: bold;
-                                        color: #1a2a6c;">
-                                DIXpertIA
+                            <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                        font-size: 24px; font-weight: 800;
+                                        letter-spacing: -0.5px;">
+                                <span style="color: #84cc16;
+                                             font-family: 'Courier New', Courier, monospace;
+                                             font-size: 22px;">&gt;_</span>
+                                <span class="logo-ink" style="color: #111827;">DI</span>
+                                <span style="color: #84cc16;">Xpertia</span>
                             </div>
                         </td>
                     </tr>
@@ -89,12 +97,12 @@ def render_html_email(
                     <tr>
                         <td style="padding: 40px 30px;">
                             <h1 class="text-main"
-                                style="margin: 0 0 20px 0; font-size: 20px;
-                                       color: #333333;">
+                                style="margin: 0 0 20px 0; font-size: 22px;
+                                       color: #111827; font-weight: bold;">
                                 {html.escape(title)}
                             </h1>
                             <div class="text-main"
-                                 style="font-size: 15px; color: #444444;
+                                 style="font-size: 15px; color: #374151;
                                         line-height: 1.6;">
                                 {message_html}
                             </div>
@@ -105,14 +113,12 @@ def render_html_email(
                     <tr>
                         <td align="center" class="text-muted"
                             style="padding: 20px 30px;
-                                   background-color: #fafafa;
-                                   border-top: 1px solid #eaeaea;
+                                   background-color: #f9fafb;
+                                   border-top: 1px solid #e5e7eb;
                                    border-radius: 0 0 8px 8px;
-                                   font-size: 12px; color: #888888;"
+                                   font-size: 12px; color: #6b7280;"
                             class="divider">
-                            <p style="margin: 0 0 10px 0;">
-                                {html.escape(footer_text)}
-                            </p>
+                            <p style="margin: 0 0 10px 0;">{html.escape(footer_text)}</p>
                             <p style="margin: 0;">&copy; DIXpertIA</p>
                         </td>
                     </tr>
