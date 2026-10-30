@@ -90,9 +90,18 @@ sudo /usr/local/sbin/dixpertia-check             # "ok    all checks passed", or
 journalctl -u dixpertia-check -n 20 --no-pager   # what the last runs said
 ```
 
-## 5. One reboot, for the log limits
+## 5. One reboot and a redeploy, for the log limits
 
-Until now, Docker kept every container's output **without limit**, so the disk would have filled up in the end. The installer caps it at **5 files of 20 MB per container**. The cap applies only once Docker has restarted and the apps have been recreated.
+Until now, Docker kept every container's output **without limit**, so the disk would have filled up in the end. The installer caps it at **5 files of 20 MB per container**. The cap applies only once Docker has restarted **and** the apps have been recreated: a container keeps the log settings it was created with, and a reboot restarts the same containers, it does not recreate them.
+
+**Before the reboot**, check that Docker accepts its new settings. If it does not, Docker will not start after the reboot, and the site stays down:
+
+```bash
+sudo dockerd --validate --config-file /etc/docker/daemon.json   # "configuration OK"
+systemctl cat docker | grep -e '--log-'                          # nothing: the log settings are not also flags
+```
+
+If either one complains, do not reboot: fix `/etc/docker/daemon.json` first.
 
 At a quiet time, run:
 
@@ -100,7 +109,17 @@ At a quiet time, run:
 sudo reboot
 ```
 
-The site is down for about 1 to 2 minutes. After the reboot, check that all four apps are **Running** in Dokploy, and that https://dixpertia.tn opens. A reboot rather than `systemctl restart docker` keeps the start order of PostgreSQL after Docker (#172), which a Docker restart alone could break.
+The site is down for about 1 to 2 minutes. A reboot rather than `systemctl restart docker` keeps the start order of PostgreSQL after Docker (#172), which a Docker restart alone could break.
+
+**After the reboot**, in Dokploy, **Redeploy** each of the four apps (`api` first, then `web`, as in a normal deploy). Then check that all four are **Running**, and that https://dixpertia.tn opens.
+
+Last, check which containers are capped. Every app container should show `max-file:5 max-size:20m`:
+
+```bash
+sudo docker ps -q | xargs sudo docker inspect -f '{{.Name}}  {{.HostConfig.LogConfig.Config}}'
+```
+
+A container that shows `map[]` is still unlimited. Dokploy's own containers (Dokploy, Traefik, and their database) stay that way until Dokploy recreates them, for example at its next update. Their output is small, but run the command again after that update.
 
 ## What is checked, and when it alerts
 

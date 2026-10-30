@@ -50,7 +50,7 @@ sudo docker system df                                # what Docker holds
    Dokploy also has **Settings → Server → Docker cleanup**.
 2. **Logs**:
    - `sudo journalctl --disk-usage`. To shrink: `sudo journalctl --vacuum-size=500M`.
-   - The Docker logs are capped after the reboot of README.md, step 5. If that reboot has not happened yet, do it now.
+   - The Docker logs are capped only after the reboot and the redeploy of README.md, step 5. If they have not happened yet, do them now.
 3. **Backups**: `sudo du -sh /var/backups/dixpertia`. Retention keeps 7 daily and 4 weekly. Never delete them by hand without checking that the off-server copy (#171) has them.
 4. **PostgreSQL**: `sudo du -sh /var/lib/postgresql/17/*`.
 
