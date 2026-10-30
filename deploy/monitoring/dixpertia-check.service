@@ -1,0 +1,10 @@
+[Unit]
+Description=DI Xpertia server checks and alerts (#188)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dixpertia-check
+Nice=10
+TimeoutStartSec=4min
