@@ -71,7 +71,7 @@ else:
         json.dump(conf, f, indent=2)
         f.write("\n")
     os.replace(path + ".new", path)
-    print("ok    docker logs capped at 5 x 20 MB, from the next reboot (README.md, step 5)")
+    print("ok    docker logs capped at 5 x 20 MB, after a reboot and a redeploy of the apps (README.md, step 5)")
 PY
 
 # --- A first run, and a test mail ------------------------------------------------------
