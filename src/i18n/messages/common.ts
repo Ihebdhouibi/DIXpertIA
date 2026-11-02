@@ -68,7 +68,6 @@ export default defineMessages('common', {
   'common.leaveType.Personal Day': { fr: 'Jour personnel', en: 'Personal Day' },
 
   // The app shell: navigation, header, sidebar (#135).
-  'common.nav.home': { fr: 'Accueil', en: 'Home' },
   'common.nav.dashboard': { fr: 'Tableau de bord', en: 'Dashboard' },
   'common.nav.invoices': { fr: 'Factures', en: 'Invoices' },
   'common.nav.leaveRequests': { fr: 'Demandes de congé', en: 'Leave Requests' },

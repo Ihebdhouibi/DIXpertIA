@@ -46,7 +46,7 @@ NAMES = {
     "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
            "skip": {"DI Xpertia", "Sign out", "Close navigation", "Close"}},
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
-           "skip": {"DI Xpertia", "Se déconnecter", "Fermer la navigation", "Fermer"}},
+           "skip": {"Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
 BRAND = re.compile(r"^DI\s*Xpertia$", re.I)
 
@@ -62,10 +62,7 @@ def screens_of(page, names: dict) -> list[str]:
     labels = [norm(t) for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    return [
-        label for label in labels
-        if label and not BRAND.match(label) and label.casefold() not in names["skip"]
-    ]
+    return [label for label in labels if label and label not in names["skip"]]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
