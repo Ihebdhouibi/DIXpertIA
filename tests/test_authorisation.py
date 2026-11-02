@@ -44,6 +44,13 @@ ROUTES = [
     ("POST", "/api/contact", PUBLIC),
     ("GET", "/api/contact-requests", ADMIN_ONLY),
     ("POST", "/api/contact-requests/1/handle", ADMIN_ONLY),
+    # Demo videos (#232): the website reads the published ones; the admin manages them.
+    ("GET", "/api/public/demos", PUBLIC),
+    ("GET", "/api/demos", ADMIN_ONLY),
+    ("POST", "/api/demos", ADMIN_ONLY),
+    ("PUT", "/api/demos/order", ADMIN_ONLY),
+    ("PATCH", "/api/demos/1", ADMIN_ONLY),
+    ("DELETE", "/api/demos/1", ADMIN_ONLY),
 
     # --- identity ----------------------------------------------------------
     ("GET", "/api/me", AUTHENTICATED),
@@ -197,6 +204,7 @@ def test_every_route_is_covered(app):
                       .replace("/api/leave-requests/1/", "/api/leave-requests/{req_id}/")
                       .replace("/api/contact-requests/1/", "/api/contact-requests/{request_id}/")
                       .replace("/api/clients/1", "/api/clients/{client_id}")
+                      .replace("/api/demos/1", "/api/demos/{demo_id}")
                       .replace("/api/notifications/1/", "/api/notifications/{notification_id}/")
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")

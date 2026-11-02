@@ -48,7 +48,7 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
+from app.routers import accounting, audit, contact, dashboard, demos, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
@@ -74,6 +74,9 @@ PUBLIC_PATHS = frozenset({
     "/api/activate",
     # The website's contact form (#98): anonymous, rate limited in the database.
     "/api/contact",
+    # The website's Demo section (#232): published demos only, through one
+    # SECURITY DEFINER function, rate limited like every public route.
+    "/api/public/demos",
     # Container health check (#185): says only whether the database answers.
     "/api/health",
     # The sign-in's second step (#44): each carries its own short-lived token,
@@ -175,6 +178,8 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
+app.include_router(demos.public, prefix="/api")
+app.include_router(demos.admin, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(mfa_router.router, prefix="/api")
 app.include_router(mfa_router.public, prefix="/api")
