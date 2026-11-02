@@ -48,8 +48,7 @@ NAMES = {
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
            "skip": {"Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
-BRAND = re.compile(r"^DI\s*Xpertia$", re.I)
-
+BRAND = re.compile(r"DI\s*Xpertia", re.I)
 
 def norm(text: str) -> str:
     # collapses NBSP, newlines and repeated spaces
@@ -59,10 +58,13 @@ def norm(text: str) -> str:
 def screens_of(page, names: dict) -> list[str]:
     page.get_by_role("button", name=names["open"]).click()
     page.wait_for_timeout(400)
-    labels = [norm(t) for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
+    labels = [t.strip() for t in page.get_by_role("dialog").get_by_role("button").all_inner_texts()]
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    return [label for label in labels if label and label not in names["skip"]]
+    return [
+        label for label in labels
+        if label and not BRAND.match(label) and label not in names["skip"]
+    ]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
