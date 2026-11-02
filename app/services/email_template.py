@@ -6,7 +6,12 @@ It uses tables and inline CSS to ensure compatibility with major e-mail clients
 """
 
 import html
+from app.i18n import t
 
+def t_html(key: str, locale: str | None = None, **params) -> str:
+    """Format a message from the catalog, escaping all values for safe HTML insertion."""
+    safe_params = {k: html.escape(str(v)) for k, v in params.items()}
+    return t(key, locale, **safe_params)
 
 def render_html_email(
     lang: str,
@@ -17,7 +22,6 @@ def render_html_email(
     footer_text: str = ""
 ) -> str:
     """Generate a responsive, dark-mode ready HTML email."""
-
     lang = "fr" if lang == "fr" else "en"
 
     button_html = ""
@@ -60,6 +64,7 @@ def render_html_email(
             .text-muted {{ color: #9ca3af !important; }}
             .divider {{ border-color: #374151 !important; }}
             .logo-ink {{ color: #f9fafb !important; }}
+            .footer-bg {{ background-color: #1f2937 !important; }}
         }}
     </style>
 </head>
@@ -85,7 +90,8 @@ def render_html_email(
                             <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                                         font-size: 24px; font-weight: 800;
                                         letter-spacing: -0.5px;">
-                                <span style="color: #84cc16;
+                                <span class="logo-ink"
+                                      style="color: #111827;
                                              font-family: 'Courier New', Courier, monospace;
                                              font-size: 22px;">&gt;_</span>
                                 <span class="logo-ink" style="color: #111827;">DI</span>
@@ -111,13 +117,12 @@ def render_html_email(
                     </tr>
                     <!-- Footer -->
                     <tr>
-                        <td align="center" class="text-muted"
+                        <td align="center" class="text-muted divider footer-bg"
                             style="padding: 20px 30px;
                                    background-color: #f9fafb;
                                    border-top: 1px solid #e5e7eb;
                                    border-radius: 0 0 8px 8px;
-                                   font-size: 12px; color: #6b7280;"
-                            class="divider">
+                                   font-size: 12px; color: #6b7280;">
                             <p style="margin: 0 0 10px 0;">{html.escape(footer_text)}</p>
                             <p style="margin: 0;">&copy; DIXpertIA</p>
                         </td>

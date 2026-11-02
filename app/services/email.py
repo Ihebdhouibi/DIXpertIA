@@ -31,8 +31,9 @@ def send_email(
     to_email: str,
     subject: str,
     body: str,
-    html_text: str | None = None,
-    reply_to: str | None = None
+    reply_to: str | None = None,
+    html_text: str | None = None
+
 ) -> bool:
     """Send an e-mail, optionally with an HTML alternative.
     `plain_text` is always required as a fallback (and to keep spam filters happy).

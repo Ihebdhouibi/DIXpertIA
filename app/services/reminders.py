@@ -25,12 +25,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
-import html
-from app.services.email_template import render_html_email
-
 from sqlalchemy import text
+import html
+from app.services.email_template import render_html_email, t_html
 from sqlalchemy.orm import Session, joinedload, selectinload
-
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.identity import get_identity, set_identity
@@ -173,6 +171,7 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
         # 1. Generate the notification message
         message_text = render_notification(r.kind, r.params, locale)
         if not message_text:
+            log.warning("Reminder %s has no translated text for locale %s", r.kind, locale)
             continue
 
         # 2. Plain text version (fallback)
@@ -180,14 +179,13 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
 
         # 3. HTML version (with escaping for security)
         safe_message = html.escape(message_text)
-        safe_url = html.escape(settings.FRONTEND_URL)
 
-        html_msg = t("email.reminder.html_message", locale, message=safe_message)
+        html_msg = t_html("email.reminder.html_message", locale, message=safe_message)
         html_body = render_html_email(
             lang=locale,
             title=t("email.reminder.html_title", locale),
             message_html=html_msg,
-            action_url=safe_url,
+            action_url=settings.FRONTEND_URL,
             action_text=t("email.reminder.html_action", locale),
             footer_text=t("email.reminder.html_footer", locale)
         )

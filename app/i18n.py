@@ -448,10 +448,10 @@ CATALOG: dict[str, dict[str, str]] = {
               "(valable 1 heure, une seule fois) :\n\n{link}\n\n"
               "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\n"
               "Cordialement,\nL'équipe DIXpertIA\n"},
-    "email.reminder.subject": {"en": "DI Xpertia - invoice reminder", "fr": "DI Xpertia - rappel de facture"},
+    "email.reminder.subject": {"en": "DIXpertia - invoice reminder", "fr": "DIXpertia - rappel de facture"},
     "email.reminder.body": {
-        "en": "{message}\n\nOpen DI Xpertia: {url}\n",
-        "fr": "{message}\n\nOuvrir DI Xpertia : {url}\n"},
+        "en": "{message}\n\nOpen DIXpertia: {url}\n",
+        "fr": "{message}\n\nOuvrir DIXpertia : {url}\n"},
 
     # Invoice PDF (#194: the Claude Design layout in design/invoice-v2/)
     "pdf.invoice": {"en": "INVOICE", "fr": "FACTURE"},
@@ -520,7 +520,7 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.status.payee": {"en": "Paid", "fr": "Payée"},
     "pdf.status.en_retard": {"en": "Overdue", "fr": "En retard"},
     "pdf.status.annulee": {"en": "Cancelled", "fr": "Annulée"},
-        # HTML E-mail components (#211)
+    # HTML E-mail components (#211)
     "email.activation.html_title": {
         "en": "Activate your DIXpertIA account",
         "fr": "Activez votre compte DIXpertIA"
@@ -558,9 +558,9 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "Vous recevez cet e-mail car une réinitialisation de mot de passe a été demandée."
     },
 
-    "email.reminder.html_title": {"en": "DI Xpertia - Invoice reminder", "fr": "DI Xpertia - Rappel de facture"},
+    "email.reminder.html_title": {"en": "DIXpertia - Invoice reminder", "fr": "DIXpertia - Rappel de facture"},
     "email.reminder.html_message": {"en": "<p>{message}</p>", "fr": "<p>{message}</p>"},
-    "email.reminder.html_action": {"en": "Open DI Xpertia", "fr": "Ouvrir DI Xpertia"},
+    "email.reminder.html_action": {"en": "Open DIXpertia", "fr": "Ouvrir DIXpertia"},
     "email.reminder.html_footer": {"en": "This is an automated reminder.", "fr": "Ceci est un rappel automatique."},
 
     "email.contact.html_title": {"en": "New enquiry from the website", "fr": "Nouvelle demande depuis le site"},

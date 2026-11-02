@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.i18n import DEFAULT_LOCALE, t
 from app.services.email import email_configured, send_email
-from app.services.email_template import render_html_email
+from app.services.email_template import render_html_email, t_html
 
 log = logging.getLogger("dixpertia")
 
@@ -69,10 +69,9 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
     safe_email = html.escape(email)
     # Replace newlines with <br> to keep the message formatting in HTML
     safe_message = html.escape(message).replace('\n', '<br>')
-    safe_topic = html.escape(topic_label)
 
-    html_msg = t("email.contact.html_message", DEFAULT_LOCALE,
-                 name=safe_name, email=safe_email, topic=safe_topic,
+    html_msg = t_html("email.contact.html_message", DEFAULT_LOCALE,
+                 name=safe_name, email=safe_email, topic=topic_label,
                  message=safe_message, link=settings.FRONTEND_URL)
 
     html_body = render_html_email(
