@@ -68,7 +68,8 @@ def verify(cur) -> list[str]:
 
     # DELETE must be granted only on the tables the application deletes from:
     # `services`, and `invoice_items` for replacing a draft's lines (#125),
-    # which a trigger refuses for any invoice that is no longer a draft.
+    # which a trigger refuses for any invoice that is no longer a draft, and
+    # `demo_videos`, site content the admin removes (#232).
     cur.execute(
         "SELECT table_name FROM information_schema.role_table_grants "
         "WHERE grantee = %s AND privilege_type = 'DELETE' ORDER BY table_name",
@@ -77,7 +78,7 @@ def verify(cur) -> list[str]:
     granted = {r[0] for r in cur.fetchall()}
     cur.execute(
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-        "AND tablename IN ('services', 'invoice_items')"
+        "AND tablename IN ('services', 'invoice_items', 'demo_videos')"
     )
     # On a fresh database the tables do not exist yet, so only the subset that
     # does exist can carry a grant. Re-run after migrations for the rest.
