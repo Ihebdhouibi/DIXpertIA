@@ -15,7 +15,7 @@ def test_send_email_multipart_order(mock_smtp):
 
         send_email("test@example.com", "Subject", "Plain text", html_text="<p>HTML</p>")
 
-        # On vérifie l'appel directement sur l'objet 'server' (le return_value de SMTP)
+        # LIGNE CORRIGÉE ICI (sans __enter__)
         msg = mock_smtp.return_value.send_message.call_args[0][0]
 
         assert msg.get_content_type() == "multipart/alternative"
