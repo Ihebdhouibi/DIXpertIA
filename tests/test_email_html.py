@@ -4,11 +4,9 @@ from unittest.mock import patch
 
 @patch("app.services.email.smtplib.SMTP")
 def test_send_email_multipart_order(mock_smtp):
-    # Importer ici pour éviter que app.core.config plante au démarrage
     from app.services.email import send_email
     from app.core.config import settings
 
-    # On force les paramètres SMTP pour que la fonction n'abandonne pas
     with patch.object(settings, "SMTP_FROM", "from@example.com"), \
          patch.object(settings, "SMTP_HOST", "smtp.example.com"), \
          patch.object(settings, "SMTP_PORT", 587), \
@@ -17,8 +15,9 @@ def test_send_email_multipart_order(mock_smtp):
 
         send_email("test@example.com", "Subject", "Plain text", html_text="<p>HTML</p>")
 
-        # Vérifier que le message a bien été construit et envoyé
-        msg = mock_smtp.return_value.__enter__.return_value.send_message.call_args[0][0]
+        # On vérifie l'appel directement sur l'objet 'server' (le return_value de SMTP)
+        msg = mock_smtp.return_value.send_message.call_args[0][0]
+
         assert msg.get_content_type() == "multipart/alternative"
         payloads = msg.get_payload()
         assert payloads[0].get_content_type() == "text/plain"
