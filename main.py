@@ -54,7 +54,7 @@ from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
-from app.services.email_template import render_html_email
+from app.services.email_template import render_html_email , t_html
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -408,7 +408,7 @@ def _send_activation(user: User, token: str) -> bool:
 
     # 2. HTML version (#211), with escaping for the name
     safe_name = html.escape(user.firstName)
-    html_msg = t("email.activation.html_message", user.locale, name=safe_name)
+    html_msg = t_html("email.activation.html_message", user.locale, name=safe_name)
 
     html_body = render_html_email(
         lang=user.locale,
