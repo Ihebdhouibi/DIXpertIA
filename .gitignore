@@ -57,6 +57,13 @@ db.json
 !/design/DI Xpertia Logo Concepts/exports/palette/
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.css
 !/design/DI Xpertia Logo Concepts/exports/palette/dixpertia-palette.json
+# The demo videos handoff from Claude Design (#231): spec, added tokens and the
+# HTML references (support.js is their runtime). The PNG exports stay local.
+!/design/demo-videos/
+!/design/demo-videos/README.md
+!/design/demo-videos/tokens.css
+!/design/demo-videos/reference/
+!/design/demo-videos/reference/*
 # The invoice layout handoff from Claude Design (#194): spec and the HTML
 # references (support.js is their runtime). The raster exports stay local.
 !/design/invoice-v2/

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Demos — DI Xpertia admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+[data-theme="dark"]{color-scheme:dark;--dx-bg:#101314;--dx-surface:#141819;--dx-card:#1A1F21;--dx-head:#20262A;--dx-input:#121617;--dx-fg:#F3F2EE;--dx-muted:rgba(243,242,238,.66);--dx-line:rgba(243,242,238,.1);--dx-line-strong:rgba(243,242,238,.22);--dx-accent-text:#C6F24E;--dx-btn-bg:#F3F2EE;--dx-btn-fg:#101314;--dx-btn-hover:#FFFFFF;--dx-nav-active:#23292B;--dx-danger:#FF9C8F;--dx-danger-bg:#E5484D;--dx-danger-fg:#101314;--dx-ok-bg:rgba(198,242,78,.14);--dx-ok-fg:#C6F24E;--dx-ok-line:rgba(198,242,78,.4);--dx-focus-outline:#F3F2EE;--dx-scrim:rgba(0,0,0,.66)}
+[data-theme] button:focus-visible,[data-theme] a:focus-visible,[data-theme] input:focus-visible,[data-theme] textarea:focus-visible,[data-theme] select:focus-visible,[data-theme] [role="tab"]:focus-visible{outline:2px solid var(--dx-focus-outline,#101314);outline-offset:2px;box-shadow:0 0 0 5px #C6F24E}
+[data-theme] input::placeholder,[data-theme] textarea::placeholder{color:var(--dx-muted,rgba(16,19,20,.5))}
+@keyframes dxspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){[data-theme] *,[data-theme] *::before,[data-theme] *::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="position:relative;min-height:max(100%,100vh);display:flex;background:var(--dx-bg,#F3F2EE);color:var(--dx-fg,#101314);font-family:'Space Grotesk',sans-serif">
+
+  <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ true }}">
+    <aside style="flex:0 0 248px;display:flex;flex-direction:column;gap:20px;padding:28px 16px 24px;background:var(--dx-surface,#F7F6F2);border-right:1px solid var(--dx-line,rgba(16,19,20,.1))">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 16px 8px">
+        <svg width="22" height="16" viewBox="12 18 38 28" aria-hidden="true"><path d="M17 23 L27 32 L17 41" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="var(--dx-accent-text,#5C7A0A)"></rect></svg>
+        <span style="font:700 18px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;white-space:nowrap">DI <span style="font:500 17px/1 'JetBrains Mono',monospace;letter-spacing:-.03em;color:var(--dx-accent-text,#5C7A0A)">Xpertia</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:10px;background:var(--dx-nav-active,#E8E7E2);border:1px solid var(--dx-line,rgba(16,19,20,.1))">
+        <span style="flex:none;width:38px;height:38px;border-radius:50%;background:var(--dx-card,#FFFFFF);display:flex;align-items:center;justify-content:center;font:600 13px/1 'JetBrains Mono',monospace">AS</span>
+        <span style="display:flex;flex-direction:column;gap:5px;min-width:0"><span style="font:600 14px/1.2 'Space Grotesk',sans-serif;white-space:nowrap">Sample user</span><span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:var(--dx-muted,rgba(16,19,20,.64))">ADMIN</span></span>
+      </div>
+      <nav aria-label="{{ t.navLabel }}" style="display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="10">
+          <sc-if value="{{ n.active }}">
+            <a href="#demos" aria-current="page" style="position:relative;display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;border-radius:8px;background:var(--dx-nav-active,#E8E7E2);font:600 14px/1 'Space Grotesk',sans-serif;white-space:nowrap">
+              <span aria-hidden="true" style="position:absolute;left:-1px;top:8px;bottom:8px;width:4px;border-radius:2px;background:var(--dx-accent-text,#5C7A0A)"></span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ n.d }}"></path></svg>{{ n.label }}
+            </a>
+          </sc-if>
+          <sc-if value="{{ n.idle }}">
+            <a href="#" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;border-radius:8px;font:500 14px/1 'Space Grotesk',sans-serif;white-space:nowrap;color:var(--dx-muted,rgba(16,19,20,.72))" style-hover="background:var(--dx-nav-active,#E8E7E2);color:var(--dx-fg,#101314)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ n.d }}"></path></svg>{{ n.label }}
+            </a>
+          </sc-if>
+        </sc-for>
+      </nav>
+      <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--dx-line,rgba(16,19,20,.1))">
+        <a href="#" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;font:500 14px/1 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.logout }}"></path></svg>{{ t.signOut }}</a>
+      </div>
+    </aside>
+  </sc-if>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 clamp(16px,2.5vw,32px);border-bottom:1px solid var(--dx-line,rgba(16,19,20,.1))">
+      <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;align-items:center;gap:8px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;white-space:nowrap;color:var(--dx-accent-text,#5C7A0A)">DI XPERTIA <span style="color:var(--dx-muted,rgba(16,19,20,.5))">/</span> <span style="font:600 14px/1 'Space Grotesk',sans-serif;letter-spacing:0;color:var(--dx-fg,#101314)">{{ t.title }}</span></span>
+      </sc-if>
+      <sc-if value="{{ isMob }}">
+        <span style="display:flex;align-items:center;gap:6px">
+          <button type="button" aria-label="{{ t.menu }}" style="width:44px;height:44px;margin-left:-10px;border:0;background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.menu }}"></path></svg></button>
+          <svg width="22" height="16" viewBox="12 18 38 28" aria-hidden="true"><path d="M17 23 L27 32 L17 41" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="var(--dx-accent-text,#5C7A0A)"></rect></svg>
+          <span style="font:700 17px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;white-space:nowrap">DI <span style="font:500 16px/1 'JetBrains Mono',monospace;color:var(--dx-accent-text,#5C7A0A)">Xpertia</span></span>
+        </span>
+      </sc-if>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div role="group" aria-label="{{ t.langLabel }}" style="display:flex;padding:3px;gap:2px;border-radius:8px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.16));background:var(--dx-card,#FFFFFF)">
+          <button type="button" aria-pressed="{{ langFr }}" onClick="{{ setFr }}" style="height:26px;padding:0 9px;border:0;border-radius:5px;cursor:pointer;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:inherit;background:{{ frBg }}">FR</button>
+          <button type="button" aria-pressed="{{ langEn }}" onClick="{{ setEn }}" style="height:26px;padding:0 9px;border:0;border-radius:5px;cursor:pointer;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:inherit;background:{{ enBg }}">EN</button>
+        </div>
+        <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ true }}">
+          <span style="position:relative;display:flex;color:var(--dx-muted,rgba(16,19,20,.72))"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.bell }}"></path></svg></span>
+        </sc-if>
+        <span aria-hidden="true" style="width:36px;height:36px;border-radius:50%;background:var(--dx-nav-active,#E8E7E2);display:flex;align-items:center;justify-content:center;font:600 12px/1 'JetBrains Mono',monospace">AS</span>
+      </div>
+    </header>
+
+    <main id="demos" style="flex:1;width:100%;padding:clamp(24px,3vw,36px) clamp(16px,2.5vw,32px) 48px;display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px 24px">
+        <div style="flex:1 1 360px;display:flex;flex-direction:column;gap:8px;min-width:0">
+          <h1 style="margin:0;font:700 clamp(32px,3vw,40px)/1.05 'Space Grotesk',sans-serif;letter-spacing:-.025em">{{ t.title }}</h1>
+          <p style="margin:0;font:400 clamp(15px,1.3vw,17px)/1.5 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.68));text-wrap:pretty">{{ t.intro }}</p>
+        </div>
+        <sc-if value="{{ hasDemos }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ openNew }}" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border:0;border-radius:8px;cursor:pointer;background:var(--dx-btn-bg,#101314);color:var(--dx-btn-fg,#F3F2EE);font:600 14px/1 'Space Grotesk',sans-serif;white-space:nowrap;flex:{{ btnFlex }}" style-hover="background:var(--dx-btn-hover,#2A2F31)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.plus }}"></path></svg>{{ t.newBtn }}</button>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ deskList }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="border-radius:12px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.12));background:var(--dx-card,#FFFFFF);overflow-x:auto">
+            <table style="width:100%;min-width:940px;border-collapse:collapse">
+              <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">{{ t.tableCaption }}</caption>
+              <thead>
+                <tr style="background:var(--dx-head,#EDECE7);font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;text-align:left">
+                  <th scope="col" style="padding:15px 12px 15px 20px;font-weight:500;width:132px">{{ t.cOrder }}</th>
+                  <th scope="col" style="padding:15px 12px;font-weight:500;width:144px">{{ t.cPreview }}</th>
+                  <th scope="col" style="padding:15px 12px;font-weight:500">{{ t.cTitle }}</th>
+                  <th scope="col" style="padding:15px 12px;font-weight:500;width:150px">{{ t.cService }}</th>
+                  <th scope="col" style="padding:15px 12px;font-weight:500;width:130px">{{ t.cStatus }}</th>
+                  <th scope="col" style="padding:15px 20px 15px 12px;font-weight:500;text-align:right"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">{{ t.cActions }}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+                  <tr style="border-top:1px solid var(--dx-line,rgba(16,19,20,.1))">
+                    <td style="padding:12px 12px 12px 14px">
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span title="{{ t.dragHint }}" aria-hidden="true" style="width:20px;display:flex;justify-content:center;cursor:grab;color:var(--dx-muted,rgba(16,19,20,.45))"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.grip }}"></path></svg></span>
+                        <span style="width:26px;font:500 13px/1 'JetBrains Mono',monospace">{{ r.pos }}</span>
+                        <button type="button" aria-label="{{ r.upLabel }}" disabled="{{ r.first }}" onClick="{{ r.up }}" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.16));background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:{{ r.upOp }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.up }}"></path></svg></button>
+                        <button type="button" aria-label="{{ r.downLabel }}" disabled="{{ r.last }}" onClick="{{ r.down }}" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.16));background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:{{ r.downOp }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.down }}"></path></svg></button>
+                      </div>
+                    </td>
+                    <td style="padding:12px">
+                      <div style="position:relative;width:120px;height:68px;border-radius:6px;overflow:hidden;background-color:{{ r.thumbBg }};background-image:linear-gradient(rgba(243,242,238,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.07) 1px,transparent 1px);background-size:12px 12px">
+                        <span style="position:absolute;left:8px;bottom:7px;font:500 12px/1 'JetBrains Mono',monospace;color:#F3F2EE">{{ r.pos }}</span>
+                        <span style="position:absolute;right:8px;bottom:9px;width:22px;height:4px;border-radius:1px;background:#C6F24E"></span>
+                        <sc-if value="{{ r.auto }}"><span style="position:absolute;top:6px;left:6px;padding:3px 5px;border-radius:3px;background:rgba(16,19,20,.85);font:500 8px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#F3F2EE">AUTO</span></sc-if>
+                      </div>
+                    </td>
+                    <td style="padding:12px">
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <span style="font:600 14px/1.35 'Space Grotesk',sans-serif;text-wrap:pretty">{{ r.title }}</span>
+                        <span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--dx-muted,rgba(16,19,20,.64))">{{ r.source }}</span>
+                      </div>
+                    </td>
+                    <td style="padding:12px">
+                      <sc-if value="{{ r.hasService }}"><span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.18));font:400 13px/1 'Space Grotesk',sans-serif;white-space:nowrap">{{ r.service }}</span></sc-if>
+                      <sc-if value="{{ r.noService }}"><span style="font:400 13px/1 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.6))">—</span></sc-if>
+                    </td>
+                    <td style="padding:12px">
+                      <sc-if value="{{ r.pub }}"><span style="display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;background:var(--dx-ok-bg,#E6F5BF);border:1px solid var(--dx-ok-line,rgba(92,122,10,.35));color:var(--dx-ok-fg,#3D5207);font:600 12px/1 'Space Grotesk',sans-serif"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.check }}"></path></svg>{{ t.pub }}</span></sc-if>
+                      <sc-if value="{{ r.hid }}"><span style="display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;border:1px dashed var(--dx-line-strong,rgba(16,19,20,.3));color:var(--dx-muted,rgba(16,19,20,.72));font:600 12px/1 'Space Grotesk',sans-serif"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.eyeOff }}"></path></svg>{{ t.hid }}</span></sc-if>
+                    </td>
+                    <td style="padding:12px 16px 12px 12px">
+                      <div style="display:flex;justify-content:flex-end;gap:2px">
+                        <button type="button" aria-label="{{ r.editLabel }}" onClick="{{ r.edit }}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace" style-hover="background:var(--dx-nav-active,#EDECE7)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.pencil }}"></path></svg>{{ t.edit }}</button>
+                        <button type="button" aria-label="{{ r.toggleAria }}" onClick="{{ r.toggle }}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace" style-hover="background:var(--dx-nav-active,#EDECE7)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ r.toggleIcon }}"></path></svg>{{ r.toggleLabel }}</button>
+                        <button type="button" aria-label="{{ r.delLabel }}" onClick="{{ r.remove }}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--dx-danger,#B42318);cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace" style-hover="background:var(--dx-nav-active,#EDECE7)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.trash }}"></path></svg>{{ t.del }}</button>
+                      </div>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin:0;font:400 14px/1.4 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))">{{ countText }}</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ mobList }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+            <article style="border-radius:12px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.12));background:var(--dx-card,#FFFFFF);overflow:hidden">
+              <div style="display:flex;align-items:flex-start;gap:12px;padding:12px">
+                <div style="position:relative;flex:none;width:120px;height:68px;border-radius:6px;overflow:hidden;background-color:{{ r.thumbBg }};background-image:linear-gradient(rgba(243,242,238,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.07) 1px,transparent 1px);background-size:12px 12px">
+                  <span style="position:absolute;left:8px;bottom:7px;font:500 12px/1 'JetBrains Mono',monospace;color:#F3F2EE">{{ r.pos }}</span>
+                  <span style="position:absolute;right:8px;bottom:9px;width:22px;height:4px;border-radius:1px;background:#C6F24E"></span>
+                  <sc-if value="{{ r.auto }}"><span style="position:absolute;top:6px;left:6px;padding:3px 5px;border-radius:3px;background:rgba(16,19,20,.85);font:500 8px/1 'JetBrains Mono',monospace;letter-spacing:.12em;color:#F3F2EE">AUTO</span></sc-if>
+                </div>
+                <div style="min-width:0;display:flex;flex-direction:column;gap:7px">
+                  <span style="font:600 14px/1.3 'Space Grotesk',sans-serif;text-wrap:pretty">{{ r.title }}</span>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    <sc-if value="{{ r.pub }}"><span style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:12px;background:var(--dx-ok-bg,#E6F5BF);border:1px solid var(--dx-ok-line,rgba(92,122,10,.35));color:var(--dx-ok-fg,#3D5207);font:600 12px/1 'Space Grotesk',sans-serif"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.check }}"></path></svg>{{ t.pub }}</span></sc-if>
+                    <sc-if value="{{ r.hid }}"><span style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:12px;border:1px dashed var(--dx-line-strong,rgba(16,19,20,.3));color:var(--dx-muted,rgba(16,19,20,.72));font:600 12px/1 'Space Grotesk',sans-serif"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.eyeOff }}"></path></svg>{{ t.hid }}</span></sc-if>
+                    <sc-if value="{{ r.hasService }}"><span style="display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:12px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.18));font:400 12px/1 'Space Grotesk',sans-serif;white-space:nowrap">{{ r.service }}</span></sc-if>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;padding:4px 6px;border-top:1px solid var(--dx-line,rgba(16,19,20,.1))">
+                <button type="button" aria-label="{{ r.upLabel }}" disabled="{{ r.first }}" onClick="{{ r.up }}" style="width:44px;height:44px;border:0;background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:{{ r.upOp }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.up }}"></path></svg></button>
+                <button type="button" aria-label="{{ r.downLabel }}" disabled="{{ r.last }}" onClick="{{ r.down }}" style="width:44px;height:44px;border:0;background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:{{ r.downOp }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.down }}"></path></svg></button>
+                <span style="font:500 12px/1 'JetBrains Mono',monospace;color:var(--dx-muted,rgba(16,19,20,.64))">{{ r.pos }}</span>
+                <span style="flex:1"></span>
+                <button type="button" aria-label="{{ r.editLabel }}" onClick="{{ r.edit }}" style="display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 10px;border:0;background:transparent;color:inherit;cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.pencil }}"></path></svg>{{ t.edit }}</button>
+                <button type="button" aria-label="{{ r.toggleAria }}" onClick="{{ r.toggle }}" style="display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 10px;border:0;background:transparent;color:inherit;cursor:pointer;font:500 12px/1 'JetBrains Mono',monospace"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ r.toggleIcon }}"></path></svg>{{ r.toggleLabel }}</button>
+                <button type="button" aria-label="{{ r.delLabel }}" onClick="{{ r.remove }}" style="width:44px;height:44px;border:0;background:transparent;color:var(--dx-danger,#B42318);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.trash }}"></path></svg></button>
+              </div>
+            </article>
+          </sc-for>
+          <p style="margin:2px 0 0;font:400 14px/1.4 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))">{{ countText }}</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isEmpty }}">
+        <section aria-labelledby="empty-title" style="display:flex;flex-direction:column;align-items:stretch;text-align:center;gap:18px;padding:clamp(40px,7vw,80px) clamp(20px,4vw,48px);border-radius:12px;border:1px dashed var(--dx-line-strong,rgba(16,19,20,.25));background:var(--dx-card,#FFFFFF)">
+          <div aria-hidden="true" style="position:relative;width:176px;height:99px;margin:0 auto;border-radius:10px;background-color:#1A1F21;background-image:linear-gradient(rgba(243,242,238,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.07) 1px,transparent 1px);background-size:14px 14px;display:flex;align-items:center;justify-content:center">
+            <span style="width:44px;height:44px;border-radius:50%;background:#C6F24E;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ ic.play }}" fill="#101314"></path></svg></span>
+          </div>
+          <h2 id="empty-title" style="margin:0;font:600 clamp(20px,2vw,24px)/1.2 'Space Grotesk',sans-serif;letter-spacing:-.015em">{{ t.emptyT }}</h2>
+          <p style="margin:0 auto;max-width:46ch;font:400 15px/1.6 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.7));text-wrap:pretty">{{ t.emptyB }}</p>
+          <div style="display:flex;justify-content:center"><button type="button" onClick="{{ openNew }}" style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:0;border-radius:8px;cursor:pointer;background:var(--dx-btn-bg,#101314);color:var(--dx-btn-fg,#F3F2EE);font:600 14px/1 'Space Grotesk',sans-serif;white-space:nowrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.plus }}"></path></svg>{{ t.emptyBtn }}</button></div>
+          <p style="margin:0;font:500 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.06em;color:var(--dx-muted,rgba(16,19,20,.64))">{{ t.emptyNote }}</p>
+        </section>
+      </sc-if>
+    </main>
+  </div>
+
+  <sc-if value="{{ showForm }}">
+    <div style="position:fixed;inset:0;z-index:50;background:var(--dx-scrim,rgba(16,19,20,.42));display:flex;align-items:center;justify-content:center;padding:{{ scrimPad }}">
+      <div role="dialog" aria-modal="true" aria-labelledby="form-title" onKeyDown="{{ dlgKey }}" data-dlg="form" style="width:100%;max-width:660px;max-height:100%;display:flex;flex-direction:column;border-radius:14px;background:var(--dx-card,#FFFFFF);border:1px solid var(--dx-line,rgba(16,19,20,.08));box-shadow:0 30px 80px -20px rgba(0,0,0,.45)">
+        <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 20px 18px 24px;border-bottom:1px solid var(--dx-line,rgba(16,19,20,.1))">
+          <h2 id="form-title" style="margin:0;white-space:nowrap;font:700 18px/1.2 'Space Grotesk',sans-serif;letter-spacing:-.01em">{{ f.heading }}</h2>
+          <button type="button" aria-label="{{ t.close }}" onClick="{{ f.cancel }}" style="width:40px;height:40px;border:0;border-radius:8px;background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.x }}"></path></svg></button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:22px 24px 26px;display:flex;flex-direction:column;gap:24px">
+          <sc-if value="{{ f.hasSummary }}">
+            <div role="alert" style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:8px;border:1px solid var(--dx-danger,#B42318);font:500 14px/1.45 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px"><path d="{{ ic.alert }}"></path></svg><span style="flex:1;min-width:0">{{ f.summary }}</span></div>
+          </sc-if>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label for="f-link" style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ t.lLink }}</label>
+            <div style="position:relative">
+              <input id="f-link" type="url" inputmode="url" value="{{ f.link }}" onChange="{{ f.onLink }}" placeholder="https://drive.google.com/file/d/…/view" aria-invalid="{{ f.linkInvalid }}" aria-describedby="f-link-msg" style="width:100%;height:44px;padding:0 {{ f.linkPadR }} 0 13px;border-radius:8px;border:1px solid {{ f.linkBorder }};background:var(--dx-input,#FFFFFF);color:inherit;font:400 13px/1 'JetBrains Mono',monospace"></input>
+              <sc-if value="{{ f.hasChip }}">
+                <span style="position:absolute;right:8px;top:9px;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:13px;background:var(--dx-head,#EDECE7);font:500 11px/1 'JetBrains Mono',monospace;white-space:nowrap"><span aria-hidden="true" style="width:7px;height:7px;border-radius:2px;background:{{ f.chipDot }}"></span>{{ f.chip }}</span>
+              </sc-if>
+            </div>
+            <sc-if value="{{ f.hasLinkErr }}">
+              <p id="f-link-msg" style="margin:0;display:flex;gap:7px;align-items:flex-start;font:500 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:2px"><path d="{{ ic.alert }}"></path></svg><span style="flex:1;min-width:0">{{ f.linkErr }}</span></p>
+            </sc-if>
+            <sc-if value="{{ f.noLinkErr }}">
+              <p id="f-link-msg" style="margin:0;font:400 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))">{{ t.hLink }}</p>
+            </sc-if>
+            <sc-if value="{{ f.showPreview }}">
+              <div style="display:grid;grid-template-columns:{{ previewCols }};gap:14px;align-items:center;margin-top:6px;padding:10px;border-radius:10px;background:var(--dx-bg,#F3F2EE);border:1px solid var(--dx-line,rgba(16,19,20,.08))">
+                <div role="img" aria-label="{{ t.previewAria }}" style="position:relative;width:100%;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#0B0D0E;display:flex;align-items:center;justify-content:center">
+                  <span style="width:40px;height:40px;border-radius:50%;background:rgba(243,242,238,.92);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ ic.play }}" fill="#101314"></path></svg></span>
+                  <span style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(243,242,238,.2)"><span style="display:block;width:28%;height:100%;background:#C6F24E"></span></span>
+                  <span style="position:absolute;left:8px;top:7px;font:500 9px/1 'JetBrains Mono',monospace;letter-spacing:.1em;white-space:nowrap;color:rgba(243,242,238,.75)">{{ f.chipUpper }}</span>
+                </div>
+                <div style="min-width:0;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 13px/1.3 'Space Grotesk',sans-serif">{{ t.previewT }}</span>
+                  <span style="font:400 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.68));text-wrap:pretty">{{ t.previewB }}</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label for="f-img" style="display:flex;gap:8px;align-items:baseline;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ t.lImg }} <span style="font-weight:400;letter-spacing:.06em;text-transform:none;color:var(--dx-muted,rgba(16,19,20,.6))">{{ t.optional }}</span></label>
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <input id="f-img" type="url" inputmode="url" value="{{ f.img }}" onChange="{{ f.onImg }}" placeholder="https://…/preview.jpg" aria-describedby="f-img-msg" style="flex:1 1 260px;min-width:0;height:44px;padding:0 13px;border-radius:8px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.2));background:var(--dx-input,#FFFFFF);color:inherit;font:400 13px/1 'JetBrains Mono',monospace"></input>
+              <sc-if value="{{ f.hasImg }}">
+                <div role="img" aria-label="{{ t.imgAria }}" style="position:relative;flex:none;width:96px;height:54px;border-radius:6px;overflow:hidden;background-color:#252C2F;background-image:linear-gradient(rgba(243,242,238,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.07) 1px,transparent 1px);background-size:10px 10px"><span style="position:absolute;right:7px;bottom:7px;width:18px;height:3px;background:#C6F24E"></span><span style="position:absolute;left:6px;top:6px;font:500 8px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:rgba(243,242,238,.8)">SAMPLE</span></div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ f.noImg }}">
+              <p id="f-img-msg" style="margin:0;display:flex;gap:7px;align-items:flex-start;font:400 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.68))"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:2px"><path d="{{ ic.info }}"></path></svg><span><strong style="font-weight:600;color:var(--dx-fg,#101314)">{{ t.fallback }}</strong> {{ t.fallbackSub }}</span></p>
+            </sc-if>
+          </div>
+
+          <fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:10px;min-width:0">
+            <legend style="padding:0;margin-bottom:10px;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ t.lContent }}</legend>
+            <div role="tablist" aria-label="{{ t.lContent }}" onKeyDown="{{ f.tabKey }}" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;padding:4px;border-radius:10px;background:var(--dx-bg,#F3F2EE);border:1px solid var(--dx-line,rgba(16,19,20,.1))">
+              <sc-for list="{{ f.tabs }}" as="tb" hint-placeholder-count="2">
+                <button type="button" role="tab" id="{{ tb.id }}" aria-selected="{{ tb.sel }}" aria-controls="f-lang-panel" tabIndex="{{ tb.ti }}" onClick="{{ tb.pick }}" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px;min-width:0;min-height:44px;padding:8px 12px;border:0;border-radius:7px;cursor:pointer;color:inherit;text-align:left;font:600 14px/1.2 'Space Grotesk',sans-serif;background:{{ tb.bg }};box-shadow:{{ tb.shadow }}">
+                  <span style="display:flex;align-items:center;gap:8px"><span style="font:500 11px/1 'JetBrains Mono',monospace;color:var(--dx-accent-text,#5C7A0A)">{{ tb.code }}</span>{{ tb.label }}</span>
+                  <sc-if value="{{ tb.missing }}"><span style="display:inline-flex;align-items:center;gap:5px;font:600 12px/1 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.alert }}"></path></svg>{{ t.missing }}</span></sc-if>
+                  <sc-if value="{{ tb.done }}"><span style="display:inline-flex;align-items:center;gap:5px;font:500 12px/1 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.check }}"></path></svg>{{ t.complete }}</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+            <div id="f-lang-panel" role="tabpanel" aria-labelledby="{{ f.panelBy }}" lang="{{ f.tabLang }}" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                  <label for="f-title" style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ f.titleLabel }}</label>
+                  <span aria-live="polite" style="white-space:nowrap;font:400 11px/1 'JetBrains Mono',monospace;color:var(--dx-muted,rgba(16,19,20,.64))">{{ f.titleCount }}</span>
+                </div>
+                <input id="f-title" type="text" maxLength="80" value="{{ f.title }}" onChange="{{ f.onTitle }}" placeholder="{{ f.titlePh }}" aria-invalid="{{ f.titleInvalid }}" style="width:100%;height:44px;padding:0 13px;border-radius:8px;border:1px solid {{ f.titleBorder }};background:var(--dx-input,#FFFFFF);color:inherit;font:400 15px/1 'Space Grotesk',sans-serif"></input>
+                <sc-if value="{{ f.hasTitleErr }}"><p style="margin:0;font:500 13px/1.4 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)">{{ f.titleErr }}</p></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                  <label for="f-desc" style="font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ f.descLabel }}</label>
+                  <span aria-live="polite" style="white-space:nowrap;font:400 11px/1 'JetBrains Mono',monospace;color:var(--dx-muted,rgba(16,19,20,.64))">{{ f.descCount }}</span>
+                </div>
+                <textarea id="f-desc" rows="4" maxLength="300" value="{{ f.desc }}" onChange="{{ f.onDesc }}" placeholder="{{ f.descPh }}" aria-invalid="{{ f.descInvalid }}" style="width:100%;padding:11px 13px;border-radius:8px;border:1px solid {{ f.descBorder }};background:var(--dx-input,#FFFFFF);color:inherit;font:400 15px/1.5 'Space Grotesk',sans-serif;resize:vertical"></textarea>
+                <sc-if value="{{ f.hasDescErr }}"><p style="margin:0;font:500 13px/1.4 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)">{{ f.descErr }}</p></sc-if>
+              </div>
+              <p style="margin:0;font:400 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))">{{ t.langHint }}</p>
+            </div>
+          </fieldset>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:20px 16px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <label for="f-svc" style="display:flex;gap:8px;align-items:baseline;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ t.cService }} <span style="font-weight:400;letter-spacing:.06em;text-transform:none;color:var(--dx-muted,rgba(16,19,20,.6))">{{ t.optional }}</span></label>
+              <select id="f-svc" key="{{ f.svcKey }}" defaultValue="{{ f.service }}" onChange="{{ f.onService }}" style="width:100%;height:44px;padding:0 10px;border-radius:8px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.2));background:var(--dx-input,#FFFFFF);color:inherit;font:500 15px/1 'Space Grotesk',sans-serif">
+                <sc-for list="{{ f.svcOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+              </select>
+            </div>
+            <fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:8px;min-width:0">
+              <legend style="padding:0;margin-bottom:8px;font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap">{{ t.cStatus }}</legend>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <label style="display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:8px;border:1px solid {{ f.pubBorder }};cursor:pointer;font:500 14px/1 'Space Grotesk',sans-serif"><input type="radio" name="f-status" checked="{{ f.isPub }}" onChange="{{ f.setPub }}" style="margin:0;accent-color:#5C7A0A"></input>{{ t.pub }}</label>
+                <label style="display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;border-radius:8px;border:1px solid {{ f.hidBorder }};cursor:pointer;font:500 14px/1 'Space Grotesk',sans-serif"><input type="radio" name="f-status" checked="{{ f.isHid }}" onChange="{{ f.setHid }}" style="margin:0;accent-color:#5C7A0A"></input>{{ t.hid }}</label>
+              </div>
+              <p style="margin:0;font:400 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.66))">{{ t.statusHint }}</p>
+            </fieldset>
+          </div>
+        </div>
+
+        <div style="flex:none;display:flex;flex-direction:column;gap:12px;padding:16px 24px 18px;border-top:1px solid var(--dx-line,rgba(16,19,20,.1))">
+          <sc-if value="{{ f.saveFail }}">
+            <div role="alert" style="display:flex;gap:9px;align-items:flex-start;font:500 13px/1.45 'Space Grotesk',sans-serif;color:var(--dx-danger,#B42318)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px"><path d="{{ ic.alert }}"></path></svg><span style="flex:1;min-width:0">{{ t.saveFail }}</span></div>
+          </sc-if>
+          <div style="display:flex;justify-content:flex-end;gap:10px">
+            <button type="button" onClick="{{ f.cancel }}" disabled="{{ f.saving }}" style="height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.2));background:var(--dx-card,#FFFFFF);color:inherit;cursor:pointer;font:600 14px/1 'Space Grotesk',sans-serif">{{ t.cancel }}</button>
+            <button type="button" onClick="{{ f.save }}" aria-disabled="{{ f.saving }}" style="display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 20px;border:0;border-radius:8px;background:var(--dx-btn-bg,#101314);color:var(--dx-btn-fg,#F3F2EE);cursor:pointer;font:600 14px/1 'Space Grotesk',sans-serif;opacity:{{ f.saveOp }}">
+              <sc-if value="{{ f.saving }}"><span aria-hidden="true" style="width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:dxspin .8s linear infinite"></span></sc-if>
+              <span aria-live="polite">{{ f.saveLabel }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showDelete }}">
+    <div style="position:fixed;inset:0;z-index:60;background:var(--dx-scrim,rgba(16,19,20,.42));display:flex;align-items:center;justify-content:center;padding:16px">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="del-title" aria-describedby="del-body" onKeyDown="{{ dlgKey }}" data-dlg="del" style="width:100%;max-width:440px;border-radius:14px;background:var(--dx-card,#FFFFFF);border:1px solid var(--dx-line,rgba(16,19,20,.08));box-shadow:0 30px 80px -20px rgba(0,0,0,.45);padding:24px;display:flex;flex-direction:column;gap:14px">
+        <h2 id="del-title" style="margin:0;font:700 18px/1.25 'Space Grotesk',sans-serif">{{ t.delQ }}</h2>
+        <p id="del-body" style="margin:0;font:400 15px/1.55 'Space Grotesk',sans-serif;color:var(--dx-muted,rgba(16,19,20,.72));text-wrap:pretty">{{ t.delB }}</p>
+        <p style="margin:0;padding:10px 12px;border-radius:8px;background:var(--dx-bg,#F3F2EE);font:600 14px/1.4 'Space Grotesk',sans-serif">{{ delTitle }}</p>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">
+          <button type="button" data-autofocus="1" onClick="{{ closeDelete }}" style="height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--dx-line-strong,rgba(16,19,20,.2));background:var(--dx-card,#FFFFFF);color:inherit;cursor:pointer;font:600 14px/1 'Space Grotesk',sans-serif">{{ t.cancel }}</button>
+          <button type="button" onClick="{{ confirmDelete }}" style="display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border:0;border-radius:8px;background:var(--dx-danger-bg,#B42318);color:var(--dx-danger-fg,#FFFFFF);cursor:pointer;font:600 14px/1 'Space Grotesk',sans-serif"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.trash }}"></path></svg>{{ t.del }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}">
+    <div role="status" style="position:fixed;right:16px;bottom:16px;left:{{ toastLeft }};z-index:40;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--dx-ok-bg,#EEF7D9);border:1px solid var(--dx-ok-line,rgba(92,122,10,.35));color:var(--dx-ok-fg,#3D5207);font:600 14px/1.4 'Space Grotesk',sans-serif;box-shadow:0 10px 30px -12px rgba(0,0,0,.3)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ ic.check }}"></path></svg><span style="flex:1">{{ toast }}</span>
+      <button type="button" aria-label="{{ t.close }}" onClick="{{ hideToast }}" style="width:32px;height:32px;border:0;background:transparent;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="{{ ic.x }}"></path></svg></button>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;lang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;fr&quot;,&quot;en&quot;],&quot;default&quot;:&quot;en&quot;,&quot;tsType&quot;:&quot;'fr'|'en'&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;list&quot;,&quot;empty&quot;,&quot;form-empty&quot;,&quot;form-filled&quot;,&quot;form-error&quot;,&quot;form-saving&quot;,&quot;form-savefail&quot;,&quot;delete&quot;],&quot;default&quot;:&quot;list&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mobile&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const IC = {
+  home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+  dash: 'M4 4h7v9H4zM13 4h7v5h-7zM13 11h7v9h-7zM4 15h7v5H4z',
+  invoice: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7',
+  clients: 'M4 21V5l8-2v18M12 8h8v13M3 21h18M7.5 8h1M7.5 12h1M7.5 16h1M15.5 12h1M15.5 16h1',
+  team: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6M16 4.5a3.5 3.5 0 0 1 0 6.5M18.5 14.5c1.8.8 3 2.9 3 5.5',
+  users: 'M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 20c0-3.3 2.9-6 6.5-6 1 0 2 .2 2.8.6M18 15v6M15 18h6',
+  inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1.5 2.5h5L16 13h5',
+  demos: 'M3 5h18v14H3zM10 9.5v5l4.5-2.5z',
+  bell: 'M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15zM10 21h4',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1',
+  logout: 'M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10',
+  plus: 'M12 5v14M5 12h14', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+  up: 'M12 19V5M6 11l6-6 6 6', down: 'M12 5v14M6 13l6 6 6-6',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  eyeOff: 'M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.9M6.3 6.3C3.6 8.1 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3', x: 'M6 6l12 12M18 6 6 18',
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01', menu: 'M4 7h16M4 12h16M4 17h16',
+  check: 'M5 12.5l4.5 4.5L19 7', alert: 'M12 3l10 18H2zM12 10v5M12 18h.01',
+  info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 11v6M12 7.5h.01', play: 'M8 5v14l11-7z',
+};
+const T = {
+  en: {
+    navLabel: 'Main', signOut: 'Sign out', menu: 'Open menu', langLabel: 'Interface language', close: 'Close',
+    nav: ['Home', 'Dashboard', 'Invoices', 'Clients', 'Team Management', 'Users', 'Enquiries', 'Demos', 'Notifications', 'Settings'],
+    title: 'Demos', intro: 'The videos shown in the Demo section of the website.', newBtn: 'New demo',
+    tableCaption: 'Demos, in website display order', cOrder: 'Order', cPreview: 'Preview', cTitle: 'Title', cService: 'Service', cStatus: 'Status', cActions: 'Actions',
+    pub: 'Published', hid: 'Hidden', edit: 'Edit', hide: 'Hide', publish: 'Publish', del: 'Delete', up: 'Move up', down: 'Move down', dragHint: 'Drag to reorder, or use the arrows',
+    count: (n, p) => `${n} demo${n > 1 ? 's' : ''} · ${p} on the website`,
+    emptyT: 'No demos yet', emptyB: 'Paste a link to a video hosted on Google Drive to add your first demo. Once published, it appears in the Demo section of the website.', emptyBtn: 'Add the first demo', emptyNote: 'The Demo section stays off the website until a demo is published.',
+    newT: 'New demo', editT: 'Edit demo', lLink: 'Video link', hLink: 'Paste the share link of a Google Drive video. YouTube and Vimeo links will be recognised later.',
+    errUnknown: 'We don’t recognise this link. Paste a Google Drive share link (drive.google.com/file/d/…).', errPrivate: 'This Drive file isn’t shared publicly. In Drive, set General access to “Anyone with the link”, then save again.', errEmpty: 'Paste the video link.',
+    previewAria: 'In-app preview of the video', previewT: 'Is this the right video?', previewB: 'Preview for you only — visitors see our own card until they press Play.',
+    lImg: 'Preview image link', optional: 'Optional', imgAria: 'Preview image', fallback: 'The video’s automatic thumbnail will be used.', fallbackSub: 'Its quality isn’t guaranteed; a 1280 × 720 image looks best.',
+    lContent: 'Content', fr: 'Français', en: 'English', missing: 'Missing', complete: 'Complete', title_: 'Title', desc_: 'Description',
+    langHint: 'Both languages are required: the website shows each visitor their language.',
+    errTitle: l => `Add the ${l} title.`, errDesc: l => `Add the ${l} description.`, langName: { fr: 'French', en: 'English' },
+    phT: { fr: 'Titre en français', en: 'Title in English' }, phD: { fr: 'Ce que montre la vidéo, en deux phrases.', en: 'What the video shows, in two sentences.' },
+    svcNone: 'No service', svc: { cloud: 'Cloud', security: 'Cybersecurity', software: 'Custom software' },
+    statusHint: 'Hidden demos are not shown on the website.', cancel: 'Cancel', save: 'Save', saving: 'Saving…',
+    summary: n => `${n} field${n > 1 ? 's need' : ' needs'} attention before saving.`, saveFail: 'Couldn’t save the demo. Check your connection and try again — nothing was lost.',
+    delQ: 'Delete this demo?', delB: 'It disappears from the website. The video itself stays on Drive.', saved: t => `Demo “${t}” saved.`, deleted: 'Demo deleted.',
+  },
+  fr: {
+    navLabel: 'Principal', signOut: 'Déconnexion', menu: 'Ouvrir le menu', langLabel: 'Langue de l’interface', close: 'Fermer',
+    nav: ['Accueil', 'Tableau de bord', 'Factures', 'Clients', 'Gestion d’équipe', 'Utilisateurs', 'Demandes', 'Démos', 'Notifications', 'Paramètres'],
+    title: 'Démos', intro: 'Les vidéos affichées dans la section Démo du site web.', newBtn: 'Nouvelle démo',
+    tableCaption: 'Démos, dans l’ordre d’affichage du site', cOrder: 'Ordre', cPreview: 'Aperçu', cTitle: 'Titre', cService: 'Service', cStatus: 'Statut', cActions: 'Actions',
+    pub: 'Publiée', hid: 'Masquée', edit: 'Modifier', hide: 'Masquer', publish: 'Publier', del: 'Supprimer', up: 'Monter', down: 'Descendre', dragHint: 'Glisser pour réordonner, ou utiliser les flèches',
+    count: (n, p) => `${n} démo${n > 1 ? 's' : ''} · ${p} sur le site`,
+    emptyT: 'Aucune démo pour l’instant', emptyB: 'Collez le lien d’une vidéo hébergée sur Google Drive pour ajouter votre première démo. Une fois publiée, elle apparaît dans la section Démo du site.', emptyBtn: 'Ajouter la première démo', emptyNote: 'La section Démo reste absente du site tant qu’aucune démo n’est publiée.',
+    newT: 'Nouvelle démo', editT: 'Modifier la démo', lLink: 'Lien de la vidéo', hLink: 'Collez le lien de partage d’une vidéo Google Drive. Les liens YouTube et Vimeo seront reconnus plus tard.',
+    errUnknown: 'Lien non reconnu. Collez un lien de partage Google Drive (drive.google.com/file/d/…).', errPrivate: 'Ce fichier Drive n’est pas partagé publiquement. Dans Drive, réglez l’accès général sur « Tous les utilisateurs disposant du lien », puis enregistrez à nouveau.', errEmpty: 'Collez le lien de la vidéo.',
+    previewAria: 'Aperçu de la vidéo dans l’application', previewT: 'Est-ce la bonne vidéo ?', previewB: 'Aperçu visible par vous seul — les visiteurs voient notre propre carte jusqu’à ce qu’ils lancent la lecture.',
+    lImg: 'Lien de l’image d’aperçu', optional: 'Facultatif', imgAria: 'Image d’aperçu', fallback: 'La miniature automatique de la vidéo sera utilisée.', fallbackSub: 'Sa qualité n’est pas garantie ; une image 1280 × 720 donne le meilleur rendu.',
+    lContent: 'Contenu', fr: 'Français', en: 'English', missing: 'Manquant', complete: 'Complet', title_: 'Titre', desc_: 'Description',
+    langHint: 'Les deux langues sont obligatoires : le site affiche à chaque visiteur sa langue.',
+    errTitle: l => `Ajoutez le titre ${l}.`, errDesc: l => `Ajoutez la description ${l}.`, langName: { fr: 'en français', en: 'en anglais' },
+    phT: { fr: 'Titre en français', en: 'Title in English' }, phD: { fr: 'Ce que montre la vidéo, en deux phrases.', en: 'What the video shows, in two sentences.' },
+    svcNone: 'Aucun service', svc: { cloud: 'Cloud', security: 'Cybersécurité', software: 'Logiciel sur mesure' },
+    statusHint: 'Les démos masquées ne sont pas affichées sur le site.', cancel: 'Annuler', save: 'Enregistrer', saving: 'Enregistrement…',
+    summary: n => `${n} champ${n > 1 ? 's demandent' : ' demande'} votre attention avant l’enregistrement.`, saveFail: 'Impossible d’enregistrer la démo. Vérifiez votre connexion et réessayez — rien n’est perdu.',
+    delQ: 'Supprimer cette démo ?', delB: 'Elle disparaît du site web. La vidéo elle-même reste sur Drive.', saved: t => `Démo « ${t} » enregistrée.`, deleted: 'Démo supprimée.',
+  },
+};
+const NAV_IC = ['home', 'dash', 'invoice', 'clients', 'team', 'users', 'inbox', 'demos', 'bell', 'settings'];
+const SAMPLES = [
+  { id: 1, link: 'https://drive.google.com/file/d/SAMPLE-1/view', img: 'https://example.com/samples/backup.jpg', service: 'cloud', status: 'pub', fr: { t: 'Exemple — Restaurer une sauvegarde cloud', d: 'Démo d’exemple pour la revue de maquette : choisir un instantané, le restaurer dans un environnement de test, vérifier le résultat.' }, en: { t: 'Sample — Restoring a cloud backup', d: 'Sample demo for layout review: pick a snapshot, restore it to a test environment, check the result.' } },
+  { id: 2, link: 'https://drive.google.com/file/d/SAMPLE-2/view', img: 'https://example.com/samples/access.jpg', service: 'security', status: 'pub', fr: { t: 'Exemple — Revue des droits d’accès', d: 'Démo d’exemple : repérer les comptes inactifs, retirer les droits inutiles et exporter le rapport de revue.' }, en: { t: 'Sample — Reviewing access permissions', d: 'Sample demo: spot inactive accounts, remove unneeded permissions and export the review report.' } },
+  { id: 3, link: 'https://drive.google.com/file/d/SAMPLE-3/view', img: 'https://example.com/samples/invoice.jpg', service: 'software', status: 'pub', fr: { t: 'Exemple — Créer un client dans l’application de facturation', d: 'Démo d’exemple : ajouter un client à l’export, choisir sa devise et la langue de ses factures.' }, en: { t: 'Sample — Creating a client in the invoicing app', d: 'Sample demo: add an export client, set their currency and the language their invoices print in.' } },
+  { id: 4, link: 'https://drive.google.com/file/d/SAMPLE-4/view', img: '', service: '', status: 'hid', fr: { t: 'Exemple — Vue d’ensemble du tableau de bord', d: 'Démo d’exemple encore masquée : parcours rapide des indicateurs du tableau de bord.' }, en: { t: 'Sample — Dashboard overview', d: 'Sample demo, still hidden: a quick tour of the dashboard indicators.' } },
+];
+const EMPTY_FORM = { id: null, link: '', img: '', service: '', status: 'pub', fr: { t: '', d: '' }, en: { t: '', d: '' } };
+const srcOf = l => /drive\.google\.com\/(file\/d\/|open\?id=)/.test(l) ? 'Google Drive' : /(youtube\.com\/watch\?v=|youtu\.be\/)/.test(l) ? 'YouTube' : /vimeo\.com\/\d+/.test(l) ? 'Vimeo' : null;
+const SRC_DOT = { 'Google Drive': '#1FA463', YouTube: '#E5484D', Vimeo: '#1AB7EA' };
+
+class Component extends DCLogic {
+  state = this.init(this.props);
+  init(p) {
+    const v = p.view || 'list';
+    const s = { lang: p.lang || 'en', demos: v === 'empty' ? [] : SAMPLES.map(d => ({ ...d })), form: null, tab: 'fr', attempted: false, saving: false, saveFail: false, privateLink: false, del: null, toast: '', w: typeof window !== 'undefined' ? innerWidth : 1440, view: v };
+    if (v === 'form-empty') s.form = JSON.parse(JSON.stringify(EMPTY_FORM));
+    if (v === 'form-filled' || v === 'form-saving' || v === 'form-savefail') { s.form = JSON.parse(JSON.stringify(SAMPLES[0])); s.saving = v === 'form-saving'; s.saveFail = v === 'form-savefail'; }
+    if (v === 'form-error') { s.form = { ...JSON.parse(JSON.stringify(EMPTY_FORM)), link: 'https://drive.google.com/file/d/1aB-private-sample/view', fr: { t: 'Exemple — Restaurer une sauvegarde cloud', d: 'Démo d’exemple pour la revue de maquette : choisir un instantané, le restaurer dans un environnement de test, vérifier le résultat.' } }; s.attempted = true; s.privateLink = true; s.tab = 'en'; }
+    if (v === 'delete') s.del = 2;
+    return s;
+  }
+  componentDidMount() { this.onR = () => this.setState({ w: innerWidth }); addEventListener('resize', this.onR); this.focusDlg(); }
+  componentWillUnmount() { removeEventListener('resize', this.onR); clearTimeout(this.st); clearTimeout(this.tt); }
+  componentDidUpdate(pp, ps) {
+    if (pp.view !== this.props.view || pp.lang !== this.props.lang) this.setState(this.init(this.props));
+    if ((!ps.form && this.state.form) || (!ps.del && this.state.del)) this.focusDlg();
+  }
+  focusDlg() { setTimeout(() => { const d = document.querySelector('[data-dlg]'); if (!d) return; const a = d.querySelector('[data-autofocus]') || d.querySelector('input,button'); a && a.focus({ preventScroll: true }); }, 30); }
+  restoreFocus() { const el = this.opener; this.opener = null; setTimeout(() => el && el.isConnected && el.focus(), 30); }
+  errors() {
+    const f = this.state.form, t = T[this.state.lang], e = {};
+    if (!f) return e;
+    const src = srcOf(f.link.trim());
+    if (f.link.trim() && !src) e.link = t.errUnknown;
+    else if (this.state.attempted && !f.link.trim()) e.link = t.errEmpty;
+    else if (this.state.privateLink && src === 'Google Drive') e.link = t.errPrivate;
+    if (this.state.attempted) ['fr', 'en'].forEach(l => { if (!f[l].t.trim()) e[l + 't'] = t.errTitle(t.langName[l]); if (!f[l].d.trim()) e[l + 'd'] = t.errDesc(t.langName[l]); });
+    return e;
+  }
+  setF(patch) { this.setState(s => ({ form: { ...s.form, ...patch }, saveFail: false })); }
+  setL(field, val) { this.setState(s => ({ form: { ...s.form, [s.tab]: { ...s.form[s.tab], [field]: val } } })); }
+  closeForm() { clearTimeout(this.st); this.setState({ form: null, attempted: false, saving: false, saveFail: false, privateLink: false }); this.restoreFocus(); }
+  save() {
+    if (this.state.saving) return;
+    const e0 = this.errors();
+    this.setState({ attempted: true }, () => {
+      const e = this.errors();
+      if (Object.keys(e).length) { const miss = ['fr', 'en'].find(l => e[l + 't'] || e[l + 'd']); if (miss && !e.link) this.setState({ tab: miss }); return; }
+      this.setState({ saving: true, saveFail: false });
+      this.st = setTimeout(() => {
+        const f = this.state.form, lang = this.state.lang;
+        this.setState(s => ({ saving: false, form: null, attempted: false, demos: f.id ? s.demos.map(d => d.id === f.id ? f : d) : [...s.demos, { ...f, id: Date.now() }], toast: T[lang].saved(f[lang].t) }));
+        this.restoreFocus(); this.flashToast();
+      }, 1100);
+    });
+  }
+  flashToast() { clearTimeout(this.tt); this.tt = setTimeout(() => this.setState({ toast: '' }), 5000); }
+  move(i, dir) {
+    this.setState(s => { const a = [...s.demos]; const j = i + dir; [a[i], a[j]] = [a[j], a[i]]; return { demos: a }; }, () => {
+      setTimeout(() => { const b = document.querySelector(`[data-mv="${this.state.demos[i + dir].id}${dir < 0 ? 'u' : 'd'}"]`); }, 0);
+    });
+  }
+  renderVals() {
+    const s = this.state, lang = s.lang, t = T[lang], dark = (this.props.theme || 'light') === 'dark';
+    const isMob = this.props.mobile ?? (s.w < 760);
+    const n = s.demos.length;
+    const rows = s.demos.map((d, i) => {
+      const title = d[lang].t, pub = d.status === 'pub';
+      return {
+        pos: String(i + 1).padStart(2, '0'), title, source: srcOf(d.link) || '—', service: d.service ? t.svc[d.service] : '', hasService: !!d.service, noService: !d.service,
+        pub, hid: !pub, auto: !d.img, thumbBg: d.img ? '#252C2F' : '#424B4F',
+        first: i === 0, last: i === n - 1, upOp: i === 0 ? .35 : 1, downOp: i === n - 1 ? .35 : 1,
+        upLabel: `${t.up}: ${title}`, downLabel: `${t.down}: ${title}`, editLabel: `${t.edit}: ${title}`, delLabel: `${t.del}: ${title}`,
+        toggleLabel: pub ? t.hide : t.publish, toggleAria: `${pub ? t.hide : t.publish}: ${title}`, toggleIcon: pub ? IC.eyeOff : IC.eye,
+        up: e => { e.currentTarget.blur(); i > 0 && this.move(i, -1); }, down: e => { i < n - 1 && this.move(i, 1); },
+        edit: e => { this.opener = e.currentTarget; this.setState({ form: JSON.parse(JSON.stringify(d)), tab: lang, attempted: false, privateLink: false }); },
+        toggle: () => this.setState(st => ({ demos: st.demos.map(x => x.id === d.id ? { ...x, status: pub ? 'hid' : 'pub' } : x) })),
+        remove: e => { this.opener = e.currentTarget; this.setState({ del: d.id }); },
+      };
+    });
+    const f = s.form, e = this.errors(), errCount = Object.keys(e).length;
+    let fv = {};
+    if (f) {
+      const src = srcOf(f.link.trim()), cur = f[s.tab];
+      const red = 'var(--dx-danger,#B42318)', norm = 'var(--dx-line-strong,rgba(16,19,20,.2))';
+      fv = {
+        heading: f.id ? t.editT : t.newT, link: f.link, img: f.img, onLink: ev => this.setState({ privateLink: false }, () => this.setF({ link: ev.target.value })), onImg: ev => this.setF({ img: ev.target.value }),
+        hasChip: !!src, chip: src, chipUpper: (src || '').toUpperCase(), chipDot: SRC_DOT[src] || '#999', linkPadR: src ? '140px' : '13px',
+        hasLinkErr: !!e.link, noLinkErr: !e.link, linkErr: e.link, linkInvalid: e.link ? 'true' : 'false', linkBorder: e.link ? red : norm,
+        showPreview: !!src && !e.link, hasImg: !!f.img.trim(), noImg: !f.img.trim(),
+        tabs: ['fr', 'en'].map(l => ({ id: 'f-tab-' + l, code: l.toUpperCase(), label: t[l], sel: s.tab === l ? 'true' : 'false', ti: s.tab === l ? 0 : -1, pick: () => this.setState({ tab: l }),
+          bg: s.tab === l ? 'var(--dx-card,#FFFFFF)' : 'transparent', shadow: s.tab === l ? '0 1px 2px rgba(0,0,0,.12), inset 0 0 0 1px var(--dx-line,rgba(16,19,20,.1))' : 'none',
+          missing: !!(e[l + 't'] || e[l + 'd']), done: !(e[l + 't'] || e[l + 'd']) && !!(f[l].t.trim() && f[l].d.trim()) })),
+        tabKey: ev => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) { ev.preventDefault(); const nl = ev.key === 'Home' ? 'fr' : ev.key === 'End' ? 'en' : (s.tab === 'fr' ? 'en' : 'fr'); this.setState({ tab: nl }, () => document.getElementById('f-tab-' + nl)?.focus()); } },
+        panelBy: 'f-tab-' + s.tab, tabLang: s.tab,
+        titleLabel: `${t.title_} · ${s.tab.toUpperCase()}`, descLabel: `${t.desc_} · ${s.tab.toUpperCase()}`,
+        title: cur.t, desc: cur.d, titleCount: `${cur.t.length} / 80`, descCount: `${cur.d.length} / 300`, titlePh: t.phT[s.tab], descPh: t.phD[s.tab],
+        onTitle: ev => this.setL('t', ev.target.value.slice(0, 80)), onDesc: ev => this.setL('d', ev.target.value.slice(0, 300)),
+        hasTitleErr: !!e[s.tab + 't'], titleErr: e[s.tab + 't'], titleInvalid: e[s.tab + 't'] ? 'true' : 'false', titleBorder: e[s.tab + 't'] ? red : norm,
+        hasDescErr: !!e[s.tab + 'd'], descErr: e[s.tab + 'd'], descInvalid: e[s.tab + 'd'] ? 'true' : 'false', descBorder: e[s.tab + 'd'] ? red : norm,
+        service: f.service, svcKey: 'svc-' + (f.id || 'new'), onService: ev => this.setF({ service: ev.target.value }),
+        svcOpts: [{ v: '', label: t.svcNone, sel: !f.service }, ...['cloud', 'security', 'software'].map(k => ({ v: k, label: t.svc[k], sel: f.service === k }))],
+        isPub: f.status === 'pub', isHid: f.status === 'hid', setPub: () => this.setF({ status: 'pub' }), setHid: () => this.setF({ status: 'hid' }),
+        pubBorder: f.status === 'pub' ? 'var(--dx-fg,#101314)' : norm, hidBorder: f.status === 'hid' ? 'var(--dx-fg,#101314)' : norm,
+        hasSummary: s.attempted && errCount > 0, summary: t.summary(errCount), saveFail: s.saveFail,
+        saving: s.saving, saveLabel: s.saving ? t.saving : t.save, saveOp: s.saving ? .7 : 1,
+        save: () => this.save(), cancel: () => this.closeForm(),
+      };
+    }
+    const delD = s.demos.find(d => d.id === s.del);
+    return {
+      theme: dark ? 'dark' : 'light', t, ic: IC, isDesk: !isMob, isMob,
+      nav: t.nav.map((label, i) => ({ label, d: IC[NAV_IC[i]], active: i === 7, idle: i !== 7 })),
+      langFr: lang === 'fr' ? 'true' : 'false', langEn: lang === 'en' ? 'true' : 'false',
+      frBg: lang === 'fr' ? 'var(--dx-nav-active,#E8E7E2)' : 'transparent', enBg: lang === 'en' ? 'var(--dx-nav-active,#E8E7E2)' : 'transparent',
+      setFr: () => this.setState({ lang: 'fr' }), setEn: () => this.setState({ lang: 'en' }),
+      hasDemos: n > 0, isEmpty: n === 0, deskList: n > 0 && !isMob, mobList: n > 0 && isMob, btnFlex: isMob ? '1 1 100%' : '0 0 auto',
+      rows, countText: t.count(n, s.demos.filter(d => d.status === 'pub').length),
+      openNew: ev => { this.opener = ev.currentTarget; this.setState({ form: JSON.parse(JSON.stringify(EMPTY_FORM)), tab: lang, attempted: false, privateLink: false }); },
+      showForm: !!f, f: fv, previewCols: isMob ? 'minmax(0,1fr)' : '220px minmax(0,1fr)', scrimPad: isMob ? '16px' : '32px',
+      dlgKey: ev => {
+        if (ev.key === 'Escape') { ev.stopPropagation(); if (s.del) { this.setState({ del: null }); this.restoreFocus(); } else if (!s.saving) this.closeForm(); return; }
+        if (ev.key !== 'Tab') return;
+        const els = [...ev.currentTarget.querySelectorAll('button:not([disabled]),input,select,textarea,[tabindex="0"]')].filter(x => x.offsetParent !== null);
+        const a = els[0], z = els[els.length - 1];
+        if (ev.shiftKey && document.activeElement === a) { ev.preventDefault(); z.focus(); } else if (!ev.shiftKey && document.activeElement === z) { ev.preventDefault(); a.focus(); }
+      },
+      showDelete: !!delD, delTitle: delD ? delD[lang].t : '',
+      closeDelete: () => { this.setState({ del: null }); this.restoreFocus(); },
+      confirmDelete: () => { this.setState(st => ({ demos: st.demos.filter(d => d.id !== st.del), del: null, toast: t.deleted })); this.flashToast(); },
+      hasToast: !!s.toast && !f && !delD, toast: s.toast, hideToast: () => this.setState({ toast: '' }), toastLeft: isMob ? '16px' : 'auto',
+    };
+  }
+}
+</script>
+</body>
+</html>
