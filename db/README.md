@@ -49,7 +49,7 @@ alembic current           # show the applied revision
 
 | Variable | Role | Can |
 |---|---|---|
-| `DATABASE_URL` | `dixpertia_app` | SELECT / INSERT / UPDATE, DELETE on `services`, `invoice_items` (draft lines, #125) and `demo_videos` (#232) only |
+| `DATABASE_URL` | `dixpertia_app` | SELECT / INSERT / UPDATE, DELETE on `services`, `invoice_items` (draft lines, #125) and `demo_videos` / `demo_previews` (#232) only |
 | `SCHEMA_DATABASE_URL` | `dixpertia_owner` | CREATE / ALTER - used by Alembic only |
 
 The application role is deliberately `NOSUPERUSER NOBYPASSRLS`: a superuser

@@ -84,7 +84,8 @@ GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO dixpertia_app;
 -- DELETE is granted only where the application deletes rows:
 --   app/routers/services.py:44   db.delete(service)
 --   app/routers/invoicing.py     update_invoice replaces a DRAFT's lines (#125)
---   app/routers/demos.py         the admin deletes a demo video (#232); site
+--   app/routers/demos.py         the admin deletes a demo video, or its stale
+--                                preview (#232); site
 --                                content, not an accounting record
 -- Nothing else deletes, so nothing else gets DELETE. In particular `users`,
 -- `invoices`, `payslips` and `leave_requests` are append/update only - an
@@ -100,7 +101,7 @@ DO $$
 DECLARE
     tbl text;
 BEGIN
-    FOREACH tbl IN ARRAY ARRAY['services', 'invoice_items', 'demo_videos'] LOOP
+    FOREACH tbl IN ARRAY ARRAY['services', 'invoice_items', 'demo_videos', 'demo_previews'] LOOP
         IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = tbl) THEN
             EXECUTE format('GRANT DELETE ON TABLE public.%I TO dixpertia_app', tbl);
         ELSE

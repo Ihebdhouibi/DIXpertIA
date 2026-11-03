@@ -7,6 +7,7 @@ a SECURITY DEFINER function (migration 261d7bfed607).
 """
 
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import BYTEA
 
 from app.core.database import Base
 
@@ -51,4 +52,25 @@ class DemoVideo(Base):
         CheckConstraint("thumbnail_url IS NULL OR thumbnail_url LIKE 'https://%'",
                         name="ck_demo_videos_thumbnail_url_https"),
         Index("ix_demo_videos_published_position", "published", "position"),
+    )
+
+
+class DemoPreview(Base):
+    """A demo's preview image, fetched once by the server and served from our domain (#232).
+
+    JPEG, at most 1280 x 720. Visitors read it through published_demo_preview()
+    (migration 9d098021263d); the admin reads it directly.
+    """
+
+    __tablename__ = "demo_previews"
+
+    demo_id = Column(Integer, ForeignKey("demo_videos.id", ondelete="CASCADE"), primary_key=True)
+    content = Column(BYTEA, nullable=False)
+    content_type = Column(String(40), nullable=False)
+    source_url = Column(String(500), nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        CheckConstraint("content_type = 'image/jpeg'", name="ck_demo_previews_content_type"),
+        CheckConstraint("octet_length(content) BETWEEN 1 AND 2000000", name="ck_demo_previews_size"),
     )
