@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>DI Xpertia — Demo section</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+[data-site="dark"]{--dx-bg:#101314;--dx-surface:#171B1C;--dx-fg:#F3F2EE;--dx-fg-rgb:243,242,238;--dx-accent-text:#C6F24E;--dx-header-bg:rgba(16,19,20,.88);--dx-btn-strong-bg:#F3F2EE;--dx-btn-strong-fg:#101314;--dx-btn-strong-hover:#FFFFFF;--dx-focus-outline:#F3F2EE;--dx-mark-block:#C6F24E}
+[data-site] a:focus-visible,[data-site] button:focus-visible{outline:2px solid var(--dx-focus-outline,#101314);outline-offset:3px;box-shadow:0 0 0 6px #C6F24E;border-radius:8px}
+[data-site] [data-lb] button:focus-visible{outline-color:#F3F2EE}
+@media (prefers-reduced-motion:reduce){[data-site] *,[data-site] *::before,[data-site] *::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div data-site="{{ theme }}" style="position:relative;min-height:max(100%,100vh);display:flex;flex-direction:column;background:var(--dx-bg,#F3F2EE);color:var(--dx-fg,#101314);font-family:'Space Grotesk',sans-serif">
+
+<header style="position:sticky;top:0;z-index:30;background:var(--dx-header-bg,rgba(243,242,238,.88));backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(var(--dx-fg-rgb,16,19,20),.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:0 clamp(20px,5vw,48px);height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+    <a href="#top" aria-label="DI Xpertia — home" style="display:flex;align-items:center;gap:10px">
+      <svg width="30" height="22" viewBox="12 18 38 28" aria-hidden="true"><path d="M17 23 L27 32 L17 41" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="var(--dx-accent-text,#5C7A0A)"></rect></svg>
+      <span style="font:700 19px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;white-space:nowrap">DI <span style="font:500 18px/1 'JetBrains Mono',monospace;letter-spacing:-.03em;color:var(--dx-accent-text,#5C7A0A)">Xpertia</span></span>
+    </a>
+    <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <nav aria-label="Primary" style="display:flex;gap:32px;font:500 14px/1 'Space Grotesk',sans-serif">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+          <a href="{{ n.href }}" style="white-space:nowrap;color:rgba(var(--dx-fg-rgb,16,19,20),.66);transition:color .2s" style-hover="color:var(--dx-fg,#101314)">{{ n.label }}</a>
+        </sc-for>
+      </nav>
+    </sc-if>
+    <a href="#dashboard" style="display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:8px;background:var(--dx-btn-strong-bg,#101314);color:var(--dx-btn-strong-fg,#F3F2EE);font:600 14px/1 'Space Grotesk',sans-serif;white-space:nowrap;transition:background .2s" style-hover="background:var(--dx-btn-strong-hover,#2A2F31);color:var(--dx-btn-strong-fg,#F3F2EE)">{{ t.dash }}</a>
+  </div>
+</header>
+
+<main style="flex:1">
+<section id="demo" aria-labelledby="demo-title" style="background:var(--dx-bg,#F3F2EE);border-top:1px solid rgba(var(--dx-fg-rgb,16,19,20),.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:clamp(72px,9vw,128px) clamp(20px,5vw,48px);display:flex;flex-direction:column;gap:clamp(32px,4vw,48px)">
+    <div style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:16px">
+      <div style="flex:1 1 320px;display:flex;flex-direction:column;gap:14px">
+        <p style="margin:0;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--dx-accent-text,#5C7A0A)">{{ t.eyebrow }}</p>
+        <h2 id="demo-title" style="margin:0;font:700 clamp(32px,3.6vw,52px)/1.05 'Space Grotesk',sans-serif;letter-spacing:-.025em">{{ t.h2 }}</h2>
+      </div>
+      <p style="margin:0;max-width:40ch;font:400 15px/1.6 'Space Grotesk',sans-serif;color:rgba(var(--dx-fg-rgb,16,19,20),.68);text-wrap:pretty">{{ t.note }}</p>
+    </div>
+
+    <sc-if value="{{ loading }}">
+      <div aria-busy="true" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:clamp(28px,3vw,40px) clamp(20px,2vw,28px);border-top:1px solid var(--dx-fg,#101314);padding-top:clamp(24px,3vw,36px)">
+        <span role="status" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">{{ t.loading }}</span>
+        <sc-for list="{{ skeletons }}" as="k" hint-placeholder-count="3">
+          <div aria-hidden="true" data-shimmer="1" style="display:flex;flex-direction:column;gap:18px">
+            <div style="aspect-ratio:16/9;border-radius:12px;background:rgba(var(--dx-fg-rgb,16,19,20),.08)"></div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <span style="width:28%;height:10px;border-radius:3px;background:rgba(var(--dx-fg-rgb,16,19,20),.1)"></span>
+              <span style="width:78%;height:20px;border-radius:4px;background:rgba(var(--dx-fg-rgb,16,19,20),.1)"></span>
+              <span style="width:100%;height:12px;border-radius:3px;background:rgba(var(--dx-fg-rgb,16,19,20),.07)"></span>
+              <span style="width:64%;height:12px;border-radius:3px;background:rgba(var(--dx-fg-rgb,16,19,20),.07)"></span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ ready }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:clamp(28px,3vw,40px) clamp(20px,2vw,28px);border-top:1px solid var(--dx-fg,#101314);padding-top:clamp(24px,3vw,36px)">
+        <sc-for list="{{ cards }}" as="c" hint-placeholder-count="3">
+          <article style="display:flex;flex-direction:column;gap:18px;min-width:0">
+            <button type="button" data-play="{{ c.id }}" aria-label="{{ c.playLabel }}" aria-haspopup="dialog" onClick="{{ c.open }}" style="position:relative;display:block;width:100%;aspect-ratio:16/9;padding:0;border:0;border-radius:12px;overflow:hidden;cursor:pointer;background:transparent;color:inherit;text-align:left;transition:box-shadow .25s" style-hover="box-shadow:0 0 0 1px var(--dx-fg,#101314),0 18px 40px -22px rgba(16,19,20,.55)">
+              <sc-if value="{{ c.ok }}">
+                <span aria-hidden="true" style="position:absolute;inset:0;background-color:#1A1F21;background-image:linear-gradient(rgba(243,242,238,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(243,242,238,.06) 1px,transparent 1px);background-size:24px 24px;background-position:-1px -1px"></span>
+                <span aria-hidden="true" style="position:absolute;left:18px;top:16px;font:500 11px/1 'JetBrains Mono',monospace;letter-spacing:.16em;white-space:nowrap;color:rgba(243,242,238,.72)">{{ c.sampleTag }}</span>
+                <span aria-hidden="true" style="position:absolute;right:18px;bottom:22px;width:56px;height:8px;border-radius:2px;background:#C6F24E"></span>
+              </sc-if>
+              <sc-if value="{{ c.failed }}">
+                <span aria-hidden="true" style="position:absolute;inset:0;border-radius:12px;background:var(--dx-surface,#FBFAF7);border:1px solid rgba(var(--dx-fg-rgb,16,19,20),.12);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding-bottom:20%">
+                  <svg width="56" height="41" viewBox="12 18 38 28"><path d="M17 23 L27 32 L17 41" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path><rect x="34" y="22" width="13" height="20" rx="1.5" fill="var(--dx-mark-block,#5C7A0A)"></rect></svg>
+                  <span style="font:500 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;color:rgba(var(--dx-fg-rgb,16,19,20),.62)">DI XPERTIA · DEMO</span>
+                </span>
+              </sc-if>
+              <span aria-hidden="true" style="position:absolute;left:18px;bottom:18px;width:60px;height:60px;border-radius:50%;background:#C6F24E;box-shadow:inset 0 0 0 1px rgba(16,19,20,.14),0 6px 18px -6px rgba(16,19,20,.5);display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#101314"></path></svg></span>
+            </button>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-if value="{{ c.hasService }}"><span style="font:500 11px/1.4 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dx-accent-text,#5C7A0A)">{{ c.service }}</span></sc-if>
+              <h3 style="margin:0;font:600 clamp(20px,1.7vw,24px)/1.22 'Space Grotesk',sans-serif;letter-spacing:-.015em;text-wrap:balance">{{ c.title }}</h3>
+              <p style="margin:0;font:400 15px/1.6 'Space Grotesk',sans-serif;color:rgba(var(--dx-fg-rgb,16,19,20),.72);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;text-wrap:pretty">{{ c.desc }}</p>
+            </div>
+          </article>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+</section>
+
+<section aria-labelledby="engage-title" style="background:var(--dx-surface,#FBFAF7);border-top:1px solid rgba(var(--dx-fg-rgb,16,19,20),.1)">
+  <div style="max-width:1312px;margin:0 auto;padding:clamp(72px,9vw,120px) clamp(20px,5vw,48px) 40px;display:flex;flex-direction:column;gap:14px">
+    <p style="margin:0;font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--dx-accent-text,#5C7A0A)">{{ t.next }}</p>
+    <h2 id="engage-title" style="margin:0;font:700 clamp(32px,3.6vw,52px)/1.05 'Space Grotesk',sans-serif;letter-spacing:-.025em">{{ t.nextH }}</h2>
+  </div>
+</section>
+</main>
+
+<sc-if value="{{ open }}">
+  <div data-lb="1" onClick="{{ scrimClick }}" style="position:fixed;inset:0;z-index:80;background:rgba(10,12,13,.84);display:flex;align-items:center;justify-content:center;padding:{{ lbPad }}">
+    <div role="dialog" aria-modal="true" aria-labelledby="lb-title" onKeyDown="{{ lbKey }}" style="width:100%;max-width:1080px;max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:clamp(14px,2vw,22px);border-radius:16px;background:#1A1F21;border:1px solid rgba(243,242,238,.08);color:#F3F2EE;box-shadow:0 40px 100px -30px rgba(0,0,0,.8)">
+      <div style="flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;padding:4px 0 0 4px">
+          <sc-if value="{{ cur.hasService }}"><span style="font:500 11px/1.4 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#C6F24E">{{ cur.service }}</span></sc-if>
+          <h2 id="lb-title" style="margin:0;font:600 clamp(18px,1.8vw,24px)/1.25 'Space Grotesk',sans-serif;letter-spacing:-.015em">{{ cur.title }}</h2>
+        </div>
+        <button type="button" data-close="1" aria-label="{{ t.close }}" onClick="{{ close }}" style="flex:none;width:44px;height:44px;border-radius:50%;border:1px solid rgba(243,242,238,.28);background:transparent;color:#F3F2EE;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s" style-hover="background:rgba(243,242,238,.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+      </div>
+      <div style="position:relative;flex:none;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000">
+        <div style="position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);text-align:center">
+          <span style="display:block;font:500 12px/1.6 'JetBrains Mono',monospace;letter-spacing:.16em;color:rgba(243,242,238,.8)">{{ t.playerPh }}</span>
+          <span style="display:block;margin-top:6px;font:400 11px/1.6 'JetBrains Mono',monospace;color:rgba(243,242,238,.55)">iframe · /file/d/SAMPLE/preview</span>
+        </div>
+      </div>
+      <div style="flex:none;display:flex;justify-content:space-between;gap:12px;padding:0 4px 2px;white-space:nowrap;font:500 12px/1.4 'JetBrains Mono',monospace;color:rgba(243,242,238,.72)">
+        <span>{{ t.via }}</span>
+        <sc-if value="{{ wide }}"><span aria-hidden="true">{{ t.esc }}</span></sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;lang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;en&quot;,&quot;fr&quot;],&quot;default&quot;:&quot;en&quot;,&quot;tsType&quot;:&quot;'en'|'fr'&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;loading&quot;,&quot;player&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;'cards'|'loading'|'player'&quot;},&quot;count&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:1,&quot;max&quot;:6,&quot;step&quot;:1,&quot;default&quot;:3,&quot;tsType&quot;:&quot;number&quot;},&quot;failImage&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;},&quot;mobile&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const TX = {
+  en: {
+    nav: ['Home', 'Services', 'Demo', 'About', 'Contact'], dash: 'Go to Dashboard',
+    eyebrow: '02 — Demo', h2: 'See it in action', note: 'Short walkthroughs of what we build and run. Each video loads from its host only when you press play.',
+    loading: 'Loading demos…', play: 'Play', close: 'Close video', via: 'Played via Google Drive', esc: 'Esc to close',
+    playerPh: 'GOOGLE DRIVE PLAYER', next: '03 — Engagement', nextH: 'Ways to work with us',
+    svc: { cloud: 'Cloud', security: 'Cybersecurity', software: 'Custom software' },
+  },
+  fr: {
+    nav: ['Accueil', 'Services', 'Démo', 'À propos', 'Contact'], dash: 'Tableau de bord',
+    eyebrow: '02 — Démo', h2: 'Voir en action', note: 'De courtes démonstrations de ce que nous concevons et exploitons. Chaque vidéo se charge depuis son hébergeur seulement quand vous lancez la lecture.',
+    loading: 'Chargement des démos…', play: 'Lire', close: 'Fermer la vidéo', via: 'Lecture via Google Drive', esc: 'Échap pour fermer',
+    playerPh: 'LECTEUR GOOGLE DRIVE', next: '03 — Engagement', nextH: 'Comment travailler avec nous',
+    svc: { cloud: 'Cloud', security: 'Cybersécurité', software: 'Logiciel sur mesure' },
+  },
+};
+const DEMOS = [
+  { id: 1, service: 'cloud', en: ['Sample — Restoring a cloud backup', 'Sample demo for layout review: pick a snapshot, restore it to a test environment, check the result.'], fr: ['Exemple — Restaurer une sauvegarde cloud', 'Démo d’exemple pour la revue de maquette : choisir un instantané, le restaurer dans un environnement de test, vérifier le résultat.'] },
+  { id: 2, service: 'security', en: ['Sample — Reviewing access permissions', 'Sample demo: spot inactive accounts, remove unneeded permissions and export the review report for the security owner to sign off.'], fr: ['Exemple — Revue des droits d’accès', 'Démo d’exemple : repérer les comptes inactifs, retirer les droits inutiles et exporter le rapport de revue pour validation par le responsable sécurité.'] },
+  { id: 3, service: 'software', en: ['Sample — Creating a client in the invoicing app', 'Sample demo: add an export client, set their currency and the language their invoices print in.'], fr: ['Exemple — Créer un client dans l’application de facturation', 'Démo d’exemple : ajouter un client à l’export, choisir sa devise et la langue de ses factures.'] },
+  { id: 4, service: 'security', en: ['Sample — Hardening a Linux server', 'Sample demo: apply a baseline configuration, close unused ports and check the result against the checklist.'], fr: ['Exemple — Durcir un serveur Linux', 'Démo d’exemple : appliquer une configuration de référence, fermer les ports inutilisés et vérifier le résultat avec la liste de contrôle.'] },
+  { id: 5, service: 'cloud', en: ['Sample — Setting up monitoring alerts', 'Sample demo: define thresholds, route alerts to the on-call channel and test one end to end.'], fr: ['Exemple — Configurer des alertes de supervision', 'Démo d’exemple : définir les seuils, router les alertes vers le canal d’astreinte et en tester une de bout en bout.'] },
+  { id: 6, service: '', en: ['Sample — Exporting an invoice to PDF', 'Sample demo: open an issued invoice and export it to an A4 PDF.'], fr: ['Exemple — Exporter une facture en PDF', 'Démo d’exemple : ouvrir une facture émise et l’exporter en PDF A4.'] },
+];
+class Component extends DCLogic {
+  state = { w: typeof window !== 'undefined' ? innerWidth : 1440, openId: this.props.state === 'player' ? 1 : null };
+  componentDidMount() {
+    this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.onR = () => this.setState({ w: innerWidth }); addEventListener('resize', this.onR);
+    this.shimmer(); if (this.state.openId) this.focusClose();
+  }
+  componentDidUpdate(pp) {
+    if (pp.state !== this.props.state) this.setState({ openId: this.props.state === 'player' ? 1 : null }, () => { this.shimmer(); this.state.openId && this.focusClose(); });
+  }
+  componentWillUnmount() { removeEventListener('resize', this.onR); }
+  shimmer() { if (this.reduced) return; setTimeout(() => document.querySelectorAll('[data-shimmer]').forEach((el, i) => el.animate([{ opacity: 1 }, { opacity: .45 }], { duration: 900, delay: i * 120, direction: 'alternate', iterations: Infinity, easing: 'ease-in-out' })), 50); }
+  focusClose() { setTimeout(() => document.querySelector('[data-close]')?.focus({ preventScroll: true }), 40); }
+  closeLb() { const id = this.state.openId; this.setState({ openId: null }); setTimeout(() => document.querySelector(`[data-play="${id}"]`)?.focus({ preventScroll: true }), 30); }
+  renderVals() {
+    const lang = this.props.lang || 'en', t = TX[lang], dark = (this.props.theme || 'light') === 'dark';
+    const st = this.props.state || 'cards', wide = !(this.props.mobile ?? (this.state.w < 860));
+    const count = Math.max(1, Math.min(6, this.props.count ?? 3)), fail = this.props.failImage ?? -1;
+    const cards = DEMOS.slice(0, count).map((d, i) => ({
+      id: d.id, title: d[lang][0], desc: d[lang][1], service: d.service ? t.svc[d.service] : '', hasService: !!d.service,
+      playLabel: `${t.play}: ${d[lang][0]}`, ok: i !== fail, failed: i === fail, sampleTag: `SAMPLE PREVIEW · 0${i + 1}`,
+      open: () => this.setState({ openId: d.id }, () => this.focusClose()),
+    }));
+    const c = cards.find(x => x.id === this.state.openId);
+    return {
+      theme: dark ? 'dark' : 'light', t, wide,
+      nav: t.nav.map((label, i) => ({ label, href: ['#top', '#services', '#demo', '#about', '#contact'][i] })),
+      loading: st === 'loading', ready: st !== 'loading', skeletons: [1, 2, 3], cards,
+      open: !!c, cur: c || {}, lbPad: wide ? 'clamp(24px,4vw,48px)' : '12px',
+      close: () => this.closeLb(),
+      scrimClick: e => { if (e.target === e.currentTarget) this.closeLb(); },
+      lbKey: e => {
+        if (e.key === 'Escape') { e.preventDefault(); this.closeLb(); return; }
+        if (e.key === 'Tab') { const f = [...e.currentTarget.querySelectorAll('button,iframe')]; const a = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); } }
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

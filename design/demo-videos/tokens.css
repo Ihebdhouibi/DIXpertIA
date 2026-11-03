@@ -1,0 +1,58 @@
+/* DI Xpertia — Demo videos feature. ADDITIONS ONLY.
+   Everything else comes from the homepage tokens.css (--dx-bg, --dx-surface, --dx-fg, --dx-fg-rgb,
+   --dx-accent-text, --dx-signal, --dx-header-bg, --dx-btn-strong-*, --dx-focus-*, fonts, easings).
+   If the admin app already has equivalent tokens (it should — Clients page), map these to them instead. */
+
+:root {
+  /* Admin app surfaces */
+  --dx-card: #FFFFFF;                 /* table, cards, dialogs */
+  --dx-head: #EDECE7;                 /* table header row, source chip */
+  --dx-input: #FFFFFF;
+  --dx-nav-active: #E8E7E2;           /* active sidebar item, user card, hover rows */
+  --dx-muted: rgba(16,19,20,.64);     /* = rgba(var(--dx-fg-rgb), .64) — secondary text, ≥4.5:1 on --dx-bg */
+  --dx-line: rgba(16,19,20,.10);      /* = rgba(var(--dx-fg-rgb), .10) */
+  --dx-line-strong: rgba(16,19,20,.20);
+  --dx-btn-bg: #101314;               /* = --dx-btn-strong-bg */
+  --dx-btn-fg: #F3F2EE;               /* = --dx-btn-strong-fg */
+  --dx-btn-hover: #2A2F31;            /* = --dx-btn-strong-hover */
+  --dx-scrim: rgba(16,19,20,.42);
+
+  /* Status */
+  --dx-ok-bg: #E6F5BF;                /* "Published" badge, success toast (lime tint) */
+  --dx-ok-fg: #3D5207;                /* 8.9:1 on --dx-ok-bg */
+  --dx-ok-line: rgba(92,122,10,.35);
+  --dx-danger: #B42318;               /* errors, Delete text — 6.4:1 on #FFF */
+  --dx-danger-bg: #B42318;            /* destructive button */
+  --dx-danger-fg: #FFFFFF;
+
+  /* Public site */
+  --dx-mark-block: #5C7A0A;           /* = --dx-accent-text; the block of the logo mark in the image fallback */
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --dx-surface: #141819;              /* admin sidebar only (homepage keeps #171B1C) */
+  --dx-card: #1A1F21;
+  --dx-head: #20262A;
+  --dx-input: #121617;
+  --dx-nav-active: #23292B;
+  --dx-muted: rgba(243,242,238,.66);
+  --dx-line: rgba(243,242,238,.10);
+  --dx-line-strong: rgba(243,242,238,.22);
+  --dx-btn-bg: #F3F2EE;
+  --dx-btn-fg: #101314;
+  --dx-btn-hover: #FFFFFF;
+  --dx-scrim: rgba(0,0,0,.66);
+  --dx-ok-bg: rgba(198,242,78,.14);
+  --dx-ok-fg: #C6F24E;
+  --dx-ok-line: rgba(198,242,78,.40);
+  --dx-danger: #FF9C8F;               /* 7.6:1 on --dx-card */
+  --dx-danger-bg: #E5484D;
+  --dx-danger-fg: #101314;            /* 5.1:1 */
+  --dx-mark-block: #C6F24E;
+}
+
+/* Constants (not themed)
+   Sample/preview panels and the player lightbox are ALWAYS dark: #1A1F21 panel, #000 player,
+   paper text rgba(243,242,238,a). Thumbnail placeholder in admin: #252C2F (auto thumbnail #424B4F).
+   Play button: --dx-signal fill + #101314 glyph, inset 1px rgba(16,19,20,.14). */
