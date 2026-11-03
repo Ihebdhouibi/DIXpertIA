@@ -26,7 +26,11 @@ from app.services import demo_links
 log = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = 6
-MAX_DOWNLOAD_BYTES = 5_000_000
+MAX_DOWNLOAD_BYTES = 2_000_000
+MAX_REDIRECTS = 3
+# What a preview may be, by its Content-Type and by what Pillow finds in it.
+IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
 MAX_SIZE = (1280, 720)
 JPEG_QUALITY = 82
 # Where previews may come from, redirects included: Drive's thumbnail answers
@@ -42,6 +46,8 @@ def _allowed(url: str) -> bool:
 
 
 class _OnlyAllowedRedirects(urllib.request.HTTPRedirectHandler):
+    max_redirections = MAX_REDIRECTS
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if not _allowed(newurl):
             host = urllib.parse.urlsplit(newurl).hostname
@@ -52,12 +58,15 @@ class _OnlyAllowedRedirects(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_OnlyAllowedRedirects)
 
 
-def _get(url: str) -> bytes:
-    """GET an allowed URL, at most MAX_DOWNLOAD_BYTES."""
+def _get(url: str, accept: set[str]) -> bytes:
+    """GET an allowed URL: at most MAX_DOWNLOAD_BYTES, and only a Content-Type in `accept`."""
     if not _allowed(url):
         raise ValueError(f"host not allowed: {urllib.parse.urlsplit(url).hostname}")
     request = urllib.request.Request(url, headers={"User-Agent": "DI Xpertia preview fetcher"})
     with _opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+        content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if content_type not in accept:
+            raise ValueError(f"unexpected content type: {content_type or 'none'}")
         body = response.read(MAX_DOWNLOAD_BYTES + 1)
     if len(body) > MAX_DOWNLOAD_BYTES:
         raise ValueError("preview larger than the limit")
@@ -83,6 +92,8 @@ def source_url(provider: str, video_id: str, thumbnail_url: str | None) -> str |
 def to_jpeg(raw: bytes) -> bytes:
     """Any image as a JPEG of at most 1280 x 720: metadata dropped, nothing but pixels kept."""
     with Image.open(io.BytesIO(raw)) as image:
+        if image.format not in IMAGE_FORMATS:
+            raise ValueError(f"not a JPEG, PNG or WebP image: {image.format}")
         image.load()
         picture = image.convert("RGB")
     picture.thumbnail(MAX_SIZE)
@@ -98,10 +109,10 @@ def fetch(provider: str, video_id: str, thumbnail_url: str | None) -> tuple[byte
         return None
     try:
         if url.startswith("https://vimeo.com/api/oembed.json"):
-            url = json.loads(_get(url)).get("thumbnail_url") or ""
+            url = json.loads(_get(url, {"application/json"})).get("thumbnail_url") or ""
             if not url:
                 return None
-        return to_jpeg(_get(url)), url
+        return to_jpeg(_get(url, IMAGE_TYPES)), url
     except Exception as exc:  # network, refused redirect, not an image: no preview, the save goes on
         log.warning("Demo preview not fetched from %s: %s", urllib.parse.urlsplit(url).hostname, exc)
         return None

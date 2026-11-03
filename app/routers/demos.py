@@ -231,9 +231,12 @@ def reorder_demos(payload: DemoOrder, db: Session = Depends(get_db), user: User 
     if len(payload.ids) != len(set(payload.ids)) or set(payload.ids) != set(demos):
         raise ApiError(422, "demo.order_mismatch")
     before = [d.id for d in sorted(demos.values(), key=lambda d: (d.position, d.id))]
+    now = datetime.now(timezone.utc)
     for position, demo_id in enumerate(payload.ids):
-        demos[demo_id].position = position
-        demos[demo_id].updated_by_id = user.id
+        if demos[demo_id].position != position:
+            demos[demo_id].position = position
+            demos[demo_id].updated_by_id = user.id
+            demos[demo_id].updated_at = now
     if before != payload.ids:
         record_event(db, "demo.reordered", "demo", "order", before={"order": before}, after={"order": payload.ids})
     db.commit()

@@ -40,6 +40,10 @@ def jpeg(width=64, height=36) -> bytes:
     return out.getvalue()
 
 
+# The real preview fetch, kept before the fixture below replaces it.
+REAL = {}
+
+
 @pytest.fixture(autouse=True)
 def fetched(monkeypatch):
     """The preview fetch, without the network: an image for Drive and YouTube, none for Vimeo.
@@ -49,6 +53,7 @@ def fetched(monkeypatch):
     from app.services import demo_previews
 
     calls = []
+    REAL.setdefault("fetch", demo_previews.fetch)
 
     def fake(provider, video_id, thumbnail_url):
         calls.append((provider, video_id, thumbnail_url))
@@ -352,3 +357,85 @@ def test_a_preview_goes_with_its_demo(client, admin, database):
     client.delete(f"/api/demos/{demo['id']}", headers=admin)
     with database.connect() as c:
         assert c.execute(text("SELECT count(*) FROM demo_previews")).scalar() == 0
+
+
+# --- The fetch itself, with the network replaced -------------------------------------
+
+class _Response:
+    def __init__(self, body: bytes, content_type: str):
+        self.body, self.headers = body, {"Content-Type": content_type}
+
+    def read(self, limit):
+        return self.body[:limit]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+@pytest.fixture
+def network(monkeypatch):
+    """The opener the fetch uses, answering with whatever the test sets."""
+    from app.services import demo_previews
+
+    answer = {}
+
+    def open_(request, timeout):
+        if "error" in answer:
+            raise answer["error"]
+        return _Response(answer["body"], answer["type"])
+
+    monkeypatch.setattr(demo_previews._opener, "open", open_)
+    return answer
+
+
+def real_fetch():
+    """The real fetch, kept aside by the autouse fixture before it replaces it."""
+    return REAL["fetch"]
+
+
+@pytest.mark.parametrize("content_type", ["image/jpeg", "image/png", "image/webp"])
+def test_a_fetched_image_is_kept(network, content_type):
+    from PIL import Image
+
+    raw = io.BytesIO()
+    Image.new("RGB", (32, 18), (1, 2, 3)).save(raw, format=content_type.split("/")[1].upper())
+    network.update(body=raw.getvalue(), type=content_type)
+    content, source = real_fetch()("youtube", "dQw4w9WgXcQ", None)
+    assert content.startswith(b"\xff\xd8") and source == "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+
+
+@pytest.mark.parametrize("body,content_type", [
+    (b"<html>Sign in</html>", "text/html"),          # a Drive file that is not shared
+    (b"GIF89a", "image/gif"),                         # not an accepted type
+    (b"<svg/>", "image/jpeg"),                        # announced as an image, but is not one
+    (b"\xff\xd8" + b"0" * 2_000_001, "image/jpeg"),     # too large
+], ids=["html", "gif", "fake-jpeg", "too-large"])
+def test_anything_but_a_small_image_gives_no_preview(network, body, content_type):
+    network.update(body=body, type=content_type)
+    assert real_fetch()("drive", "1AbCdEfGhIjKlMnOp", None) is None
+
+
+def test_a_network_failure_gives_no_preview(network):
+    import urllib.error
+
+    network["error"] = urllib.error.URLError("timed out")
+    assert real_fetch()("drive", "1AbCdEfGhIjKlMnOp", None) is None
+
+
+def test_redirects_are_capped():
+    from app.services.demo_previews import MAX_REDIRECTS, _OnlyAllowedRedirects
+
+    assert _OnlyAllowedRedirects.max_redirections == MAX_REDIRECTS == 3
+
+
+def test_reordering_records_who_and_when_on_the_moved_demos_only(client, admin, database):
+    first = create(client, admin, title_fr="Un", title_en="One").json()
+    second = create(client, admin, title_fr="Deux", title_en="Two").json()
+    third = create(client, admin, title_fr="Trois", title_en="Three").json()
+    client.put("/api/demos/order", headers=admin, json={"ids": [second["id"], first["id"], third["id"]]})
+    with database.connect() as c:
+        changed = dict(c.execute(text("SELECT id, updated_at > created_at FROM demo_videos")).all())
+    assert changed == {first["id"]: True, second["id"]: True, third["id"]: False}
