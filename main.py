@@ -48,7 +48,7 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
+from app.routers import accounting, audit, contact, dashboard, demos, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
@@ -82,6 +82,10 @@ PUBLIC_PATHS = frozenset({
     "/api/mfa/enrol/setup",
     "/api/mfa/enrol/confirm",
 })
+# The website's own reads (#232, demo videos and their previews): every path
+# under this prefix is public. Each such route reads through a SECURITY
+# DEFINER function that returns published content only, and is rate limited.
+PUBLIC_PREFIX = "/api/public/"
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 
@@ -104,7 +108,7 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     # The language of this request's messages (#135): what the UI sends in
     # Accept-Language, French without one. Set before anything can refuse.
     set_locale(request.headers.get("accept-language"))
-    if request.url.path in PUBLIC_PATHS:
+    if request.url.path in PUBLIC_PATHS or request.url.path.startswith(PUBLIC_PREFIX):
         return
     identity = await run_in_threadpool(_identity_for, token) if token else None
     if identity is None:
@@ -175,6 +179,8 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
+app.include_router(demos.public, prefix="/api")
+app.include_router(demos.admin, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(mfa_router.router, prefix="/api")
 app.include_router(mfa_router.public, prefix="/api")

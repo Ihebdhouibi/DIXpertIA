@@ -499,6 +499,17 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "Trop de messages reçus dans la dernière heure. Réessayez plus tard, "
               "ou appelez-nous au +216 28 814 729."},
     "contact.not_found": {"en": "Enquiry not found", "fr": "Demande introuvable"},
+    # Demo videos (#232)
+    "demo.not_found": {"en": "Demo not found", "fr": "Démo introuvable"},
+    "demo.link_unknown": {
+        "en": "This link is not recognised: use a Google Drive, YouTube or Vimeo video link.",
+        "fr": "Ce lien n'est pas reconnu : utilisez le lien d'une vidéo Google Drive, YouTube ou Vimeo."},
+    "demo.thumbnail_drive_only": {
+        "en": "The preview image must be a Google Drive link, for now.",
+        "fr": "L'image d'aperçu doit être un lien Google Drive, pour l'instant."},
+    "demo.order_mismatch": {
+        "en": "The new order must list every demo exactly once.",
+        "fr": "Le nouvel ordre doit contenir chaque démo une seule fois."},
     "contact.topic.security_audit": {
         "en": "Security audit / penetration testing", "fr": "Audit de sécurité / test d'intrusion"},
     "contact.topic.cloud_migration": {"en": "Hybrid cloud migration", "fr": "Migration vers le cloud hybride"},

@@ -60,6 +60,8 @@ TRUNCATED_BETWEEN_TESTS = (
     "audit_events",
     "notifications",
     "contact_requests",
+    "demo_previews",
+    "demo_videos",
     "auth_attempts",
     "user_mfa_recovery",
     "user_mfa",
