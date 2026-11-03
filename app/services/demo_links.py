@@ -1,9 +1,9 @@
 """Recognise a demo's video link, and build what the website needs to show it (#232).
 
 The admin pastes a share link; nothing is stored but the link and what is
-recognised in it. From the provider and the video id the API builds:
-- the player to embed, loaded only when a visitor clicks Play;
-- a preview image when the admin gave none.
+recognised in it. From the provider and the video id the API builds the player to embed,
+loaded only when a visitor clicks Play. Preview images are fetched by the
+server instead (app/services/demo_previews.py).
 
 Only three providers are recognised, in their usual share formats. Anything
 else is refused, so the website never frames an arbitrary page, and the
@@ -91,15 +91,3 @@ def embed_url(provider: str, video_id: str) -> str:
         return f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0"
     number, _, unlisted = video_id.partition("-")
     return f"https://player.vimeo.com/video/{number}?dnt=1" + (f"&h={unlisted}" if unlisted else "")
-
-
-def preview_image(provider: str, video_id: str, thumbnail_url: str | None) -> str | None:
-    """The admin's image, else the platform's own thumbnail; Vimeo has none we can build."""
-    if thumbnail_url:
-        found = parse_drive_image(thumbnail_url)
-        return drive_thumbnail(found) if found else None
-    if provider == "drive":
-        return drive_thumbnail(video_id)
-    if provider == "youtube":
-        return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-    return None

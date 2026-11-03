@@ -74,9 +74,6 @@ PUBLIC_PATHS = frozenset({
     "/api/activate",
     # The website's contact form (#98): anonymous, rate limited in the database.
     "/api/contact",
-    # The website's Demo section (#232): published demos only, through one
-    # SECURITY DEFINER function, rate limited like every public route.
-    "/api/public/demos",
     # Container health check (#185): says only whether the database answers.
     "/api/health",
     # The sign-in's second step (#44): each carries its own short-lived token,
@@ -85,6 +82,10 @@ PUBLIC_PATHS = frozenset({
     "/api/mfa/enrol/setup",
     "/api/mfa/enrol/confirm",
 })
+# The website's own reads (#232, demo videos and their previews): every path
+# under this prefix is public. Each such route reads through a SECURITY
+# DEFINER function that returns published content only, and is rate limited.
+PUBLIC_PREFIX = "/api/public/"
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 
@@ -107,7 +108,7 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     # The language of this request's messages (#135): what the UI sends in
     # Accept-Language, French without one. Set before anything can refuse.
     set_locale(request.headers.get("accept-language"))
-    if request.url.path in PUBLIC_PATHS:
+    if request.url.path in PUBLIC_PATHS or request.url.path.startswith(PUBLIC_PREFIX):
         return
     identity = await run_in_threadpool(_identity_for, token) if token else None
     if identity is None:

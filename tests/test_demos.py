@@ -2,8 +2,12 @@
 
 No video file is stored: a demo is a link to Drive, YouTube or Vimeo. The
 admin manages demos; the website reads the published ones through
-published_demos(), never the table.
+published_demos(), never the table. Preview images are fetched by the server
+when a demo is saved and served from our domain; here the fetch is replaced
+by a stand-in, so no test touches the network.
 """
+
+import io
 
 import pytest
 from sqlalchemy import text
@@ -26,6 +30,34 @@ def admin(identities):
 
 def create(client, admin, **changes):
     return client.post("/api/demos", headers=admin, json={**DEMO, **changes})
+
+
+def jpeg(width=64, height=36) -> bytes:
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), (16, 19, 20)).save(out, format="JPEG")
+    return out.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def fetched(monkeypatch):
+    """The preview fetch, without the network: an image for Drive and YouTube, none for Vimeo.
+
+    Each call is recorded, so a test can see what was asked for.
+    """
+    from app.services import demo_previews
+
+    calls = []
+
+    def fake(provider, video_id, thumbnail_url):
+        calls.append((provider, video_id, thumbnail_url))
+        if provider == "vimeo" and not thumbnail_url:
+            return None
+        return jpeg(), f"https://example.test/{provider}/{video_id}.jpg"
+
+    monkeypatch.setattr(demo_previews, "fetch", fake)
+    return calls
 
 
 # --- Link recognition -----------------------------------------------------------------
@@ -66,18 +98,68 @@ def test_anything_else_is_not(url):
     assert parse_video_link(url) is None
 
 
-def test_the_players_and_previews_built_from_a_link():
-    from app.services.demo_links import embed_url, preview_image
+def test_the_players_built_from_a_link():
+    from app.services.demo_links import embed_url
 
     assert embed_url("drive", "1AbCdEfGhIjKlMnOp") == "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/preview"
     assert embed_url("youtube", "dQw4w9WgXcQ").startswith("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ")
     assert embed_url("vimeo", "76979871-8272103f6e") == "https://player.vimeo.com/video/76979871?dnt=1&h=8272103f6e"
-    # The admin's image wins; otherwise the platform's own thumbnail; Vimeo has none.
-    assert preview_image("drive", "VID12345678", "https://drive.google.com/file/d/IMG12345678/view") \
+
+
+# --- Where previews come from, and what is kept of them ------------------------------
+
+def test_where_each_preview_is_fetched_from():
+    from app.services.demo_previews import source_url
+
+    # The admin's Drive image wins; otherwise the platform's own thumbnail.
+    assert source_url("drive", "VID12345678", "https://drive.google.com/file/d/IMG12345678/view") \
         == "https://drive.google.com/thumbnail?id=IMG12345678&sz=w1280"
-    assert preview_image("drive", "VID12345678", None) == "https://drive.google.com/thumbnail?id=VID12345678&sz=w1280"
-    assert preview_image("youtube", "dQw4w9WgXcQ", None) == "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
-    assert preview_image("vimeo", "76979871", None) is None
+    assert source_url("drive", "VID12345678", None) == "https://drive.google.com/thumbnail?id=VID12345678&sz=w1280"
+    assert source_url("youtube", "dQw4w9WgXcQ", None) == "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+    # Vimeo publishes its thumbnail through oEmbed, unlisted hash included.
+    assert source_url("vimeo", "76979871-8272103f6e", None).startswith(
+        "https://vimeo.com/api/oembed.json?url=https%3A%2F%2Fvimeo.com%2F76979871%2F8272103f6e")
+
+
+@pytest.mark.parametrize("url,allowed", [
+    ("https://drive.google.com/thumbnail?id=x", True),
+    ("https://lh3.googleusercontent.com/abc", True),
+    ("https://i.ytimg.com/vi/x/hqdefault.jpg", True),
+    ("https://i.vimeocdn.com/video/1.jpg", True),
+    ("http://i.ytimg.com/vi/x/hqdefault.jpg", False),          # not https
+    ("https://169.254.169.254/latest/meta-data", False),         # the cloud metadata address
+    ("https://localhost:8000/api/demos", False),
+    ("https://googleusercontent.com.evil.example/x", False),
+    ("https://example.com/image.png", False),
+])
+def test_the_server_fetches_from_the_video_hosts_only(url, allowed):
+    from app.services.demo_previews import _allowed
+
+    assert _allowed(url) is allowed
+
+
+def test_a_redirect_to_another_host_is_refused():
+    import urllib.error
+    import urllib.request
+
+    from app.services.demo_previews import _OnlyAllowedRedirects
+
+    request = urllib.request.Request("https://drive.google.com/thumbnail?id=x")
+    with pytest.raises(urllib.error.URLError):
+        _OnlyAllowedRedirects().redirect_request(request, None, 302, "Found", {}, "https://example.com/x.png")
+
+
+def test_a_preview_is_kept_as_a_small_jpeg_and_anything_else_is_refused():
+    from PIL import Image
+
+    from app.services.demo_previews import to_jpeg
+
+    big = io.BytesIO()
+    Image.new("RGBA", (3000, 2000), (198, 242, 78, 255)).save(big, format="PNG")
+    kept = Image.open(io.BytesIO(to_jpeg(big.getvalue())))
+    assert kept.format == "JPEG" and kept.size[0] <= 1280 and kept.size[1] <= 720
+    with pytest.raises(Exception):
+        to_jpeg(b"<html>Sign in to Google Drive</html>")  # a Drive file that is not shared
 
 
 # --- The admin manages them -----------------------------------------------------------
@@ -112,7 +194,7 @@ def test_a_preview_image_comes_from_drive_only(client, admin):
     refused = create(client, admin, thumbnail_url="https://example.com/image.png")
     assert refused.status_code == 422 and refused.json()["code"] == "demo.thumbnail_drive_only"
     kept = create(client, admin, thumbnail_url="https://drive.google.com/file/d/IMG12345678/view")
-    assert kept.json()["preview_image"] == "https://drive.google.com/thumbnail?id=IMG12345678&sz=w1280"
+    assert kept.status_code == 201
 
 
 def test_only_the_fields_sent_change(client, admin):
@@ -182,6 +264,8 @@ def test_the_website_sees_published_demos_only_in_order(client, admin):
     assert set(body[1]) == {"id", "title_fr", "title_en", "description_fr", "description_en", "provider",
                             "service", "embed_url", "preview_image"}
     assert body[0]["preview_image"] is None  # Vimeo without an image: the website's fallback
+    # Drive's preview is served from our own domain, never from Google.
+    assert body[1]["preview_image"].startswith(f"/api/public/demos/{shown['id']}/preview?v=")
     assert response.headers["cache-control"] == "public, max-age=60"
 
 
@@ -209,3 +293,62 @@ def test_an_anonymous_caller_cannot_read_the_table_even_in_sql(client, admin):
 def test_the_accountant_does_not_see_the_table(client, identities, admin):
     create(client, admin, published=True)
     assert client.get("/api/demos", headers=identities["accountant"]["headers"]).status_code == 403
+
+
+# --- Previews, served from our domain --------------------------------------------------
+
+def test_a_published_demos_preview_is_served_publicly(client, admin):
+    demo = create(client, admin, published=True).json()
+    url = client.get("/api/public/demos").json()[0]["preview_image"]
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert "immutable" in response.headers["cache-control"]
+    assert response.content.startswith(b"\xff\xd8")  # a JPEG
+    assert demo["preview_image"].startswith(f"/api/demos/{demo['id']}/preview?v=")
+
+
+def test_a_hidden_demos_preview_is_not_public_but_the_admin_sees_it(client, admin):
+    demo = create(client, admin).json()
+    assert client.get(f"/api/public/demos/{demo['id']}/preview").status_code == 404
+    assert client.get(f"/api/demos/{demo['id']}/preview").status_code == 401
+    seen = client.get(f"/api/demos/{demo['id']}/preview", headers=admin)
+    assert seen.status_code == 200 and seen.headers["content-type"] == "image/jpeg"
+
+
+def test_the_admins_image_is_what_gets_fetched(client, admin, fetched):
+    image = "https://drive.google.com/file/d/IMG12345678/view"
+    create(client, admin, thumbnail_url=image)
+    assert fetched[-1] == ("drive", "1AbCdEfGhIjKlMnOpQrStUvWxYz012345", image)
+
+
+def test_a_failed_fetch_saves_the_demo_without_a_preview(client, admin):
+    demo = create(client, admin, video_url="https://vimeo.com/76979871")
+    assert demo.status_code == 201 and demo.json()["preview_image"] is None
+
+
+def test_a_new_link_replaces_the_preview_or_drops_it(client, admin, fetched, database):
+    demo = create(client, admin).json()
+    # A title change does not fetch again.
+    calls = len(fetched)
+    client.patch(f"/api/demos/{demo['id']}", headers=admin, json={"title_en": "Renamed"})
+    assert len(fetched) == calls
+    # A new link whose preview cannot be fetched: the old image goes, it would show the wrong video.
+    moved = client.patch(f"/api/demos/{demo['id']}", headers=admin, json={"video_url": "https://vimeo.com/76979871"})
+    assert moved.json()["preview_image"] is None
+    with database.connect() as c:
+        assert c.execute(text("SELECT count(*) FROM demo_previews")).scalar() == 0
+
+
+def test_saving_a_demo_without_a_preview_tries_again(client, admin, fetched):
+    demo = create(client, admin, video_url="https://vimeo.com/76979871").json()
+    calls = len(fetched)
+    client.patch(f"/api/demos/{demo['id']}", headers=admin, json={"title_en": "Retry"})
+    assert len(fetched) == calls + 1
+
+
+def test_a_preview_goes_with_its_demo(client, admin, database):
+    demo = create(client, admin).json()
+    client.delete(f"/api/demos/{demo['id']}", headers=admin)
+    with database.connect() as c:
+        assert c.execute(text("SELECT count(*) FROM demo_previews")).scalar() == 0

@@ -90,6 +90,8 @@ class DemoOut(BaseModel):
     updated_at: datetime
     # Built by the server from the provider and the video id.
     embed_url: str
+    # Served by our API (the admin's route, with the token); None when no
+    # preview could be fetched.
     preview_image: str | None
 
 
@@ -104,6 +106,7 @@ class PublicDemoOut(BaseModel):
     provider: str
     service: str | None
     embed_url: str
-    # None when there is none to show (a Vimeo video without an image): the
-    # website shows its branded fallback.
+    # On our own domain, /api/public/demos/{id}/preview?v=...: the page never
+    # contacts the video host before Play. None when no preview could be
+    # fetched: the website shows its branded fallback.
     preview_image: str | None

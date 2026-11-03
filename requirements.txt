@@ -22,6 +22,8 @@ email-validator==2.3.0
 
 # PDF generation (app/services/invoice_generator.py)
 reportlab==4.2.2
+# Imported directly (invoice logo, demo previews #232); reportlab already pulls it in.
+pillow==12.3.0
 
 # Email
 mailtrap==2.0.0
