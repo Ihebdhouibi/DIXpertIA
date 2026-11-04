@@ -64,10 +64,13 @@ def test_every_admin_is_notified_and_nobody_else(client, identities, database):
 
 def test_it_is_emailed_to_our_inbox_only_with_the_sender_in_reply_to(client, inbox):
     send(client)
-    [(to, subject, body, reply_to)] = inbox
+    [(to, subject, body,html_text, reply_to)] = inbox
     assert to == "inbox@dixpertia.test", "never to the address the visitor typed"
     assert reply_to == "amira@example.tn"
     assert "Amira Ben Salah" in subject and GOOD["message"] in body
+    assert html_text is not None
+    assert '<html lang="fr">' in html_text
+    assert "Amira Ben Salah" in html_text
 
 
 def test_without_an_inbox_it_is_still_kept_and_nothing_is_emailed(client, database, monkeypatch):
