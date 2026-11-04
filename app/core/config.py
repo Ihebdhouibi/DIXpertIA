@@ -138,7 +138,7 @@ class Settings:
     MFA_ENCRYPTION_KEY: str = (os.getenv("MFA_ENCRYPTION_KEY") or "").strip()
     # The roles that must use it: signing in without it leads to enrolment.
     MFA_REQUIRED_ROLES: frozenset = frozenset(
-        r.strip() for r in (os.getenv("MFA_REQUIRED_ROLES", "admin,accountant")).split(",") if r.strip())
+        r.strip() for r in (os.getenv("MFA_REQUIRED_ROLES", "admin,accountant,employee")).split(",") if r.strip())
     # Wrong codes per account before code entry locks, for LOGIN_LOCKOUT_MINUTES.
     MFA_MAX_FAILURES: int = _positive_int("MFA_MAX_FAILURES", 5)
 
