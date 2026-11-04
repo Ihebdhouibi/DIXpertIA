@@ -49,7 +49,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => go('dashboard')}
-          aria-label={t('home.nav.homeLink')}
+          aria-label={t('common.nav.logoLink')}
           className="cursor-pointer transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary rounded"
         >
           <Wordmark size="sm" />

@@ -44,7 +44,7 @@ from playwright.sync_api import sync_playwright
 # the others are actions.
 NAMES = {
     "en": {"dashboard": "Go to Dashboard", "open": "Open navigation",
-           "skip": {"DI Xpertia", "Sign out", "Close navigation", "Close"}},
+           "skip": {"Sign out", "Close navigation", "Close"}},
     "fr": {"dashboard": "Accéder à mon espace", "open": "Ouvrir la navigation",
            "skip": {"Se déconnecter", "Fermer la navigation", "Fermer"}},
 }
@@ -65,6 +65,7 @@ def screens_of(page, names: dict) -> list[str]:
         label for label in labels
         if label and not BRAND.match(label) and label not in names["skip"]
     ]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

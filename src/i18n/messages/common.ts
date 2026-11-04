@@ -40,6 +40,8 @@ export default defineMessages('common', {
     en: 'Some data could not be loaded',
   },
   'common.retry': { fr: 'Réessayer', en: 'Retry' },
+  'common.nav.logoLink': { fr: "DI Xpertia, tableau de bord", en: "DI Xpertia, dashboard" },
+
 
   // Business statuses, as StatusBadge shows them. The key is the API's English
   // value, which also picks the badge's colour. French agrees with the noun it
