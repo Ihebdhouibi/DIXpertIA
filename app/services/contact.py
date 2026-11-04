@@ -1,9 +1,10 @@
-"""Receiving an enquiry from the public contact form (#98).
+"""Receiving an enquiry from the public contact .
 
 The order matters: limits and storage first, in one database call, then the
 commit, then the e-mail. An enquiry is never lost, because it is a row before
 anything can fail on the mail side, and nothing is e-mailed for an enquiry
 that was not stored.
+
 """
 
 import hashlib
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.i18n import DEFAULT_LOCALE, t
 from app.services.email import email_configured, send_email
+from app.services.email_template import render_html_email, t_html
 
 log = logging.getLogger("dixpertia")
 
@@ -45,17 +47,37 @@ def submit(db: Session, *, name: str, email: str, topic: str, message: str, ip: 
 
 def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: str) -> bool:
     """E-mail a stored enquiry to CONTACT_INBOX, if it and SMTP are configured.
-
     Only ever to our own inbox: the sender's address goes in Reply-To, so a
     reply reaches them, and nothing is sent to it automatically. Otherwise the
     form would mail whatever address a spammer typed.
     """
     if not settings.CONTACT_INBOX or not email_configured():
         return False
-    subject = t("email.contact.subject", DEFAULT_LOCALE, name=name, topic=t(f"contact.topic.{topic}", DEFAULT_LOCALE))
+
+    # 1. Prepare the translated topic label
+    topic_label = t(f"contact.topic.{topic}", DEFAULT_LOCALE)
+
+    # 2. Generate the plain text version (fallback)
+    subject = t("email.contact.subject", DEFAULT_LOCALE, name=name, topic=topic_label)
     body = t("email.contact.body", DEFAULT_LOCALE, id=request_id, name=name, email=email,
-             topic=t(f"contact.topic.{topic}", DEFAULT_LOCALE), message=message, link=settings.FRONTEND_URL)
-    sent = send_email(settings.CONTACT_INBOX, subject, body, reply_to=email)
+             topic=topic_label, message=message, link=settings.FRONTEND_URL)
+
+
+
+    html_msg = t_html("email.contact.html_message", DEFAULT_LOCALE, nl2br=True,
+                      name=name, email=email, topic=topic_label,
+                      message=message, link=settings.FRONTEND_URL)
+    html_body = render_html_email(
+        lang=DEFAULT_LOCALE,
+        title=t("email.contact.html_title", DEFAULT_LOCALE),
+        message_html=html_msg,
+        footer_text=t("email.contact.html_footer", DEFAULT_LOCALE)
+    )
+
+    # 4. Send both parts (plain text + HTML)
+    sent = send_email(settings.CONTACT_INBOX, subject, body, html_text=html_body, reply_to=email)
+
+
     if not sent:
         log.warning("Contact request %s stored but not e-mailed", request_id)
     return sent
