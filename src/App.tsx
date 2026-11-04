@@ -337,10 +337,7 @@ export default function App() {
     }
   };
 
-  const handleGoHome = () => {
-    setShowHomepage(true);
-    setShowLogin(false);
-  };
+
 
   const handleGoToDashboard = () => {
     setShowHomepage(false);
@@ -585,7 +582,6 @@ export default function App() {
         onLogout={handleLogout}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
-        onGoHome={handleGoHome}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

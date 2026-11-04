@@ -40,6 +40,8 @@ export default defineMessages('common', {
     en: 'Some data could not be loaded',
   },
   'common.retry': { fr: 'Réessayer', en: 'Retry' },
+  'common.nav.logoLink': { fr: "DI Xpertia, tableau de bord", en: "DI Xpertia, dashboard" },
+
 
   // Business statuses, as StatusBadge shows them. The key is the API's English
   // value, which also picks the badge's colour. French agrees with the noun it
@@ -68,7 +70,6 @@ export default defineMessages('common', {
   'common.leaveType.Personal Day': { fr: 'Jour personnel', en: 'Personal Day' },
 
   // The app shell: navigation, header, sidebar (#135).
-  'common.nav.home': { fr: 'Accueil', en: 'Home' },
   'common.nav.dashboard': { fr: 'Tableau de bord', en: 'Dashboard' },
   'common.nav.invoices': { fr: 'Factures', en: 'Invoices' },
   'common.nav.leaveRequests': { fr: 'Demandes de congé', en: 'Leave Requests' },
