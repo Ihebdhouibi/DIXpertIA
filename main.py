@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import logging
-import html
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Literal, Optional
@@ -406,9 +405,7 @@ def _send_activation(user: User, token: str) -> bool:
     # 1. Plain text version
     plain_body = t("email.activation.body", user.locale, name=user.firstName, link=link)
 
-    # 2. HTML version (#211), with escaping for the name
-    safe_name = html.escape(user.firstName)
-    html_msg = t_html("email.activation.html_message", user.locale, name=safe_name)
+    html_msg = t_html("email.activation.html_message", user.locale, name=user.firstName)
 
     html_body = render_html_email(
         lang=user.locale,
@@ -583,8 +580,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
     link = accounts.link(accounts.RESET, token)
     plain_body = t("email.reset.body", user.locale, name=user.firstName, link=link)
-    safe_name = html.escape(user.firstName)
-    html_msg = t("email.reset.html_message", user.locale, name=safe_name)
+    html_msg = t("email.reset.html_message", user.locale, name=user.firstName)
     html_body = render_html_email(
         lang=user.locale,
         title=t("email.reset.html_title", user.locale),
@@ -593,13 +589,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
         action_text=t("email.reset.html_action", user.locale),
         footer_text=t("email.reset.html_footer", user.locale)
     )
-    send_email(
-        to_email=user.email,
-        subject=t("email.reset.subject", user.locale),
-        body=plain_body,
-        html_text=html_body
-    )
-
+    send_email(user.email, t("email.reset.subject", user.locale), plain_body, html_text=html_body)
     return answer
 
 
