@@ -26,7 +26,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from sqlalchemy import text
-import html
 from app.services.email_template import render_html_email, t_html
 from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.config import settings
@@ -177,10 +176,8 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
         # 2. Plain text version (fallback)
         plain_body = t("email.reminder.body", locale, message=message_text, url=settings.FRONTEND_URL)
 
-        # 3. HTML version (with escaping for security)
-        safe_message = html.escape(message_text)
 
-        html_msg = t_html("email.reminder.html_message", locale, message=safe_message)
+        html_msg = t_html("email.reminder.html_message", locale, message=message_text)
         html_body = render_html_email(
             lang=locale,
             title=t("email.reminder.html_title", locale),

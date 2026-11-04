@@ -448,10 +448,10 @@ CATALOG: dict[str, dict[str, str]] = {
               "(valable 1 heure, une seule fois) :\n\n{link}\n\n"
               "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\n"
               "Cordialement,\nL'équipe DIXpertIA\n"},
-    "email.reminder.subject": {"en": "DIXpertia - invoice reminder", "fr": "DIXpertia - rappel de facture"},
+    "email.reminder.subject": {"en": "DI Xpertia - invoice reminder", "fr": "DI Xpertia - rappel de facture"},
     "email.reminder.body": {
-        "en": "{message}\n\nOpen DIXpertia: {url}\n",
-        "fr": "{message}\n\nOuvrir DIXpertia : {url}\n"},
+        "en": "{message}\n\nOpen DI Xpertia: {url}\n",
+        "fr": "{message}\n\nOuvrir DI Xpertia : {url}\n"},
 
     # Invoice PDF (#194: the Claude Design layout in design/invoice-v2/)
     "pdf.invoice": {"en": "INVOICE", "fr": "FACTURE"},
@@ -522,8 +522,8 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.status.annulee": {"en": "Cancelled", "fr": "Annulée"},
     # HTML E-mail components (#211)
     "email.activation.html_title": {
-        "en": "Activate your DIXpertIA account",
-        "fr": "Activez votre compte DIXpertIA"
+        "en": "Activate your DI XpertIA account",
+        "fr": "Activez votre compte DI XpertIA"
     },
     "email.activation.html_message": {
         "en": "<p>Hello {name},</p>"

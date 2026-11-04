@@ -1,4 +1,3 @@
-import html
 from unittest.mock import patch
 
 
@@ -15,7 +14,6 @@ def test_send_email_multipart_order(mock_smtp):
 
         send_email("test@example.com", "Subject", "Plain text", html_text="<p>HTML</p>")
 
-        # LIGNE CORRIGÉE ICI (sans __enter__)
         msg = mock_smtp.return_value.send_message.call_args[0][0]
 
         assert msg.get_content_type() == "multipart/alternative"
@@ -24,24 +22,47 @@ def test_send_email_multipart_order(mock_smtp):
         assert payloads[1].get_content_type() == "text/html"
 
 
-def test_html_escaping():
-    from app.services.email_template import render_html_email
-    malicious_name = "<script>alert('xss')</script>"
-    safe_name = html.escape(malicious_name)
-
-    html_body = render_html_email(
-        lang="fr",
-        title="Test",
-        message_html=f"<p>Name: {safe_name}</p>"
-    )
-    assert "<script>" not in html_body
-    assert "&lt;script&gt;" in html_body
-
-
-def test_t_html_escapes_all_params():
+def test_t_html_escapes_once_and_handles_newlines():
+    """
+    Tests the actual t_html helper, ensuring:
+    1. It escapes HTML entities exactly once (no &amp;lt;).
+    2. It handles newlines correctly when nl2br=True.
+    """
     from app.services.email_template import t_html
-    msg = t_html("email.contact.html_message", "fr", name="<script>", email="a@b.c", topic="x", message="<img>", link="https://a.com")
-    assert "<script>" not in msg
+
+    malicious_input = "O'Brien <script>alert('xss')</script>\nLine 2 & <img src=x>"
+
+    # nl2br=True simulates the contact form message behavior
+    msg = t_html(
+        "email.contact.html_message",
+        "fr",
+        nl2br=True,
+        name=malicious_input,
+        email="a@b.c",
+        topic="x",
+        message=malicious_input,
+        link="https://a.com"
+    )
+
+    # Check that it is escaped exactly once
+    assert "O&#x27;Brien" in msg
     assert "&lt;script&gt;" in msg
-    assert "<img>" not in msg
-    assert "&lt;img&gt;" in msg
+    assert "&amp;lt;" not in msg  # Ensure no double escaping
+
+    # Check that newlines are converted to <br>
+    assert "Line 2" in msg
+    assert "<br>" in msg
+    assert "\n" not in msg  # No raw newlines should remain in the HTML body
+
+
+def test_render_html_email_sets_lang():
+    """Ensures the HTML template sets the correct lang attribute for both languages."""
+    from app.services.email_template import render_html_email
+
+    # Test FR
+    html_fr = render_html_email(lang="fr", title="Test", message_html="<p>Test</p>")
+    assert '<html lang="fr">' in html_fr
+
+    # Test EN
+    html_en = render_html_email(lang="en", title="Test", message_html="<p>Test</p>")
+    assert '<html lang="en">' in html_en

@@ -9,7 +9,6 @@ that was not stored.
 
 import hashlib
 import hmac
-import html
 import logging
 
 from sqlalchemy import text
@@ -48,7 +47,6 @@ def submit(db: Session, *, name: str, email: str, topic: str, message: str, ip: 
 
 def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: str) -> bool:
     """E-mail a stored enquiry to CONTACT_INBOX, if it and SMTP are configured.
-
     Only ever to our own inbox: the sender's address goes in Reply-To, so a
     reply reaches them, and nothing is sent to it automatically. Otherwise the
     form would mail whatever address a spammer typed.
@@ -64,16 +62,11 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
     body = t("email.contact.body", DEFAULT_LOCALE, id=request_id, name=name, email=email,
              topic=topic_label, message=message, link=settings.FRONTEND_URL)
 
-    # 3. Generate the HTML version securely (Escaping is mandatory here!)
-    safe_name = html.escape(name)
-    safe_email = html.escape(email)
-    # Replace newlines with <br> to keep the message formatting in HTML
-    safe_message = html.escape(message).replace('\n', '<br>')
 
-    html_msg = t_html("email.contact.html_message", DEFAULT_LOCALE,
-                 name=safe_name, email=safe_email, topic=topic_label,
-                 message=safe_message, link=settings.FRONTEND_URL)
 
+    html_msg = t_html("email.contact.html_message", DEFAULT_LOCALE, nl2br=True,
+                      name=name, email=email, topic=topic_label,
+                      message=message, link=settings.FRONTEND_URL)
     html_body = render_html_email(
         lang=DEFAULT_LOCALE,
         title=t("email.contact.html_title", DEFAULT_LOCALE),
@@ -82,13 +75,8 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
     )
 
     # 4. Send both parts (plain text + HTML)
-    sent = send_email(
-        to_email=settings.CONTACT_INBOX,
-        subject=subject,
-        body=body,
-        html_text=html_body,
-        reply_to=email
-    )
+    sent = send_email(settings.CONTACT_INBOX, subject, body, html_text=html_body, reply_to=email)
+
 
     if not sent:
         log.warning("Contact request %s stored but not e-mailed", request_id)
