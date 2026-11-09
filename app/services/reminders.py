@@ -25,9 +25,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
+
 from sqlalchemy import text
-from app.services.email_template import render_html_email, t_html
 from sqlalchemy.orm import Session, joinedload, selectinload
+
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.identity import get_identity, set_identity
@@ -42,8 +43,8 @@ from app.models.invoicing import (
 from app.models.notifications import Notification
 from app.models.user import User
 from app.services.email import email_configured, send_email
+from app.services.email_template import render_html_email, t_html
 from app.services.notifications import notify, users_with_role
-
 log = logging.getLogger("dixpertia")
 
 JOB_ROLE = "reminders"
@@ -166,14 +167,10 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
         to, locale = recipients.get(r.user_id, (None, None))
         if not to:
             continue
-
-        # 1. Generate the notification message
         message_text = render_notification(r.kind, r.params, locale)
         if not message_text:
             log.warning("Reminder %s has no translated text for locale %s", r.kind, locale)
             continue
-
-        # 2. Plain text version (fallback)
         plain_body = t("email.reminder.body", locale, message=message_text, url=settings.FRONTEND_URL)
 
 
@@ -186,8 +183,6 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
             action_text=t("email.reminder.html_action", locale),
             footer_text=t("email.reminder.html_footer", locale)
         )
-
-        # 4. Send both versions
         if send_email(
             to_email=to,
             subject=t("email.reminder.subject", locale),

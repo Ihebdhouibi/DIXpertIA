@@ -194,8 +194,30 @@ def test_an_inactive_account_gets_no_reset_link(client, database, mailbox):
     make_account(database, f"inactive@{DOMAIN}", active=False)
     assert client.post("/api/forgot-password", json={"email": f"inactive@{DOMAIN}"}).status_code == 200
     assert mailbox == []
-
-
+def test_reset_email_escapes_html_in_first_name(client, database, mailbox):
+    """Ensures the reset e-mail HTML escapes malicious first names (#211)."""
+    email = f"xss-reset@{DOMAIN}"
+    malicious_name = '"><img src=x onerror=alert(1)>'
+    with database.connect() as c:
+        c.execute(text('''
+            INSERT INTO users (
+                id, email, "firstName", "lastName", role,
+                "hashedPassword", "isActive", "isVerified", "createdAt", locale
+            )
+            VALUES (
+                'USR-XSS-RESET', :email, :fn, 'Hacker', 'employee',
+                'x', true, true, now(), 'fr'
+            )
+        '''), {"email": email, "fn": malicious_name})
+    response = client.post("/api/forgot-password", json={"email": email})
+    assert response.status_code == 200
+    mails = [m for m in mailbox if m["to"] == email]
+    assert len(mails) == 1
+    html_text = mails[0].get("html_text")
+    assert html_text is not None, "The HTML part was not sent or not captured by the mailbox fixture"
+    assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_text
+    assert malicious_name not in html_text
+    assert "&amp;quot;" not in html_text
 # --- New accounts: no password returned, activation first ----------------------
 
 def test_a_new_account_gets_an_activation_link_and_no_password(client, admin, database, mailbox):

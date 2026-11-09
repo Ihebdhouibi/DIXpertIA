@@ -33,10 +33,9 @@ def send_email(
     body: str,
     reply_to: str | None = None,
     html_text: str | None = None
-
 ) -> bool:
     """Send an e-mail, optionally with an HTML alternative.
-    `plain_text` is always required as a fallback (and to keep spam filters happy).
+    `body` is always required as a fallback (and to keep spam filters happy).
     `html_text` is optional; when provided, the e-mail is sent as multipart/alternative.
     `reply_to` lets the recipient answer someone else, such as a contact form's sender (#98).
     """

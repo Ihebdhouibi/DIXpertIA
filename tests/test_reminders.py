@@ -152,7 +152,7 @@ def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identitie
     monkeypatch.setattr(settings, "SMTP_USER", "user")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
     def mock_send(to_email, subject, body, html_text=None, **kwargs):
-            sent.append((to_email, body))
+            sent.append((to_email, body, html_text))
             return True
 
     monkeypatch.setattr(reminders, "send_email", mock_send)

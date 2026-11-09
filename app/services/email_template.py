@@ -64,7 +64,7 @@ def render_html_email(
             .text-main {{ color: #f9fafb !important; }}
             .text-muted {{ color: #9ca3af !important; }}
             .divider {{ border-color: #374151 !important; }}
-            .logo-ink {{ color: #C6F24E !important; }}
+            .logo-ink {{ color: #f9fafb !important; }}
             .logo-brand {{ color: #C6F24E !important; }}
             .footer-bg {{ background-color: #101314 !important; }}
         }}

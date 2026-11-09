@@ -522,8 +522,8 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.status.annulee": {"en": "Cancelled", "fr": "Annulée"},
     # HTML E-mail components (#211)
     "email.activation.html_title": {
-        "en": "Activate your DI XpertIA account",
-        "fr": "Activez votre compte DI XpertIA"
+        "en": "Activate your DI Xpertia account",
+        "fr": "Activez votre compte DI Xpertia"
     },
     "email.activation.html_message": {
         "en": "<p>Hello {name},</p>"

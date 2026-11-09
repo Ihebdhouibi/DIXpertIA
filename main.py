@@ -53,7 +53,7 @@ from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
-from app.services.email_template import render_html_email , t_html
+from app.services.email_template import render_html_email, t_html
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -580,7 +580,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
     link = accounts.link(accounts.RESET, token)
     plain_body = t("email.reset.body", user.locale, name=user.firstName, link=link)
-    html_msg = t("email.reset.html_message", user.locale, name=user.firstName)
+    html_msg = t_html("email.reset.html_message", user.locale, name=user.firstName)
     html_body = render_html_email(
         lang=user.locale,
         title=t("email.reset.html_title", user.locale),
