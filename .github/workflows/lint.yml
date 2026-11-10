@@ -188,6 +188,25 @@ jobs:
           # The link-preview URL was built for this environment.
           curl -sf http://127.0.0.1:8080/ | grep -q 'https://staging.dixpertia.tn'
 
+      - name: Every built asset is served with its own type
+        # A module served as application/octet-stream does not run: the
+        # invoice preview's pdf.js worker is a .mjs, which nginx did not know
+        # (#239). Checked against the built files, since their names carry a
+        # hash; the CSS and JS checks catch a types block that would replace
+        # the standard list instead of adding to it.
+        run: |
+          assets=$(docker exec web ls /usr/share/nginx/html/assets)
+          check() {
+            file=$(echo "$assets" | grep -E "$1" | head -n 1 || true)
+            [ -n "$file" ] || { echo "no asset matches $1"; exit 1; }
+            type=$(curl -sI "http://127.0.0.1:8080/assets/$file" | tr -d '\r' | grep -i '^content-type:' | cut -d' ' -f2- || true)
+            echo "$file: $type"
+            echo "$type" | grep -q "^$2" || { echo "expected $2"; exit 1; }
+          }
+          check '^pdf\.worker.*\.mjs$' 'application/javascript'
+          check '^index-.*\.js$' 'application/javascript'
+          check '\.css$' 'text/css'
+
       - name: Scan both images (Trivy)
         # Trivy's own image at a pinned version, rather than a third-party
         # action: one less piece of someone else's code in the pipeline.
