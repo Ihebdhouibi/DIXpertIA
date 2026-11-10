@@ -24,8 +24,13 @@ pytestmark = pytest.mark.identity("admin")
 
 DOMAIN = "responses-test.tn"
 
-# Returns a file, not JSON: nothing to allowlist.
-NOT_JSON = {("GET", "/api/invoices/{invoice_id}/download")}
+# Return a file, not JSON: nothing to allowlist. The demo previews (#232) are
+# JPEG images the server re-encoded itself.
+NOT_JSON = {
+    ("GET", "/api/invoices/{invoice_id}/download"),
+    ("GET", "/api/demos/{demo_id}/preview"),
+    ("GET", "/api/public/demos/{demo_id}/preview"),
+}
 
 # A secret, or the name of a column that holds one. None may appear in any
 # response body. "$2b$" is the prefix of every bcrypt hash; "!unusable:" the
