@@ -537,6 +537,57 @@ export const contactRequests = {
   handle: (id: string) => request<ContactRequest>(`/api/contact-requests/${id}/handle`, { method: 'POST' }),
 };
 
+/** A demo video as the admin manages it (#232, #233). */
+export type DemoService = 'cloud' | 'security' | 'software';
+export type DemoProvider = 'drive' | 'youtube' | 'vimeo';
+export interface Demo {
+  id: number;
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  video_url: string;
+  provider: DemoProvider;
+  video_id: string;
+  thumbnail_url: string | null;
+  service: DemoService | null;
+  position: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+  embed_url: string;
+  /** Our own API's route for the stored preview; null when none could be fetched. */
+  preview_image: string | null;
+}
+export interface DemoInput {
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  video_url: string;
+  /** "" removes the image. */
+  thumbnail_url: string;
+  service: DemoService | null;
+  published: boolean;
+}
+
+/** The demo videos shown on the website (#233): admin only. */
+export const demos = {
+  list: () => request<Demo[]>('/api/demos'),
+  create: (body: DemoInput) => request<Demo>('/api/demos', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: Partial<DemoInput>) =>
+    request<Demo>(`/api/demos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  remove: (id: number) => request<void>(`/api/demos/${id}`, { method: 'DELETE' }),
+  /** The full order, first shown first: every demo, each once. */
+  reorder: (ids: number[]) => request<Demo[]>('/api/demos/order', { method: 'PUT', body: JSON.stringify({ ids }) }),
+  /**
+   * The stored preview image, as a blob: the route needs the admin's token,
+   * which an <img src> cannot send, and the page never loads images from the
+   * video host (img-src 'self').
+   */
+  preview: async (path: string) => (await send(path)).blob(),
+};
+
 export const notifications = {
   /** The caller's own notifications, unread first (#116). */
   list: async (limit = 50): Promise<NotificationPage> => {
