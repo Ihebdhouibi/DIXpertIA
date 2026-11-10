@@ -28,13 +28,14 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   const t = useT();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
-  // Reuse the app's useDismiss hook for Escape, click-outside, and focus return
-  useDismiss(menuRef, isMenuOpen, () => {
+  // Pass menuButtonRef as the 4th argument (returnFocusTo).
+  // Using headerRef means clicks on the X button or anywhere in the header
+  // are considered "inside" and won't trigger the dismiss handler.
+  useDismiss(headerRef, isMenuOpen, () => {
     setIsMenuOpen(false);
-    menuButtonRef.current?.focus();
-  });
+  }, menuButtonRef);
 
   const handleNavigate = (target: HomeTarget) => {
     onNavigate(target);
@@ -42,7 +43,7 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-home-fg/10 bg-home-header backdrop-blur-md">
+    <header ref={headerRef} className="sticky top-0 z-30 border-b border-home-fg/10 bg-home-header backdrop-blur-md">
       <div className="mx-auto flex h-[68px] max-w-[1312px] items-center justify-between gap-3 px-[clamp(20px,5vw,48px)] sm:gap-6">
 
         <button type="button" onClick={() => handleNavigate('home')} aria-label={t('home.nav.homeLink')} className="cursor-pointer">
@@ -68,7 +69,6 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          {/* Hide LanguageToggle on mobile to save space; it goes in the menu */}
           <div className="hidden min-[860px]:block">
             <LanguageToggle tone="home" />
           </div>
@@ -102,8 +102,7 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
       {isMenuOpen && (
         <div
           id="mobile-menu"
-          ref={menuRef}
-          className="absolute left-0 top-full w-full border-b border-home-fg/10 bg-home-header shadow-lg backdrop-blur-md min-[860px]:hidden"
+          className="absolute left-0 top-full w-full border-b border-home-fg/10 bg-home-bg shadow-lg min-[860px]:hidden"
         >
           <nav aria-label={t('home.nav.primary')} className="flex flex-col px-[clamp(20px,5vw,48px)] py-4 gap-4 text-base font-medium">
             {NAV.map(({ target, label }) => {
@@ -123,7 +122,6 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
               );
             })}
           </nav>
-          {/* Language Toggle moved into the mobile menu */}
           <div className="px-[clamp(20px,5vw,48px)] pb-4">
             <LanguageToggle tone="home" />
           </div>
