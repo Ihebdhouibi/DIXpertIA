@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, Query, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
@@ -172,8 +173,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 status_code=422,
                 content={"detail": t("auth.invalid_email"), "code": "auth.invalid_email"},
             )
-        return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
+    # For ALL other validation errors, let FastAPI's default handler manage it
+    return await request_validation_exception_handler(request, exc)
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
 # registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a

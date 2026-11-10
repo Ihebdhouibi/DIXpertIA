@@ -54,8 +54,7 @@ def test_an_inactive_account_cannot_sign_in(client, database):
     make_account(database, f"gone@{DOMAIN}", active=False)
     response = sign_in(client, f"gone@{DOMAIN}")
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials", "the same answer as a wrong password"
-
+    assert response.json()["detail"] == "Incorrect e-mail address or password.", "the same answer as a wrong password"
 
 def test_deactivation_revokes_a_token_already_issued(client, admin, database):
     user_id = make_account(database, f"leaver@{DOMAIN}", role="accountant")
