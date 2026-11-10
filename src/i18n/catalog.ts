@@ -1,6 +1,7 @@
 import auth from './messages/auth';
 import common from './messages/common';
 import dashboard from './messages/dashboard';
+import demos from './messages/demos';
 import home from './messages/home';
 import invoices from './messages/invoices';
 import people from './messages/people';
@@ -12,6 +13,7 @@ export const catalog = {
   ...dashboard,
   ...invoices,
   ...people,
+  ...demos,
   ...home,
 };
 
