@@ -7,6 +7,8 @@ from typing import List, Literal, Optional
 from fastapi import FastAPI, Depends, Query, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
@@ -146,8 +148,6 @@ async def lifespan(_: FastAPI):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
-
-
 # The interactive API documentation (/docs, /redoc, /openapi.json) maps every
 # route and schema: useful in development and on staging, not something to hand
 # the internet in production (#185). Off unless API_DOCS is set.
@@ -167,7 +167,19 @@ async def _api_error(_request: Request, exc: ApiError) -> JSONResponse:
     key in `code`, so the UI and the tests recognise it without parsing text."""
     return JSONResponse(status_code=exc.status_code, headers=exc.headers,
                         content={"detail": exc.detail, "code": exc.code})
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Intercept Pydantic validation errors to return translated messages."""
+    for error in exc.errors():
+        # Catch the specific Pydantic error for reserved/invalid domains
+        if "email" in error.get("loc", []) and "value is not a valid email address" in error.get("msg", ""):
+            return JSONResponse(
+                status_code=422,
+                content={"detail": t("auth.invalid_email"), "code": "auth.invalid_email"},
+            )
 
+    # For ALL other validation errors, let FastAPI's default handler manage it
+    return await request_validation_exception_handler(request, exc)
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
 # registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a

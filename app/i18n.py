@@ -58,7 +58,15 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.not_authenticated": {"en": "Not authenticated", "fr": "Non authentifié"},
     "auth.forbidden": {"en": "Access denied", "fr": "Accès refusé"},
     "auth.admin_required": {"en": "Administrator role required", "fr": "Rôle administrateur requis"},
-    "auth.invalid_credentials": {"en": "Invalid credentials", "fr": "Identifiants incorrects"},
+    "auth.invalid_credentials": {
+        "en": "Incorrect e-mail address or password.",
+        "fr": "Adresse e-mail ou mot de passe incorrect."
+    },
+    "auth.invalid_email": {
+        "en": "Invalid e-mail address.",
+        "fr": "Adresse e-mail invalide."
+    },
+
     # #220: a lockout says it is one, and for how long. The same for any
     # e-mail, existing or not, so it reveals nothing.
     "auth.locked": {
