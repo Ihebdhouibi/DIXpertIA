@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Menu, X } from 'lucide-react';
 import { HomeWordmark } from './LogoMark';
 import LanguageToggle from '../LanguageToggle';
 import { useT, type MessageKey } from '../../i18n';
+import { useDismiss } from '../ui/useDismiss';
 
 export type HomeTarget = 'home' | 'services' | 'about' | 'contact';
 
@@ -13,6 +14,12 @@ const NAV: { target: HomeTarget; label: MessageKey }[] = [
   { target: 'contact', label: 'home.nav.contact' },
 ];
 
+/**
+ * Sticky, blurred header (HP-04). The navigation moves into a hamburger menu
+ * below 860px. On mobile, the FR/EN toggle is moved inside the menu to save
+ * space and prevent horizontal scrolling. The site has no router, so the links
+ * are buttons that scroll or switch to the contact page.
+ */
 export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   current: 'home' | 'contact';
   onNavigate: (target: HomeTarget) => void;
@@ -21,22 +28,17 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   const t = useT();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on Escape and return focus to the button
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isMenuOpen) {
-        setIsMenuOpen(false);
-        menuButtonRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMenuOpen]);
+  // Reuse the app's useDismiss hook for Escape, click-outside, and focus return
+  useDismiss(menuRef, isMenuOpen, () => {
+    setIsMenuOpen(false);
+    menuButtonRef.current?.focus();
+  });
 
   const handleNavigate = (target: HomeTarget) => {
     onNavigate(target);
-    setIsMenuOpen(false); // Close menu on link click
+    setIsMenuOpen(false);
   };
 
   return (
@@ -66,7 +68,10 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <LanguageToggle tone="home" />
+          {/* Hide LanguageToggle on mobile to save space; it goes in the menu */}
+          <div className="hidden min-[860px]:block">
+            <LanguageToggle tone="home" />
+          </div>
 
           <button
             type="button"
@@ -85,8 +90,8 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
-            aria-label={isMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-home-fg hover:bg-home-fg/5 min-[860px]:hidden cursor-pointer"
+            aria-label={isMenuOpen ? t('common.nav.close') : t('common.nav.open')}
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg text-home-fg hover:bg-home-fg/5 min-[860px]:hidden"
           >
             {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -97,7 +102,8 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
       {isMenuOpen && (
         <div
           id="mobile-menu"
-          className="absolute left-0 top-full w-full border-b border-home-fg/10 bg-home-header shadow-lg min-[860px]:hidden"
+          ref={menuRef}
+          className="absolute left-0 top-full w-full border-b border-home-fg/10 bg-home-header shadow-lg backdrop-blur-md min-[860px]:hidden"
         >
           <nav aria-label={t('home.nav.primary')} className="flex flex-col px-[clamp(20px,5vw,48px)] py-4 gap-4 text-base font-medium">
             {NAV.map(({ target, label }) => {
@@ -117,6 +123,10 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
               );
             })}
           </nav>
+          {/* Language Toggle moved into the mobile menu */}
+          <div className="px-[clamp(20px,5vw,48px)] pb-4">
+            <LanguageToggle tone="home" />
+          </div>
         </div>
       )}
     </header>
