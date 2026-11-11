@@ -3,7 +3,6 @@
 import html
 from app.i18n import t
 
-
 def t_html(key: str, locale: str | None = None, nl2br: bool = False, **params) -> str:
     """Format a message, escaping all values exactly once for safe HTML insertion."""
     safe_params = {}
@@ -13,7 +12,6 @@ def t_html(key: str, locale: str | None = None, nl2br: bool = False, **params) -
             escaped = escaped.replace("\n", "<br>")
         safe_params[k] = escaped
     return t(key, locale, **safe_params)
-
 
 def render_html_email(
     lang: str,
@@ -32,19 +30,16 @@ def render_html_email(
             <tr>
                 <td align="center" bgcolor="#101314" style="border-radius: 6px;">
                     <a href="{html.escape(action_url)}" target="_blank"
-                       style="font-size: 15px;
-                              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                       style="font-size: 15px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                               color: #ffffff; text-decoration: none; padding: 14px 24px;
-                              border-radius: 6px; display: inline-block;
-                              font-weight: bold;">
+                              border-radius: 6px; display: inline-block; font-weight: bold;">
                         {html.escape(action_text)}
                     </a>
                 </td>
             </tr>
         </table>
         <p style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                  font-size: 12px; color: #6b7280; margin-top: 10px;
-                  word-break: break-all;">
+                  font-size: 12px; color: #6b7280; margin-top: 10px; word-break: break-all;">
             {html.escape(action_url)}
         </p>
         """
@@ -64,7 +59,7 @@ def render_html_email(
             .text-main {{ color: #f9fafb !important; }}
             .text-muted {{ color: #9ca3af !important; }}
             .divider {{ border-color: #374151 !important; }}
-            .logo-ink {{ color: #f9fafb !important; }}
+            .logo-ink {{ color: #C6F24E !important; }}
             .logo-brand {{ color: #C6F24E !important; }}
             .footer-bg {{ background-color: #101314 !important; }}
         }}
@@ -93,7 +88,11 @@ def render_html_email(
                                 <span class="logo-ink"
                                       style="color: #101314;
                                              font-family: 'Courier New', Courier, monospace;
-                                             font-size: 22px;">&gt;_</span>
+                                             font-size: 22px;">&gt;</span><span
+                                      class="logo-brand"
+                                      style="color: #5C7A0A;
+                                             font-family: 'Courier New', Courier, monospace;
+                                             font-size: 22px;">_</span>
                                 <span class="logo-ink" style="color: #101314;">DI </span>
                                 <span class="logo-brand" style="color: #5C7A0A;">Xpertia</span>
                             </div>

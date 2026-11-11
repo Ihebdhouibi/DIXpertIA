@@ -152,16 +152,22 @@ def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identitie
     monkeypatch.setattr(settings, "SMTP_USER", "user")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
     def mock_send(to_email, subject, body, html_text=None, **kwargs):
-            sent.append((to_email, body, html_text))
-            return True
+        sent.append((to_email, body, html_text))
+        return True
 
     monkeypatch.setattr(reminders, "send_email", mock_send)
     new_draft()
     run(draft_since() + timedelta(days=3))
-    assert [to for to, _ in sent] == [identities["admin"]["email"]]
-    # In the recipient's language (#135): the test accounts are French, the default.
-    assert "est un brouillon depuis" in sent[0][1]
 
+    assert len(sent) == 1
+    to_email, body_text, html_body = sent[0]
+    assert html_body is not None
+    assert '<html lang="fr">' in html_body
+    assert "&lt;script&gt;" not in html_body
+    assert "&amp;lt;" not in html_body
+    assert [to for to, _, _ in sent] == [identities["admin"]["email"]]
+    # In the recipient's language (#135): the test accounts are French, the default.
+    assert "est un brouillon depuis" in body_text
 
 def test_without_smtp_reminders_are_in_app_only(run, new_draft, monkeypatch):
     from app.core.config import settings

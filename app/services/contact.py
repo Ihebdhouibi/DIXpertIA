@@ -2,7 +2,8 @@
 
 The order matters: limits and storage first, in one database call, then the
 commit, then the e-mail. An enquiry is never lost, because it is a row before
-anything can fail on the mail side.
+anything can fail on the mail side, and nothing is e-mailed for an enquiry
+that was not stored.
 """
 
 import hashlib
@@ -52,9 +53,7 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
     """
     if not settings.CONTACT_INBOX or not email_configured():
         return False
-    # 1. Prepare the translated topic label
     topic_label = t(f"contact.topic.{topic}", DEFAULT_LOCALE)
-    # 2. Generate the plain text version (fallback)
     subject = t("email.contact.subject", DEFAULT_LOCALE, name=name, topic=topic_label)
     body = t("email.contact.body", DEFAULT_LOCALE, id=request_id, name=name, email=email,
              topic=topic_label, message=message, link=settings.FRONTEND_URL)
@@ -67,11 +66,7 @@ def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: 
         message_html=html_msg,
         footer_text=t("email.contact.html_footer", DEFAULT_LOCALE)
     )
-
-    # 4. Send both parts (plain text + HTML)
     sent = send_email(settings.CONTACT_INBOX, subject, body, html_text=html_body, reply_to=email)
-
-
     if not sent:
         log.warning("Contact request %s stored but not e-mailed", request_id)
     return sent
