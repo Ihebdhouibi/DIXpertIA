@@ -64,7 +64,7 @@ def test_every_admin_is_notified_and_nobody_else(client, identities, database):
 
 def test_it_is_emailed_to_our_inbox_only_with_the_sender_in_reply_to(client, inbox):
     send(client)
-    [(to, subject, body, reply_to, html_text)] = inbox
+    [(to, subject, body, html_text, reply_to)] = inbox
 
     assert to == "inbox@dixpertia.test"
     assert reply_to == "amira@example.tn"
