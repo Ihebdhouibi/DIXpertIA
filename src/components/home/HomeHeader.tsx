@@ -30,12 +30,9 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
-  // Pass menuButtonRef as the 4th argument (returnFocusTo).
-  // Using headerRef means clicks on the X button or anywhere in the header
-  // are considered "inside" and won't trigger the dismiss handler.
-  useDismiss(headerRef, isMenuOpen, () => {
-    setIsMenuOpen(false);
-  }, menuButtonRef);
+  // The whole header counts as inside, the menu button included: otherwise a
+  // tap on X closes the menu on pointerdown and its click reopens it (#240).
+  useDismiss(headerRef, isMenuOpen, () => setIsMenuOpen(false), menuButtonRef);
 
   const handleNavigate = (target: HomeTarget) => {
     onNavigate(target);
@@ -45,12 +42,9 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
   return (
     <header ref={headerRef} className="sticky top-0 z-30 border-b border-home-fg/10 bg-home-header backdrop-blur-md">
       <div className="mx-auto flex h-[68px] max-w-[1312px] items-center justify-between gap-3 px-[clamp(20px,5vw,48px)] sm:gap-6">
-
         <button type="button" onClick={() => handleNavigate('home')} aria-label={t('home.nav.homeLink')} className="cursor-pointer">
           <HomeWordmark />
         </button>
-
-        {/* Desktop Navigation */}
         <nav aria-label={t('home.nav.primary')} className="hidden gap-8 text-sm font-medium min-[860px]:flex">
           {NAV.map(({ target, label }) => {
             const active = (target === 'home' && current === 'home') || (target === 'contact' && current === 'contact');
@@ -67,23 +61,20 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
             );
           })}
         </nav>
-
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="hidden min-[860px]:block">
             <LanguageToggle tone="home" />
           </div>
-
           <button
             type="button"
             onClick={onDashboardClick}
+            // One name at every width; the short label on phones is part of it.
             aria-label={t('home.nav.dashboard')}
             className="inline-flex h-10 cursor-pointer items-center whitespace-nowrap rounded-lg bg-home-strong px-3 text-sm font-semibold text-home-on-strong transition-colors duration-200 hover:bg-home-strong-hover sm:px-[18px]"
           >
             <span className="sm:hidden">{t('home.nav.dashboardShort')}</span>
             <span className="hidden sm:inline">{t('home.nav.dashboard')}</span>
           </button>
-
-          {/* Mobile Menu Button */}
           <button
             ref={menuButtonRef}
             type="button"
@@ -97,8 +88,6 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
           </button>
         </div>
       </div>
-
-      {/* Mobile Menu Dropdown */}
       {isMenuOpen && (
         <div
           id="mobile-menu"
