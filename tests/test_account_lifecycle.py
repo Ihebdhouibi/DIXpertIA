@@ -193,6 +193,49 @@ def test_an_inactive_account_gets_no_reset_link(client, database, mailbox):
     make_account(database, f"inactive@{DOMAIN}", active=False)
     assert client.post("/api/forgot-password", json={"email": f"inactive@{DOMAIN}"}).status_code == 200
     assert mailbox == []
+def test_reset_email_escapes_html_in_first_name(client, database, mailbox):
+    """Ensures the reset e-mail HTML escapes malicious first names (#211)."""
+    email = f"xss-reset@{DOMAIN}"
+    malicious_name = '"><img src=x onerror=alert(1)>'
+
+    # Extend make_account to allow a custom first name if needed, or update it after
+    from account_flow import make_account
+    make_account(database, email)
+
+    # Update the first name directly to inject the malicious payload
+    with database.connect() as c:
+        c.execute(text('UPDATE users SET "firstName" = :fn WHERE email = :e'),
+                  {"fn": malicious_name, "e": email})
+
+    response = client.post("/api/forgot-password", json={"email": email})
+    assert response.status_code == 200
+
+    mails = [m for m in mailbox if m["to"] == email]
+    html_body = mails[0].get("html")
+
+    assert html_body is not None
+    assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_body
+    assert malicious_name not in html_body
+    assert "&amp;quot;" not in html_body
+
+
+def test_activation_email_escapes_html_in_first_name(client, admin, database, mailbox):
+    """Ensures the activation e-mail HTML escapes malicious first names (#211)."""
+    email = f"xss-activate@{DOMAIN}"
+    malicious_name = '"><img src=x onerror=alert(1)>'
+
+    created = client.post("/api/users", headers=admin, json={
+        "email": email, "firstName": malicious_name, "lastName": "Hacker", "role": "employee"
+    })
+    assert created.status_code == 201
+
+    mails = [m for m in mailbox if m["to"] == email]
+    html_body = mails[0].get("html")
+
+    assert html_body is not None
+    assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_body
+    assert malicious_name not in html_body
+    assert "&amp;quot;" not in html_body
 
 
 # --- New accounts: no password returned, activation first ----------------------
