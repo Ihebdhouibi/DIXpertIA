@@ -4,7 +4,6 @@ Moved out of main.py for #134 so the reminder job can use it too, and reading
 the settings module rather than os.getenv. Delivery is optional: with the SMTP
 settings empty, send_email() logs a warning and returns False instead of
 failing whatever asked for it.
-
 """
 
 import logging

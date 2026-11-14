@@ -45,6 +45,7 @@ from app.models.user import User
 from app.services.email import email_configured, send_email
 from app.services.email_template import render_html_email, t_html
 from app.services.notifications import notify, users_with_role
+
 log = logging.getLogger("dixpertia")
 
 JOB_ROLE = "reminders"
@@ -172,8 +173,6 @@ def _email(db: Session, reminders: list[Reminder]) -> int:
             log.warning("Reminder %s has no translated text for locale %s", r.kind, locale)
             continue
         plain_body = t("email.reminder.body", locale, message=message_text, url=settings.FRONTEND_URL)
-
-
         html_msg = t_html("email.reminder.html_message", locale, message=message_text)
         html_body = render_html_email(
             lang=locale,

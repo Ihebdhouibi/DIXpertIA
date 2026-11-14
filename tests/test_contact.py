@@ -66,7 +66,7 @@ def test_it_is_emailed_to_our_inbox_only_with_the_sender_in_reply_to(client, inb
     send(client)
     [(to, subject, body, html_text, reply_to)] = inbox
 
-    assert to == "inbox@dixpertia.test"
+    assert to == "inbox@dixpertia.test", "never to the address the visitor typed"
     assert reply_to == "amira@example.tn"
     assert "Amira Ben Salah" in subject and GOOD["message"] in body
 
@@ -74,6 +74,19 @@ def test_it_is_emailed_to_our_inbox_only_with_the_sender_in_reply_to(client, inb
     assert '<html lang="fr">' in html_text
     assert "Amira Ben Salah" in html_text
     assert "&amp;lt;" not in html_text
+
+
+def test_contact_email_escapes_html(client, inbox):
+    PAYLOAD = "O'Brien <script>alert(1)</script>"
+    send(client, name=PAYLOAD, message=PAYLOAD + "\nsecond line")
+
+    [(to, subject, body, html_text, reply_to)] = inbox
+    assert html_text is not None
+    assert "&lt;script&gt;" in html_text
+    assert "<script>" not in html_text
+    assert "&amp;lt;" not in html_text
+    assert "<br>second line" in html_text
+
 
 def test_without_an_inbox_it_is_still_kept_and_nothing_is_emailed(client, database, monkeypatch):
     from app.core.config import settings

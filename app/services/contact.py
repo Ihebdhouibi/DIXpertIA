@@ -45,8 +45,8 @@ def submit(db: Session, *, name: str, email: str, topic: str, message: str, ip: 
 
 
 def email_inbox(*, request_id: int, name: str, email: str, topic: str, message: str) -> bool:
-    """
-    E-mail a stored enquiry to CONTACT_INBOX, if it and SMTP are configured.
+    """E-mail a stored enquiry to CONTACT_INBOX, if it and SMTP are configured.
+
     Only ever to our own inbox: the sender's address goes in Reply-To, so a
     reply reaches them, and nothing is sent to it automatically. Otherwise the
     form would mail whatever address a spammer typed.

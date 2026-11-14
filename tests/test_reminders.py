@@ -143,31 +143,41 @@ def test_the_reminder_is_shown_in_the_app(run, new_draft, client, identities):
     assert "has been a draft for 3 days" in n["message"] and "Acme Corporation" in n["message"]
 
 
-def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identities, monkeypatch):
+def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identities, database, monkeypatch):
     from app.core.config import settings
     from app.services import reminders
+    from sqlalchemy import text
 
     sent = []
     monkeypatch.setattr(settings, "SMTP_HOST", "smtp.test")
     monkeypatch.setattr(settings, "SMTP_USER", "user")
     monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
+
     def mock_send(to_email, subject, body, html_text=None, **kwargs):
         sent.append((to_email, body, html_text))
         return True
 
     monkeypatch.setattr(reminders, "send_email", mock_send)
+
+    PAYLOAD = "O'Brien <script>alert(1)</script>"
+    with database.connect() as c:
+        c.execute(text("UPDATE clients SET nom = :n"), {"n": PAYLOAD})
+
     new_draft()
     run(draft_since() + timedelta(days=3))
 
     assert len(sent) == 1
-    to_email, body_text, html_body = sent[0]
+    _, body_text, html_body = sent[0]
     assert html_body is not None
     assert '<html lang="fr">' in html_body
-    assert "&lt;script&gt;" not in html_body
+
+    assert "&lt;script&gt;" in html_body
+    assert "<script>" not in html_body
     assert "&amp;lt;" not in html_body
+    assert "O&#x27;Brien" in html_body
     assert [to for to, _, _ in sent] == [identities["admin"]["email"]]
-    # In the recipient's language (#135): the test accounts are French, the default.
     assert "est un brouillon depuis" in body_text
+
 
 def test_without_smtp_reminders_are_in_app_only(run, new_draft, monkeypatch):
     from app.core.config import settings
