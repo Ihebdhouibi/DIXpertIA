@@ -401,12 +401,8 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 def _send_activation(user: User, token: str) -> bool:
     """In the new account's language (#135), which the admin chose at creation."""
     link = accounts.link(accounts.ACTIVATION, token)
-
-    # 1. Plain text version
     plain_body = t("email.activation.body", user.locale, name=user.firstName, link=link)
-
     html_msg = t_html("email.activation.html_message", user.locale, name=user.firstName)
-
     html_body = render_html_email(
         lang=user.locale,
         title=t("email.activation.html_title", user.locale),
@@ -415,16 +411,12 @@ def _send_activation(user: User, token: str) -> bool:
         action_text=t("email.activation.html_action", user.locale),
         footer_text=t("email.activation.html_footer", user.locale)
     )
-
-    # 3. Send both parts
     return send_email(
         to_email=user.email,
         subject=t("email.activation.subject", user.locale),
         body=plain_body,
         html_text=html_body
     )
-
-
 # require_admin as a dependency rather than a check inside the body: FastAPI
 # validates the request model before the handler runs, so an in-body role check
 # let a non-admin get a 422 describing the schema before being refused.
@@ -578,6 +570,8 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     # The token itself never goes in the trail.
     record_event(db, "user.password_reset_requested", "user", user.id)
     db.commit()
+    # In the account's language (#135), not the language of the page the
+    # request came from: the account owner reads it.
     link = accounts.link(accounts.RESET, token)
     plain_body = t("email.reset.body", user.locale, name=user.firstName, link=link)
     html_msg = t_html("email.reset.html_message", user.locale, name=user.firstName)
@@ -649,7 +643,7 @@ class PasswordChange(BaseModel):
 
 class SessionOut(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer" # noqa: S105
 
 
 @app.post('/api/me/password', response_model=SessionOut)

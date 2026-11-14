@@ -422,7 +422,7 @@ class LoginOut(BaseModel):
     """
     access_token: Optional[str] = None
     # The OAuth 2 token type, always "bearer".
-    token_type: str = "bearer"
+    token_type: str = "bearer" # noqa: S105
     user: Optional[UserOut] = None
     mfaRequired: bool = False
     challengeToken: Optional[str] = None
