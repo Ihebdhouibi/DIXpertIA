@@ -417,6 +417,8 @@ def _send_activation(user: User, token: str) -> bool:
         body=plain_body,
         html_text=html_body
     )
+
+
 # require_admin as a dependency rather than a check inside the body: FastAPI
 # validates the request model before the handler runs, so an in-body role check
 # let a non-admin get a 422 describing the schema before being refused.
@@ -643,7 +645,7 @@ class PasswordChange(BaseModel):
 
 class SessionOut(BaseModel):
     access_token: str
-    token_type: str = "bearer" # noqa: S105
+    token_type: str = "bearer"
 
 
 @app.post('/api/me/password', response_model=SessionOut)

@@ -153,9 +153,9 @@ def test_the_activation_email_is_in_the_language_chosen_for_the_account(client, 
     client.post("/api/users", headers=admin, json={
         "email": f"en@{DOMAIN}", "firstName": "John", "lastName": "D", "role": "employee", "locale": "en"})
     by_to = {m["to"]: m for m in mailbox}
-    assert by_to[f"fr@{DOMAIN}"]["subject"] == "Activez votre compte DI Xpertia"
+    assert by_to[f"fr@{DOMAIN}"]["subject"] == "Activez votre compte DIXpertIA"
     assert by_to[f"fr@{DOMAIN}"]["body"].startswith("Bonjour Amel")
-    assert by_to[f"en@{DOMAIN}"]["subject"] == "Activate your DI Xpertia account"
+    assert by_to[f"en@{DOMAIN}"]["subject"] == "Activate your DIXpertIA account"
     assert link_token(mailbox, f"fr@{DOMAIN}"), "the link is still there"
 
 

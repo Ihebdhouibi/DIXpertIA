@@ -212,12 +212,11 @@ def client(app):
 
 @pytest.fixture
 def mailbox(app, monkeypatch):
-    """The e-mails the API sends, captured instead of sent: dicts of to, subject, body.
+    """The e-mails the API sends, captured instead of sent: dicts of to, subject, body and html.
 
     Activation and reset links travel only by e-mail, and only their hash is
     stored (#62), so a test that follows a link has to read it from here.
     """
-
     import main
 
     sent = []

@@ -88,13 +88,13 @@ class RecoveryCodesOut(BaseModel):
     recoveryCodes: list[str]
     # A fresh session: enabling signs every older one out, this one included.
     access_token: str | None = None
-    token_type: str = "bearer" # noqa: S105
+    token_type: str = "bearer"
     user: UserOut | None = None
 
 
 class SessionOut(BaseModel):
     access_token: str
-    token_type: str = "bearer" # noqa: S105
+    token_type: str = "bearer"
 
 
 # --- Helpers --------------------------------------------------------------------------

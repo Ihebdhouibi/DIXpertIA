@@ -28,7 +28,7 @@ from fastapi import HTTPException
 LOCALES = ("fr", "en")
 DEFAULT_LOCALE = "fr"
 
-_locale: ContextVar[str] = ContextVar("DI Xpertia_locale", default=DEFAULT_LOCALE)
+_locale: ContextVar[str] = ContextVar("dixpertia_locale", default=DEFAULT_LOCALE)
 
 
 def normalise(value: str | None) -> str:
@@ -430,24 +430,24 @@ CATALOG: dict[str, dict[str, str]] = {
     "party.unknown": {"en": "an unknown counterparty", "fr": "un tiers inconnu"},
 
     # E-mails
-    "email.activation.subject": {"en": "Activate your DI Xpertia account", "fr": "Activez votre compte DI Xpertia"},
+    "email.activation.subject": {"en": "Activate your DIXpertIA account", "fr": "Activez votre compte DIXpertIA"},
     "email.activation.body": {
-        "en": "Hello {name},\n\nAn account has been created for you on DI Xpertia.\n\n"
+        "en": "Hello {name},\n\nAn account has been created for you on DIXpertIA.\n\n"
               "Choose your password with the link below (valid for 72 hours):\n\n{link}\n\n"
-              "If you were not expecting this, you can ignore this e-mail.\n\nRegards,\nDI Xpertia Team\n",
-        "fr": "Bonjour {name},\n\nUn compte a été créé pour vous sur DI Xpertia.\n\n"
+              "If you were not expecting this, you can ignore this e-mail.\n\nRegards,\nDIXpertIA Team\n",
+        "fr": "Bonjour {name},\n\nUn compte a été créé pour vous sur DIXpertIA.\n\n"
               "Choisissez votre mot de passe avec le lien ci-dessous (valable 72 heures) :\n\n{link}\n\n"
-              "Si vous n'attendiez pas ce message, vous pouvez l'ignorer.\n\nCordialement,\nL'équipe DI Xpertia\n"},
+              "Si vous n'attendiez pas ce message, vous pouvez l'ignorer.\n\nCordialement,\nL'équipe DIXpertIA\n"},
     "email.reset.subject": {"en": "Password reset request", "fr": "Réinitialisation de votre mot de passe"},
     "email.reset.body": {
-        "en": "Hello {name},\n\nYou requested a password reset for your DI Xpertia account.\n\n"
+        "en": "Hello {name},\n\nYou requested a password reset for your DIXpertIA account.\n\n"
               "Click the link below to set a new password (valid for 1 hour, once):\n\n{link}\n\n"
-              "If you did not request this, please ignore this email.\n\nRegards,\nDI Xpertia Team\n",
-        "fr": "Bonjour {name},\n\nVous avez demandé la réinitialisation du mot de passe de votre compte DI Xpertia.\n\n"
+              "If you did not request this, please ignore this email.\n\nRegards,\nDIXpertIA Team\n",
+        "fr": "Bonjour {name},\n\nVous avez demandé la réinitialisation du mot de passe de votre compte DIXpertIA.\n\n"
               "Cliquez sur le lien ci-dessous pour choisir un nouveau mot de passe "
               "(valable 1 heure, une seule fois) :\n\n{link}\n\n"
               "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\n"
-              "Cordialement,\nL'équipe DI Xpertia\n"},
+              "Cordialement,\nL'équipe DIXpertIA\n"},
     "email.reminder.subject": {"en": "DI Xpertia - invoice reminder", "fr": "DI Xpertia - rappel de facture"},
     "email.reminder.body": {
         "en": "{message}\n\nOpen DI Xpertia: {url}\n",

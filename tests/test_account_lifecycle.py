@@ -194,6 +194,8 @@ def test_an_inactive_account_gets_no_reset_link(client, database, mailbox):
     make_account(database, f"inactive@{DOMAIN}", active=False)
     assert client.post("/api/forgot-password", json={"email": f"inactive@{DOMAIN}"}).status_code == 200
     assert mailbox == []
+
+
 def test_reset_email_escapes_html_in_first_name(client, database, mailbox):
     """Ensures the reset e-mail HTML escapes malicious first names (#211)."""
     email = f"xss-reset@{DOMAIN}"
@@ -210,6 +212,7 @@ def test_reset_email_escapes_html_in_first_name(client, database, mailbox):
     assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_body
     assert malicious_name not in html_body
     assert "&amp;quot;" not in html_body
+
 
 def test_activation_email_escapes_html_in_first_name(client, admin, database, mailbox):
     """Ensures the activation e-mail HTML escapes malicious first names (#211)."""

@@ -27,7 +27,7 @@ class UserOut(UserBase):
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer" # noqa: S105
+    token_type: str = "bearer"
 
 
 class EmployeeOut(BaseModel):

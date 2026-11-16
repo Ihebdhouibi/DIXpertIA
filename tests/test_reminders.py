@@ -161,7 +161,7 @@ def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identitie
 
     PAYLOAD = "O'Brien <script>alert(1)</script>"
     with database.connect() as c:
-        c.execute(text("UPDATE clients SET nom = :n"), {"n": PAYLOAD})
+        c.execute(text("UPDATE clients SET nom = :n WHERE nom = 'Acme Corporation'"), {"n": PAYLOAD})
 
     new_draft()
     run(draft_since() + timedelta(days=3))
@@ -176,6 +176,7 @@ def test_reminders_are_emailed_when_smtp_is_configured(run, new_draft, identitie
     assert "&amp;lt;" not in html_body
     assert "O&#x27;Brien" in html_body
     assert [to for to, _, _ in sent] == [identities["admin"]["email"]]
+    # In the recipient's language (#135): the test accounts are French, the default.
     assert "est un brouillon depuis" in body_text
 
 

@@ -27,7 +27,6 @@ def make_account(database, email: str, role: str = "employee", *, active=True, v
     # the database fixture has set DATABASE_URL, and modules are collected first.
     from app.core.security import hash_password
 
-    # Use the provided first name, or default to the part before the @ in the email
     fn = first_name if first_name is not None else email.split("@")[0]
 
     with database.connect() as c:
