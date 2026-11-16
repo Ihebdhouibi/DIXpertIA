@@ -588,6 +588,39 @@ export const demos = {
   preview: async (path: string) => (await send(path)).blob(),
 };
 
+/** A published demo as the website shows it (#234): both languages, so FR/EN needs no reload. */
+export interface PublicDemo {
+  id: number;
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  provider: DemoProvider;
+  service: DemoService | null;
+  /** The player, loaded only when the visitor presses Play. */
+  embed_url: string;
+  /** On our own domain, or null: the card then shows its branded fallback. */
+  preview_image: string | null;
+}
+
+let publishedDemos: Promise<PublicDemo[]> | null = null;
+
+/**
+ * The website's published demos, fetched once per visit (#234): going back to
+ * the homepage does not ask again. The public routes share a rate limit with
+ * sign-in and the contact form (#246), so the page spends as little of it as
+ * it can. A failure is forgotten, so a later visit of the homepage retries.
+ */
+export const publicDemos = {
+  list: (): Promise<PublicDemo[]> => {
+    publishedDemos ??= request<PublicDemo[]>('/api/public/demos').catch((err) => {
+      publishedDemos = null;
+      throw err;
+    });
+    return publishedDemos;
+  },
+};
+
 export const notifications = {
   /** The caller's own notifications, unread first (#116). */
   list: async (limit = 50): Promise<NotificationPage> => {

@@ -18,7 +18,11 @@ const finePointer = () => window.matchMedia('(hover: hover) and (pointer: fine)'
  * reduced motion; the button itself is an ordinary button, always clickable
  * and focusable.
  */
-export default function AboutCta({ onStart }: { onStart: () => void }) {
+export default function AboutCta({ onStart, number }: {
+  onStart: () => void;
+  /** The section's place on the page: "03", or "04" when the Demo section is shown (#234). */
+  number: string;
+}) {
   const t = useT();
   const reduced = useReducedMotion();
   const button = useRef<HTMLButtonElement>(null);
@@ -44,7 +48,7 @@ export default function AboutCta({ onStart }: { onStart: () => void }) {
       <div className="relative mx-auto grid max-w-[1312px] grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] items-center gap-10 px-[clamp(20px,5vw,48px)] py-[clamp(80px,10vw,136px)]">
         <div className="flex flex-col gap-5">
           <Reveal as="p" className="m-0 font-mono text-caption leading-none font-semibold tracking-[0.18em] text-lime uppercase">
-            {t('home.cta.eyebrow')}
+            {t('home.cta.eyebrow', { n: number })}
           </Reveal>
           <Reveal as="h2" index={1} id="cta-title" className="m-0 max-w-[10.37em] text-home-closing font-bold text-balance">
             {t('home.cta.title')}
