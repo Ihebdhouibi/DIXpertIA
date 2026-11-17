@@ -71,6 +71,11 @@ export default function App() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [showHomepage, setShowHomepage] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  // Read by followSession, which outlives the render it was made in.
+  const showLoginRef = useRef(false);
+  useEffect(() => {
+    showLoginRef.current = showLogin;
+  }, [showLogin]);
   const [showForgotPassword, setShowForgotPassword] = useState(false);   // NEW
   const [resetToken, setResetToken] = useState<string | null>(null);
   // A reset link carries ?token=, an activation link ?activate= (#62). Both
@@ -175,13 +180,97 @@ export default function App() {
     return () => { cancelled = true; };
   }, [refresh]);
 
-  // Send the user back to the public site when the API rejects the token.
+  // --- One session per browser, followed by every tab (#238) ---
+  //
+  // The token is kept in localStorage, which every tab shares; the user shown
+  // is this tab's own state. When another tab signs out, or signs in as
+  // someone else, this tab follows: back to sign-in, or reloaded as the new
+  // user. Never one user's screen acting with another user's token.
+  const currentUserRef = useRef<AppUser | null>(null);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  // Business data is dropped with the session rather than left in memory for
+  // whoever signs in next on this browser.
+  const dropSessionData = useCallback(() => {
+    setCurrentUser(null);
+    setAccountLocale(null);
+    setPayslips([]);
+    setLeaveRequests([]);
+    setEmployees([]);
+    setSummary(null);
+    setUsers([]);
+    setClients([]);
+    setNotifications([]);
+    setNotificationCount(0);
+    setLoadError(null);
+  }, []);
+
+  // The session ended without this tab's sign-out button: expired, or signed
+  // out in another tab. Back to the sign-in form, saying why.
+  const endSession = useCallback((reason: 'common.sessionExpired' | 'common.signedOutElsewhere') => {
+    dropSessionData();
+    setActiveTab('dashboard');
+    setShowHomepage(false);
+    setShowLogin(true);
+    toast(translateNow(reason), 'info');
+  }, [dropSessionData, toast]);
+
+  const followSession = useCallback(async () => {
+    const stored = api.storedToken();
+    if (stored === undefined) return; // storage blocked: this tab's session is its own
+    const shown = currentUserRef.current;
+    if (stored === null) {
+      api.setToken(null);
+      if (shown) endSession('common.signedOutElsewhere');
+      return;
+    }
+    if (shown && stored === api.getToken()) return;
+    api.adoptStoredToken();
+    try {
+      const me = (await api.auth.me()) as AppUser;
+      const before = currentUserRef.current;
+      // The same account with a new token (a password change, a sign-in
+      // again): nothing changes on screen.
+      if (before && before.id === me.id) return;
+      const wasSigningIn = showLoginRef.current;
+      dropSessionData();
+      setAccountLocale(me.locale);
+      setCurrentUser(me);
+      setActiveTab('dashboard');
+      if (before || wasSigningIn) {
+        setShowHomepage(false);
+        setShowLogin(false);
+      }
+      // Say why the screen changed by itself. A tab on the public site just
+      // gains the session: its "Go to Dashboard" opens the app.
+      const name = `${me.firstName} ${me.lastName}`.trim();
+      if (before) toast(translateNow('common.switchedAccount', { name }), 'info');
+      else if (wasSigningIn) toast(translateNow('common.signedInElsewhere', { name }), 'info');
+      await refresh(me);
+    } catch {
+      // The new token was refused: the 401 handler has already ended the session.
+    }
+  }, [dropSessionData, endSession, refresh, toast]);
+
+  // Another tab wrote or removed the token: the browser tells every other tab.
+  // Requests check it too (api.ts), in case this event was missed.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === api.TOKEN_KEY || event.key === null) void followSession();
+    };
+    window.addEventListener('storage', onStorage);
+    api.setSessionChangedHandler(() => void followSession());
+    return () => window.removeEventListener('storage', onStorage);
+  }, [followSession]);
+
+  // The API refused this tab's token: the session expired or was revoked.
   useEffect(() => {
     api.setUnauthorizedHandler(() => {
-      setCurrentUser(null);
-      setShowHomepage(true);
+      if (currentUserRef.current) endSession('common.sessionExpired');
     });
-  }, []);
+  }, [endSession]);
 
   // --- Language (#135) ---
   // On sign-in, a language chosen in this browser wins and is saved on the
@@ -262,19 +351,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setCurrentUser(null);
     api.setToken(null);
-    setAccountLocale(null);
-    // Business data is dropped with the session rather than left in memory for
-    // whoever signs in next on this browser.
-    setPayslips([]);
-    setLeaveRequests([]);
-    setEmployees([]);
-    setSummary(null);
-    setUsers([]);
-    setClients([]);
-    setNotifications([]);
-    setNotificationCount(0);
+    dropSessionData();
     setShowHomepage(true);
     setShowLogin(false);
   };

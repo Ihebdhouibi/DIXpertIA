@@ -376,6 +376,13 @@ jobs:
         run: |
           python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures --locale fr             --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
 
+      - name: A tab follows the session changed in another tab (#238)
+        if: success() || failure()
+        run: |
+          python scripts/check_session_tabs.py --browser chromium --screenshots ui-failures \
+            --admin "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --accountant "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"
+
       - name: Keep the screenshots and logs of a failure
         if: failure()
         uses: actions/upload-artifact@v4
