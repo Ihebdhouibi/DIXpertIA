@@ -5,6 +5,8 @@ the admin in. GET /api/public/demos is public: it is listed in
 main.PUBLIC_PATHS, and it reads only through published_demos(), a SECURITY
 DEFINER function returning the public fields of published demos - never the
 table, so a hidden demo or an internal column cannot leak.
+Both public routes count in a rate-limit bucket of their own (#246,
+throttle.limit_demo_requests), apart from sign-in and the contact form.
 
 Preview images are served from our own domain (decided with the design,
 #231): the server fetches each one when the demo is saved
@@ -107,7 +109,7 @@ def _get(db: Session, demo_id: int) -> DemoVideo:
 
 # --- Public ------------------------------------------------------------------------
 
-@public.get("/public/demos", response_model=list[PublicDemoOut], dependencies=[Depends(throttle.limit_public_requests)])
+@public.get("/public/demos", response_model=list[PublicDemoOut], dependencies=[Depends(throttle.limit_demo_requests)])
 def published_demos(response: Response, db: Session = Depends(get_db)):
     """The published demos, in display order, for the website's Demo section."""
     rows = db.execute(text("SELECT * FROM published_demos()")).mappings().all()
@@ -126,7 +128,7 @@ def published_demos(response: Response, db: Session = Depends(get_db)):
     ]
 
 
-@public.get("/public/demos/{demo_id}/preview", dependencies=[Depends(throttle.limit_public_requests)])
+@public.get("/public/demos/{demo_id}/preview", dependencies=[Depends(throttle.limit_demo_requests)])
 def published_preview(demo_id: int, db: Session = Depends(get_db)):
     """A published demo's preview image, from our own domain."""
     row = db.execute(text("SELECT content, content_type FROM published_demo_preview(:id)"), {"id": demo_id}).first()

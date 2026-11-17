@@ -127,8 +127,14 @@ class Settings:
     # Reset e-mails to one account per hour.
     RESET_MAILS_PER_HOUR: int = _positive_int("RESET_MAILS_PER_HOUR", 3)
     # Requests to the public routes (sign-in, password reset, activation,
-    # contact) from one address per minute.
+    # contact, two-factor) from one address per minute.
     PUBLIC_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_REQUESTS_PER_MINUTE", 20)
+    # Requests to the website's demo videos (list and preview images) from one
+    # address per minute, counted apart (#246): browsing the demos never uses
+    # up the limit above, so it cannot block sign-in or the contact form for
+    # an office behind one address. A first visit costs at most 1 + one per
+    # demo shown; after that the browser's cache answers.
+    PUBLIC_DEMO_REQUESTS_PER_MINUTE: int = _positive_int("PUBLIC_DEMO_REQUESTS_PER_MINUTE", 120)
 
     # Two-factor authentication (#44). The key encrypts each account's TOTP
     # secret before it reaches the database, and keys the recovery codes'
