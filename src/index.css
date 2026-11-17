@@ -146,6 +146,11 @@
   --color-home-panel: var(--color-ink);
   --color-home-panel-border: transparent;
   --color-home-panel-shadow: rgba(16, 19, 20, 0.5);
+  /* The demo player (#234): dark in both themes, so it is not redefined in
+     .dark (design/demo-videos/tokens.css, "Constants"). */
+  --color-home-player-scrim: rgba(10, 12, 13, 0.84);
+  --color-home-player: #1A1F21;
+  --color-home-player-line: rgba(243, 242, 238, 0.08);
   --color-home-cta: var(--color-ink);
   --color-home-cta-grid-line: rgba(243, 242, 238, 0.045);
   /* The header's "Go to Dashboard". */

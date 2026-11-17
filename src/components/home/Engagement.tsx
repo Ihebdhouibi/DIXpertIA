@@ -44,7 +44,8 @@ const tabId = (i: number) => `engage-tab-${i}`;
  * the phase bars slide to the new split; both stay still under reduced
  * motion.
  */
-export default function Engagement() {
+/** `number` is the section's place on the page: "02", or "03" when the Demo section is shown (#234). */
+export default function Engagement({ number }: { number: string }) {
   const t = useT();
   const [active, setActive] = useState(0);
   const reduced = useReducedMotion();
@@ -85,7 +86,7 @@ export default function Engagement() {
     <section id="engage" aria-labelledby="engage-title" className="border-y border-home-fg/10 bg-home-surface">
       <div className="mx-auto flex max-w-[1312px] flex-col gap-[clamp(32px,4vw,48px)] px-[clamp(20px,5vw,48px)] py-[clamp(72px,9vw,120px)]">
         <SectionHeading
-          eyebrow={t('home.engage.eyebrow')}
+          eyebrow={t('home.engage.eyebrow', { n: number })}
           title={t('home.engage.title')}
           id="engage-title"
           note={t('home.engage.note')}

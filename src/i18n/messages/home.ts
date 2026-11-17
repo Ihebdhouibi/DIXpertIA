@@ -12,6 +12,7 @@ export default defineMessages('home', {
   'home.nav.homeLink': { fr: 'DI Xpertia, accueil', en: 'DI Xpertia, home' },
   'home.nav.home': { fr: 'Accueil', en: 'Home' },
   'home.nav.services': { fr: 'Services', en: 'Services' },
+  'home.nav.demo': { fr: 'Démo', en: 'Demo' },
   'home.nav.about': { fr: 'À propos', en: 'About' },
   'home.nav.contact': { fr: 'Contact', en: 'Contact' },
   // The short label is part of the full one, which is the button's name at
@@ -94,8 +95,24 @@ export default defineMessages('home', {
     en: 'Bespoke applications built around your operational workflows — not the other way round.',
   },
 
+  // Demo videos (#234, design/demo-videos/README.md, part 2). Shown only when
+  // the admin has published at least one demo.
+  'home.demo.eyebrow': { fr: '02 — Démo', en: '02 — Demo' },
+  'home.demo.title': { fr: 'Voir en action', en: 'See it in action' },
+  'home.demo.note': {
+    fr: 'De courtes démonstrations de ce que nous concevons et exploitons. Chaque vidéo se charge depuis son hébergeur seulement quand vous lancez la lecture.',
+    en: 'Short walkthroughs of what we build and run. Each video loads from its host only when you press play.',
+  },
+  'home.demo.play': { fr: 'Lire : {title}', en: 'Play: {title}' },
+  'home.demo.close': { fr: 'Fermer la vidéo', en: 'Close video' },
+  'home.demo.player': { fr: 'Vidéo : {title}', en: 'Video: {title}' },
+  'home.demo.via': { fr: 'Lecture via {provider}', en: 'Played via {provider}' },
+  'home.demo.esc': { fr: 'Échap pour fermer', en: 'Esc to close' },
+  'home.demo.fallback': { fr: 'DI XPERTIA · DÉMO', en: 'DI XPERTIA · DEMO' },
+
   // Engagement models
-  'home.engage.eyebrow': { fr: '02 — Collaboration', en: '02 — Engagement' },
+  // Numbered by the page: 02, or 03 when the Demo section is shown (#234).
+  'home.engage.eyebrow': { fr: '{n} — Collaboration', en: '{n} — Engagement' },
   'home.engage.title': { fr: 'Nos modes de collaboration', en: 'Ways to work with us' },
   'home.engage.note': {
     fr: 'Choisissez votre niveau d’implication. Nous adaptons le modèle, jamais l’exigence.',
@@ -222,7 +239,8 @@ export default defineMessages('home', {
   },
 
   // Closing call to action
-  'home.cta.eyebrow': { fr: '03 — À propos', en: '03 — About' },
+  // Numbered by the page: 03, or 04 when the Demo section is shown (#234).
+  'home.cta.eyebrow': { fr: '{n} — À propos', en: '{n} — About' },
   'home.cta.title': {
     fr: 'Prêt à transformer votre infrastructure informatique ?',
     en: 'Ready to transform your IT infrastructure?',

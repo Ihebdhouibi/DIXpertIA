@@ -5,11 +5,13 @@ import LanguageToggle from '../LanguageToggle';
 import { useT, type MessageKey } from '../../i18n';
 import { useDismiss } from '../ui/useDismiss';
 
-export type HomeTarget = 'home' | 'services' | 'about' | 'contact';
+export type HomeTarget = 'home' | 'services' | 'demo' | 'about' | 'contact';
 
 const NAV: { target: HomeTarget; label: MessageKey }[] = [
   { target: 'home', label: 'home.nav.home' },
   { target: 'services', label: 'home.nav.services' },
+  // Only when a demo is published: the section is absent otherwise (#234).
+  { target: 'demo', label: 'home.nav.demo' },
   { target: 'about', label: 'home.nav.about' },
   { target: 'contact', label: 'home.nav.contact' },
 ];
@@ -20,12 +22,15 @@ const NAV: { target: HomeTarget; label: MessageKey }[] = [
  * space and prevent horizontal scrolling. The site has no router, so the links
  * are buttons that scroll or switch to the contact page.
  */
-export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
+export default function HomeHeader({ current, onNavigate, onDashboardClick, showDemo = false }: {
   current: 'home' | 'contact';
+  /** True when the homepage has a Demo section to link to (#234). */
+  showDemo?: boolean;
   onNavigate: (target: HomeTarget) => void;
   onDashboardClick: () => void;
 }) {
   const t = useT();
+  const nav = showDemo ? NAV : NAV.filter((item) => item.target !== 'demo');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -46,7 +51,7 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
           <HomeWordmark />
         </button>
         <nav aria-label={t('home.nav.primary')} className="hidden gap-8 text-sm font-medium min-[860px]:flex">
-          {NAV.map(({ target, label }) => {
+          {nav.map(({ target, label }) => {
             const active = (target === 'home' && current === 'home') || (target === 'contact' && current === 'contact');
             return (
               <button
@@ -94,7 +99,7 @@ export default function HomeHeader({ current, onNavigate, onDashboardClick }: {
           className="absolute left-0 top-full w-full border-b border-home-fg/10 bg-home-bg shadow-lg min-[860px]:hidden"
         >
           <nav aria-label={t('home.nav.primary')} className="flex flex-col px-[clamp(20px,5vw,48px)] py-4 gap-4 text-base font-medium">
-            {NAV.map(({ target, label }) => {
+            {nav.map(({ target, label }) => {
               const active = (target === 'home' && current === 'home') || (target === 'contact' && current === 'contact');
               return (
                 <button
