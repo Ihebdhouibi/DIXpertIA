@@ -36,6 +36,8 @@ from app.core.database import get_db
 from app.i18n import ApiError
 
 PUBLIC_IP = "public_ip"
+# The website's demo videos, apart from the other public routes (#246).
+PUBLIC_DEMO_IP = "public_demo_ip"
 LOGIN_IP = "login_ip"
 LOGIN_ACCOUNT = "login_account"
 # Second-factor code attempts per account (#44).
@@ -83,9 +85,20 @@ def too_many(wait_seconds: int) -> ApiError:
     return ApiError(429, "auth.too_many_requests", headers={"Retry-After": str(wait_seconds)})
 
 
-def limit_public_requests(request: Request, db: Session = Depends(get_db)) -> None:
-    """Dependency of every public route: at most PUBLIC_REQUESTS_PER_MINUTE per address."""
-    result = hit(db, PUBLIC_IP, ip_key(request), settings.PUBLIC_REQUESTS_PER_MINUTE, 60)
+def _limit_per_minute(db: Session, bucket: str, request: Request, limit: int) -> None:
+    result = hit(db, bucket, ip_key(request), limit, 60)
     db.commit()
     if result < 0:
         raise too_many(-result)
+
+
+def limit_public_requests(request: Request, db: Session = Depends(get_db)) -> None:
+    """Dependency of the public routes: at most PUBLIC_REQUESTS_PER_MINUTE per address."""
+    _limit_per_minute(db, PUBLIC_IP, request, settings.PUBLIC_REQUESTS_PER_MINUTE)
+
+
+def limit_demo_requests(request: Request, db: Session = Depends(get_db)) -> None:
+    """Dependency of the website's demo routes: at most PUBLIC_DEMO_REQUESTS_PER_MINUTE
+    per address, in a bucket of their own (#246), so viewing demos never blocks
+    sign-in or the contact form."""
+    _limit_per_minute(db, PUBLIC_DEMO_IP, request, settings.PUBLIC_DEMO_REQUESTS_PER_MINUTE)

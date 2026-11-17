@@ -173,6 +173,36 @@ def test_signed_in_routes_are_not_limited(client, identities, limits):
         assert client.get("/api/me", headers=identities["employee"]["headers"]).status_code == 200
 
 
+# --- The website's demo videos: a limit of their own (#246) -------------------------
+
+@pytest.mark.parametrize("path", ["/api/public/demos", "/api/public/demos/0/preview"])
+def test_the_demo_routes_have_a_limit_of_their_own(client, database, limits, path):
+    limits(PUBLIC_DEMO_REQUESTS_PER_MINUTE=3)
+    answers = [client.get(path) for _ in range(4)]
+    assert all(r.status_code != 429 for r in answers[:3]), [r.status_code for r in answers]
+    assert answers[3].status_code == 429
+    assert answers[3].json()["code"] == "auth.too_many_requests"
+    assert 1 <= int(answers[3].headers["Retry-After"]) <= 60
+    assert counted(database, "public_demo_ip") == 3
+    assert counted(database, "public_ip") == 0, "the shared public limit is left untouched"
+
+
+def test_viewing_demos_never_blocks_sign_in_or_the_contact_form(client, limits):
+    limits(PUBLIC_REQUESTS_PER_MINUTE=2, PUBLIC_DEMO_REQUESTS_PER_MINUTE=4)
+    assert [client.get("/api/public/demos").status_code for _ in range(5)] == [200, 200, 200, 200, 429]
+    assert client.post("/api/login", json={"email": f"office@{DOMAIN}", "password": "guess"}).status_code == 401
+    contact = client.post("/api/contact", json={"name": "Amira", "email": f"amira@{DOMAIN}", "topic": "other",
+                                                "message": "A question about your services."})
+    assert contact.status_code != 429, contact.json()
+
+
+def test_the_other_public_routes_do_not_use_up_the_demo_limit(client, limits):
+    limits(PUBLIC_REQUESTS_PER_MINUTE=1, PUBLIC_DEMO_REQUESTS_PER_MINUTE=2)
+    client.post("/api/forgot-password", json={"email": f"a@{DOMAIN}"})
+    assert client.post("/api/forgot-password", json={"email": f"a@{DOMAIN}"}).status_code == 429
+    assert client.get("/api/public/demos").status_code == 200
+
+
 # --- Reset e-mails, per account ----------------------------------------------------
 
 def test_reset_mails_are_capped_per_account_silently(client, database, mailbox, limits):
