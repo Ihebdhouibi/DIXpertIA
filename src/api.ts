@@ -104,11 +104,18 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   // without one is a refusal of its own, e.g. a wrong password at sign-in,
   // which used to read "Your session has expired" (#116).
   if (res.status === 401 && token) {
-    // The token is gone or expired. Clearing it here stops every subsequent
-    // call retrying with a credential the server has already refused.
-    setToken(null);
+    // The token is gone or expired. Clearing it stops every subsequent call
+    // retrying with a credential the server has already refused - but only
+    // this tab's (#238): if another tab stored a newer token while this
+    // request was in flight (a password change revokes the older sessions),
+    // removing the shared one would sign that tab out. The app then follows
+    // the newer session instead of ending it.
+    const stored = storedToken();
+    const replaced = !!stored && stored !== token;
+    if (replaced) tabToken = null;
+    else setToken(null);
     onUnauthorized();
-    throw new ApiError(401, t('common.sessionExpired'));
+    throw new ApiError(401, t(replaced ? 'common.sessionChangedElsewhere' : 'common.sessionExpired'));
   }
 
   if (!res.ok) {

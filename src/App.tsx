@@ -265,12 +265,15 @@ export default function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, [followSession]);
 
-  // The API refused this tab's token: the session expired or was revoked.
+  // The API refused this tab's token. If another tab already stored a newer
+  // one, follow it (api.ts kept it); otherwise the session expired or was
+  // revoked.
   useEffect(() => {
     api.setUnauthorizedHandler(() => {
-      if (currentUserRef.current) endSession('common.sessionExpired');
+      if (api.storedToken()) void followSession();
+      else if (currentUserRef.current) endSession('common.sessionExpired');
     });
-  }, [endSession]);
+  }, [endSession, followSession]);
 
   // --- Language (#135) ---
   // On sign-in, a language chosen in this browser wins and is saved on the
