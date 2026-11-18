@@ -289,6 +289,10 @@ jobs:
       SUPERUSER_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia
       SECRET_KEY: ci-secret-key-at-least-32-characters-long
       REMINDERS_ENABLED: 'false'
+      # Fictitious: an invoice cannot be approved without our matricule fiscal
+      # and RNE (#189), and the seeded screens include approved invoices.
+      SELLER_TAX_ID: 0000000X/A/M/000
+      SELLER_RNE: 0000000X
 
     steps:
       - uses: actions/checkout@v4

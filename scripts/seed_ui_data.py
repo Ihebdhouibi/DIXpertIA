@@ -59,12 +59,14 @@ def main() -> int:
     today = date.today()
 
     clients = [
+        # Businesses in Tunisia, with a fictitious matricule fiscal (#189).
         api.call("POST", "/api/clients", admin, {
-            "nom": name, "email": email, "telephone": "+216 70 000 000", "adresse": address})["id"]
-        for name, email, address in [
+            "nom": name, "email": email, "telephone": "+216 70 000 000", "adresse": address,
+            "entreprise": True, "identifiant_fiscal": tax_id})["id"]
+        for name, email, address, tax_id in [
             ("Société Méditerranéenne de Services Informatiques et de Conseil", "contact@smsic.example.tn",
-             "Immeuble Les Berges du Lac, Rue du Lac Windermere, 1053 Tunis"),
-            ("Atlas Logistics", "billing@atlas.example.com", "12 avenue Habib Bourguiba, Sfax"),
+             "Immeuble Les Berges du Lac, Rue du Lac Windermere, 1053 Tunis", "0000001A/A/M/000"),
+            ("Atlas Logistics", "billing@atlas.example.com", "12 avenue Habib Bourguiba, Sfax", "0000002B/A/M/000"),
         ]
     ]
 

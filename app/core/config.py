@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal, InvalidOperation
 
 from dotenv import load_dotenv
 
@@ -73,6 +74,18 @@ def _text(name: str, default: str = "") -> str:
     """An optional text setting, trimmed; unset gives the default, set to "" gives ""."""
     raw = os.getenv(name)
     return default if raw is None else raw.strip()
+
+
+def _amount(name: str, default: str) -> Decimal:
+    """A non-negative amount in TND, with up to 3 decimals (millimes)."""
+    raw = _text(name, default)
+    try:
+        value = Decimal(raw)
+    except InvalidOperation:
+        raise RuntimeError(f"{name} must be an amount such as 1.000, not {raw!r}") from None
+    if value < 0 or value != value.quantize(Decimal("0.001")):
+        raise RuntimeError(f"{name} must be zero or more, with at most 3 decimals, not {raw!r}")
+    return value
 
 
 class Settings:
@@ -154,8 +167,9 @@ class Settings:
 
 
     # The seller on every invoice PDF (#194). Empty means not printed: no
-    # placeholder ever reaches a real invoice. The tax ID (matricule fiscal),
-    # RNE and bank details wait for the company's official details (#189).
+    # placeholder ever reaches a real invoice. The tax ID (matricule fiscal)
+    # and the RNE are mandatory mentions: an invoice cannot be approved while
+    # either is empty (#189).
     SELLER_NAME: str = _text("SELLER_NAME", "DI Xpertia SUARL")
     SELLER_ADDRESS: str = _text("SELLER_ADDRESS", "Rue de Pasteur, Dar Chaabane El Fehri")
     SELLER_CITY: str = _text("SELLER_CITY", "8011 Nabeul")
@@ -176,6 +190,13 @@ class Settings:
         "EXPORT_MENTION_FR", "Exportation de services — TVA non applicable (art. 3 et 11 du Code de la TVA)")
     EXPORT_MENTION_EN: str = _text(
         "EXPORT_MENTION_EN", "Export of services — VAT not applicable (art. 3 and 11, Tunisian VAT Code)")
+
+
+    # The stamp duty (droit de timbre) on an invoice to a client in Tunisia
+    # (#189), in TND. Copied onto each invoice when it is created or edited,
+    # then fixed with its totals: changing it never alters an issued invoice.
+    # An export invoice carries none.
+    STAMP_DUTY_AMOUNT: Decimal = _amount("STAMP_DUTY_AMOUNT", "1.000")
 
 
 settings = Settings()

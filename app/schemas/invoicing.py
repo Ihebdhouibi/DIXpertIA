@@ -26,6 +26,15 @@ class ClientBase(BaseModel):
     devise: Currency = "TND"
     # A foreign VAT number or a matricule fiscal; printed only when filled.
     identifiant_fiscal: str | None = None
+    # A business rather than a private person (#189).
+    entreprise: bool = False
+
+
+def tax_id_missing(entreprise: bool, export: bool, identifiant_fiscal: str | None) -> bool:
+    """A business in Tunisia has a matricule fiscal, a mandatory mention on its
+    invoices (#189). A client abroad has none to give, and a private person
+    neither."""
+    return bool(entreprise) and not export and not (identifiant_fiscal or "").strip()
 
 
 def export_currency_problem(export: bool, devise: str) -> bool:
@@ -101,6 +110,7 @@ class ClientUpdate(BaseModel):
     devise: Currency | None = None
     # "" clears it; omitted leaves it as it is.
     identifiant_fiscal: str | None = None
+    entreprise: bool | None = None
 
     @field_validator("identifiant_fiscal")
     @classmethod
