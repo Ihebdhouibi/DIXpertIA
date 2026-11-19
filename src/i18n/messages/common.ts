@@ -67,7 +67,6 @@ export default defineMessages('common', {
   'common.leaveType.Annual Leave': { fr: 'Congé payé', en: 'Annual Leave' },
   'common.leaveType.Sick Leave': { fr: 'Congé maladie', en: 'Sick Leave' },
   'common.leaveType.Unpaid Leave': { fr: 'Congé sans solde', en: 'Unpaid Leave' },
-  'common.leaveType.Personal Day': { fr: 'Jour personnel', en: 'Personal Day' },
 
   // The app shell: navigation, header, sidebar (#135).
   'common.nav.dashboard': { fr: 'Tableau de bord', en: 'Dashboard' },

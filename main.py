@@ -768,23 +768,32 @@ def get_leave_balances(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     year: int = Query(default_factory=lambda: datetime.now().year),
+    employee_id: Optional[int] = Query(None),
 ):
-    """Calculate the leave balance for the authenticated employee (#121)."""
-    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
-    if not employee:
-        raise ApiError(404, "leave.no_employee_record")
+    target_employee_id = employee_id
+    if target_employee_id is not None:
+        if current_user.role != 'admin':
+            raise ApiError(403, "auth.admin_required")
+        employee = db.query(Employee).filter(Employee.id == target_employee_id).first()
+        if not employee:
+            raise ApiError(404, "user.not_found")
+    else:
+        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        if not employee:
+            raise ApiError(404, "leave.no_employee_record")
+        target_employee_id = employee.id
 
     start_of_year = date(year, 1, 1)
     end_of_year = date(year, 12, 31)
 
     requests = db.query(LeaveRequest).filter(
-        LeaveRequest.employee_id == employee.id,
+        LeaveRequest.employee_id == target_employee_id,
         LeaveRequest.date_debut <= end_of_year,
         LeaveRequest.date_fin >= start_of_year
     ).all()
 
     entitlements = db.query(LeaveEntitlement).filter(
-        LeaveEntitlement.employee_id == employee.id,
+        LeaveEntitlement.employee_id == target_employee_id,
         LeaveEntitlement.year == year
     ).all()
     ent_map = {e.type_conge: float(e.days) for e in entitlements}

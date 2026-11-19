@@ -197,7 +197,6 @@ export default defineMessages('people', {
   'people.leave.title': { fr: 'Demandes de congé', en: 'Leave Requests' },
   'people.leave.subtitle': { fr: 'Gérez et suivez vos congés', en: 'Manage and track your time off' },
   'people.leave.newRequest': { fr: 'Nouvelle demande', en: 'New request' },
-  'people.leave.personalDays': { fr: 'Jours personnels', en: 'Personal Days' },
   'people.leave.daysLeft': {
     fr: { one: 'jour restant', other: 'jours restants' },
     en: { one: 'day left', other: 'days left' },
