@@ -1,14 +1,19 @@
 
+import uuid
+
 import pytest
 from sqlalchemy import text
 
 from tests.account_flow import make_account
 
 
+
 @pytest.fixture
 def setup_employee_with_entitlement(database):
     """Creates an employee with 20 days of PAID leave entitlement for 2026."""
-    emp_id = make_account(database, "emp-leave@test.tn")
+    # Génère un e-mail unique pour éviter le UniqueViolation entre les tests
+    unique_email = f"emp-leave-{uuid.uuid4().hex[:8]}@test.tn"
+    emp_id = make_account(database, unique_email)
 
     with database.connect() as c:
         e_id = c.execute(

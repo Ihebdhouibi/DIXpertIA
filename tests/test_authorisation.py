@@ -82,6 +82,7 @@ ROUTES = [
     # --- leave decisions: admin only ---------------------------------------
     ("POST", "/api/leave-requests/1/approve", ADMIN_ONLY),
     ("POST", "/api/leave-requests/1/reject", ADMIN_ONLY),
+    ("GET", "/api/leaves/balances", {"admin", "employee", "accountant"}),
 
     # --- accounts ----------------------------------------------------------
     ("GET", "/api/users", ADMIN_ONLY),
