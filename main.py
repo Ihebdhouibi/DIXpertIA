@@ -27,6 +27,8 @@ from app.schemas.api import (
     LeaveRequestOut,
     PayslipOut,
     UserOut,
+    LeaveBalancesOut,
+    LeaveBalanceOut,
 )
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user, session_identity
@@ -45,7 +47,7 @@ from app.core.security import (
 # registry so relationship("Payslip") and friends can resolve. See its docstring.
 import app.models  # noqa: F401
 from app.models.user import User
-from app.models.leaves import LeaveRequest, LeaveStatus
+from app.models.leaves import LeaveRequest, LeaveStatus, LeaveType, LeaveEntitlement
 from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
@@ -761,6 +763,60 @@ def list_users(
     )
     return [UserOut.from_orm_row(r) for r in rows]
 
+@app.get('/api/leaves/balances', response_model=LeaveBalancesOut)
+def get_leave_balances(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    year: int = Query(default_factory=lambda: datetime.now().year),
+):
+    """Calculate the leave balance for the authenticated employee (#121)."""
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        raise ApiError(404, "leave.no_employee_record")
+
+    start_of_year = date(year, 1, 1)
+    end_of_year = date(year, 12, 31)
+
+    requests = db.query(LeaveRequest).filter(
+        LeaveRequest.employee_id == employee.id,
+        LeaveRequest.date_debut <= end_of_year,
+        LeaveRequest.date_fin >= start_of_year
+    ).all()
+
+    entitlements = db.query(LeaveEntitlement).filter(
+        LeaveEntitlement.employee_id == employee.id,
+        LeaveEntitlement.year == year
+    ).all()
+    ent_map = {e.type_conge: float(e.days) for e in entitlements}
+
+    balances = {}
+    for lt in LeaveType:
+        balances[lt] = {
+            "type": lt.value,
+            "entitlement": ent_map.get(lt, 0.0) if lt == LeaveType.PAYE else 0.0,
+            "approvedDays": 0.0,
+            "pendingDays": 0.0,
+            "availableDays": 0.0
+        }
+
+    for req in requests:
+        actual_start = max(req.date_debut, start_of_year)
+        actual_end = min(req.date_fin, end_of_year)
+        days = (actual_end - actual_start).days + 1
+
+        if req.statut == LeaveStatus.APPROUVE:
+            balances[req.type_conge]["approvedDays"] += days
+        elif req.statut == LeaveStatus.EN_ATTENTE:
+            balances[req.type_conge]["pendingDays"] += days
+
+    for lt, bal in balances.items():
+        if lt == LeaveType.PAYE:
+            bal["availableDays"] = bal["entitlement"] - bal["approvedDays"]
+
+    return LeaveBalancesOut(
+        year=year,
+        balances=[LeaveBalanceOut(**b) for b in balances.values()]
+    )
 
 @app.post('/api/leave-requests', status_code=201, response_model=LeaveRequestOut)
 def create_leave_request(

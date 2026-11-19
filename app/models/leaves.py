@@ -8,8 +8,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -66,4 +68,26 @@ class LeaveRequest(Base):
         # Not for reads: makes the RESTRICT check on deleting a user an index
         # lookup instead of a full scan.
         Index("ix_leave_requests_valide_par_id", "valide_par_id"),
+    )
+
+
+class LeaveEntitlement(Base):
+    """The annual allowance of paid leave for an employee (#121).
+    Only 'paye' leave has an entitlement, as decided. Sick and unpaid leave
+    are tracked but have no balance limit.
+    """
+    __tablename__ = "leave_entitlements"
+
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    year = Column(Integer, nullable=False)
+    type_conge = Column(Enum(LeaveType), nullable=False, default=LeaveType.PAYE)
+    # Numeric allows for half-days (e.g., 10.5)
+    days = Column(Numeric(5, 2), nullable=False)
+
+    employee = relationship("Employee")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "year", "type_conge", name="uq_employee_year_type"),
+        Index("ix_leave_entitlements_employee_id", "employee_id"),
     )

@@ -3,17 +3,7 @@
 This is Option C from #37: `app/models/` keeps its normalised schema - real
 dates, enums, numerics, foreign keys - and the API keeps the camelCase shape the
 frontend already consumes. These schemas are the seam between them.
-
-The alternatives were to rewrite the API onto the ORM names (which would rename
-fields across ~10 frontend files, colliding with the v2 rebrand) or to flatten
-the ORM onto the API shape (which would discard the normalised model and break
-the invoice PDF generator). The seam costs one mapping per entity and leaves
-both sides alone.
-
-It also makes the response an allowlist. Every field returned is named here, so
-a column added to a model later is not exposed by accident - the failure mode of
-the `obj.__dict__` minus denylist approach that leaked password hashes
-(AUDIT-DB-020, #35).
+...
 """
 
 from datetime import date, datetime
@@ -36,8 +26,7 @@ LEAVE_TYPE_TO_API = {
     LeaveType.SANS_SOLDE: "Unpaid Leave",
 }
 LEAVE_TYPE_FROM_API = {v: k for k, v in LEAVE_TYPE_TO_API.items()}
-# The frontend also offers "Personal Day", which has no distinct database value.
-LEAVE_TYPE_FROM_API["Personal Day"] = LeaveType.SANS_SOLDE
+# REMOVED: The "Personal Day" alias.
 
 LEAVE_STATUS_TO_API = {
     LeaveStatus.EN_ATTENTE: "Pending",
@@ -65,8 +54,6 @@ class LeaveRequestCreate(BaseModel):
 
     @model_validator(mode="after")
     def _end_not_before_start(self) -> "LeaveRequestCreate":
-        # Mirrors ck_leave_dates. Validating here turns a database error into a
-        # 422 naming the field (#58).
         if self.endDate < self.startDate:
             raise ValueError("endDate cannot be before startDate")
         return self
@@ -94,9 +81,6 @@ class LeaveRequestOut(BaseModel):
     employeeName: str = ""
     jobTitle: Optional[str] = None
     type: str
-    # `dates` is what the UI renders today. startDate/endDate are the real
-    # columns, exposed so the UI can migrate off the formatted string without a
-    # breaking change - the lossy mapping flagged on #37.
     dates: str
     startDate: date
     endDate: date
@@ -107,7 +91,6 @@ class LeaveRequestOut(BaseModel):
 
     @classmethod
     def from_orm_row(cls, row, employee=None) -> "LeaveRequestOut":
-        """`employee` is an Employee row; the person's name lives on its user."""
         return cls(
             id=str(row.id),
             employeeId=row.employee_id,
@@ -124,6 +107,22 @@ class LeaveRequestOut(BaseModel):
         )
 
 
+# --- Leave Balances (#121) --------------------------------------------------
+
+class LeaveBalanceOut(BaseModel):
+    """The calculated balance for one leave type."""
+    type: str
+    entitlement: float = 0.0
+    approvedDays: float = 0.0
+    pendingDays: float = 0.0
+    availableDays: float = 0.0
+
+class LeaveBalancesOut(BaseModel):
+    """The list of all leave balances for a given year."""
+    year: int
+    balances: list[LeaveBalanceOut]
+
+
 # --- Payslips ---------------------------------------------------------------
 
 class PayslipOut(BaseModel):
@@ -131,7 +130,6 @@ class PayslipOut(BaseModel):
 
     id: str
     employeeId: Optional[int] = None
-    # Whose payslip it is (#144): the payroll table lists every employee's.
     employeeName: str = ""
     period: str
     grossPay: float
@@ -156,7 +154,6 @@ class PayslipOut(BaseModel):
 
 # --- Invoices ---------------------------------------------------------------
 
-# The commercial state, as the UI labels it.
 INVOICE_STATUS_TO_API = {
     "brouillon": "Draft",
     "envoyee": "Sent",
@@ -165,9 +162,6 @@ INVOICE_STATUS_TO_API = {
     "annulee": "Cancelled",
 }
 
-# The accountant's workflow state (#41) - a separate axis, not an alternative
-# spelling of the above. An invoice is routinely "Paid" and "Pending" at once:
-# the client has paid, nobody has booked it yet.
 INVOICE_PROCESSING_STATUS_TO_API = {
     "pending": "Pending",
     "processed": "Processed",
@@ -175,7 +169,6 @@ INVOICE_PROCESSING_STATUS_TO_API = {
     "archived": "Archived",
 }
 
-# The accountant's verification before sending (#118) - a third axis.
 INVOICE_REVIEW_STATUS_TO_API = {
     "not_submitted": "Not submitted",
     "submitted": "Submitted",
@@ -185,8 +178,6 @@ INVOICE_REVIEW_STATUS_TO_API = {
 
 
 class InvoiceReviewOut(BaseModel):
-    """One submission or decision in an invoice's verification (#118)."""
-
     action: str
     actor: str
     comment: str
@@ -198,69 +189,36 @@ class InvoiceItemOut(BaseModel):
     qty: float
     price: float
     total: float
-    # The VAT rate, so a draft can be edited without losing it (#125).
     vatRate: float
-    # Optional, printed on the PDF under the description and the quantity (#194).
     detail: str | None = None
     unit: str | None = None
 
 
 class InvoiceOut(BaseModel):
-    """An invoice as the UI reads it (#37 Option C, updated for #40 and #41).
-
-    The translation layer between the ORM and the API lives here on purpose:
-    the columns are French and snake_case because the business is, while the
-    UI contract is English and camelCase. Keeping the seam explicit means
-    renaming a column does not break the frontend, and the frontend never has
-    to know that `statut` and `processing_status` are different axes.
-
-    `counterparty` replaced `client`, because an invoice now has one or the
-    other depending on its direction (#40). A supplier bill rendered through
-    the old field read "Unknown".
-    """
-
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    # The legal number; None for an outgoing draft until the accountant
-    # approves it (#118). `reference` is what to show either way.
     numero: Optional[str] = None
     reference: str
     direction: str
-    # Whoever is on the other side: the client we billed, or the supplier who
-    # billed us. Which it is follows from `direction`.
     counterparty: str
     counterpartyInitials: str
-    # Their contact details as stored, '' when not given (#86 made them NOT
-    # NULL). The invoice detail showed an invented address instead (#127).
     counterpartyEmail: str = ""
     counterpartyAddress: str = ""
-    # The supplier's own number, on an incoming invoice only. Never merged with
-    # `numero`, which is always ours.
     supplierReference: Optional[str] = None
     amountHT: float
     amountTTC: float
-    # The invoice's currency, and whether it is an export of services (#195).
     currency: str = "TND"
     export: bool = False
     dateIssued: str
     dueDate: str
-    # The due date as YYYY-MM-DD, for a date input; `dueDate` is for display.
     dueDateIso: Optional[str] = None
-    # The issue date as YYYY-MM-DD: the earliest a payment can be dated (#126).
     dateIssuedIso: Optional[str] = None
-    # Set once paid (#126), for display like dateIssued.
     paidOn: Optional[str] = None
-    # Set once cancelled (#126): when, and the admin's reason.
     cancelledAt: Optional[str] = None
     cancellationReason: Optional[str] = None
-    # The commercial state the counterparty sees.
     status: str
-    # The accountant's workflow state - a separate axis, not a spelling of the
-    # line above. An invoice is routinely "Paid" and "Pending" at once.
     processingStatus: str
-    # The accountant's verification before sending (#118), and its history,
-    # oldest first: the last rejection's comment is what the admin corrects.
     reviewStatus: str = "Not submitted"
     reviews: list[InvoiceReviewOut] = Field(default_factory=list)
     items: list[InvoiceItemOut] = Field(default_factory=list)
@@ -271,7 +229,6 @@ class InvoiceOut(BaseModel):
         party = row.supplier if direction == "incoming" else row.client
         name = getattr(party, "nom", None) or "Unknown"
         initials = "".join(w[0] for w in name.split()[:2]).upper() or "?"
-        # Overdue is derived from the due date, never stored (#117).
         shown = row.displayed_status() if hasattr(row, "displayed_status") else row.statut
         statut = getattr(shown, "value", shown) or "envoyee"
         processing = getattr(row.processing_status, "value", row.processing_status) or "pending"
@@ -301,7 +258,6 @@ class InvoiceOut(BaseModel):
             amountTTC=float(row.montant_ttc or Decimal(0)),
             currency=getattr(row, "devise", None) or "TND",
             export=bool(getattr(row, "export", False)),
-            # In the request's language (#135); the ISO forms below are for inputs.
             dateIssued=format_date(row.date_emission) or "-",
             dueDate=format_date(row.date_echeance) or "-",
             dueDateIso=row.date_echeance.isoformat() if row.date_echeance else None,
@@ -329,13 +285,6 @@ class InvoiceOut(BaseModel):
 # --- Employees and users ----------------------------------------------------
 
 class EmployeeOut(BaseModel):
-    """An employee, with the name carried by their login account.
-
-    The two are separate records since #60: `employees` holds the employment
-    terms, `users` the login. The UI shows one person, so this joins them back
-    together for display rather than making the frontend do it.
-    """
-
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -366,15 +315,6 @@ class EmployeeOut(BaseModel):
 
 
 class UserOut(BaseModel):
-    """A login account.
-
-    hashedPassword and token_version are deliberately absent; reset and
-    activation tokens live in account_tokens, never on the user (#62).
-    The audit found the removed GET /api/data returning whole user rows, hashes
-    included, to any authenticated caller; an explicit output schema is what
-    stops that happening again by accident.
-    """
-
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -387,7 +327,6 @@ class UserOut(BaseModel):
     isActive: bool
     isVerified: bool
     createdAt: Optional[str] = None
-    # The account's language, "fr" or "en" (#135).
     locale: str = "fr"
 
     @classmethod
@@ -408,20 +347,9 @@ class UserOut(BaseModel):
 
 
 # --- Small responses (#77) ---------------------------------------------------
-# Every JSON route declares a response model, so what leaves the API is an
-# allowlist: a field reaches the client only if it is named here.
-# tests/test_responses.py fails for a route that declares none.
 
 class LoginOut(BaseModel):
-    """A session, or the next step of the sign-in (#44).
-
-    With no second factor: access_token and user. With one: mfaRequired and a
-    short-lived challengeToken for /api/mfa/verify, and nothing else. For a
-    role that must enrol first: mfaEnrolmentRequired and an enrolToken for
-    /api/mfa/enrol/*. The two tokens are never accepted as a session.
-    """
     access_token: Optional[str] = None
-    # The OAuth 2 token type, always "bearer".
     token_type: str = "bearer"
     user: Optional[UserOut] = None
     mfaRequired: bool = False
@@ -431,7 +359,6 @@ class LoginOut(BaseModel):
 
 
 class UserCreatedOut(BaseModel):
-    """POST /api/users (#62). No password: the owner sets one through the link."""
     id: str
     email: str
     activationEmailSent: bool
@@ -447,7 +374,6 @@ class MessageOut(BaseModel):
 
 
 class HealthOut(BaseModel):
-    """GET /api/health (#185): "ok", or "unavailable" with a 503."""
     status: str
 
 

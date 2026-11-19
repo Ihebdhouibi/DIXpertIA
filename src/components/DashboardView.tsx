@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertCircle, ArrowRight, Calendar, CheckCircle, ChevronRight,
   Download, FileText, Info, Loader2, XCircle,
@@ -22,9 +22,16 @@ interface Notification {
   link?: string;
 }
 
+interface LeaveBalance {
+  type: string;
+  entitlement: number;
+  approvedDays: number;
+  pendingDays: number;
+  availableDays: number;
+}
+
 interface DashboardViewProps {
   user: User;
-  /** The figures, computed by the server over every row (#120). */
   summary: DashboardSummary | null;
   payslips: Payslip[];
   leaveRequests: LeaveRequest[];
@@ -58,9 +65,7 @@ interface Metric {
   label: string;
   value: React.ReactNode;
   hint?: React.ReactNode;
-  /** Tab the card opens. */
   to?: string;
-  /** The view's one Signal Lime accent: the figure this role came for. */
   highlight?: boolean;
 }
 
@@ -125,19 +130,45 @@ export default function DashboardView({
   const t = useT();
   const seesInvoices = user.role === 'admin' || user.role === 'accountant';
 
-  // --- Invoices (admin and accountant) ---
-  // Counted and summed by the server over every invoice (#120): the browser no
-  // longer adds up a list capped at the API's page size.
+  // Fetch real balance (#121)
+  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [loadingBalances, setLoadingBalances] = useState(true);
+
+  useEffect(() => {
+    if (user.role !== 'employee') {
+      setLoadingBalances(false);
+      return;
+    }
+    const fetchBalances = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/leaves/balances', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBalances(data.balances);
+        }
+      } catch (err) {
+        console.error('Failed to fetch leave balances', err);
+      } finally {
+        setLoadingBalances(false);
+      }
+    };
+    fetchBalances();
+  }, [user.role]);
+
+  const annualBalance = balances.find(b => b.type === 'paye');
+
+  // --- Invoices ---
   const figures = summary?.invoices;
   const invoiceCount = figures?.count ?? 0;
-  // One total per direction (#40): what clients owe us, what we owe suppliers.
   const clientTotals = figures?.clients ?? { count: 0, amount: 0 };
   const supplierTotals = figures?.suppliers ?? { count: 0, amount: 0 };
   const directionMetrics: Metric[] = [
     {
       label: t('dashboard.metric.clientInvoices'),
       value: clientTotals.count,
-      // One amount per currency, side by side (#195).
       hint: formatAmounts(clientTotals.amounts, clientTotals.amount),
       to: 'invoices',
     },
@@ -148,9 +179,6 @@ export default function DashboardView({
       to: 'invoices',
     },
   ];
-  // Where the invoices have got to in the accountant's workflow (#41). A
-  // separate axis from the commercial status: an invoice is routinely Paid and
-  // still Pending here, because the client has paid and nobody has booked it yet.
   const processingCounts = PROCESSING_STATES.map((state) => ({
     state,
     count: figures?.byProcessing.find((p) => p.status === state)?.count ?? 0,
@@ -159,24 +187,18 @@ export default function DashboardView({
     processingCounts.find((p) => p.state === state)?.count ?? 0;
   const commercialStats = COMMERCIAL_STATES.map((status) => {
     const figure = figures?.byStatus.find((s) => s.status === status);
-    // One line per currency (#195): a narrow card cannot hold them side by side.
     const amounts = figure?.amounts?.length ? figure.amounts : [{ currency: 'TND', amount: figure?.amount ?? 0 }];
     return { status, count: figure?.count ?? 0, amounts: amounts.map((a) => formatMoney(a.amount, a.currency)) };
   });
 
   // --- Leave and team ---
-  // The caller's own pending requests, or everyone's for the admin: the
-  // server's row-level security decides, as for the leave list.
   const pendingLeaves = summary?.leave.pending ?? 0;
   const activeTeam = summary?.team?.active ?? 0;
   const teamTotal = summary?.team?.total ?? 0;
 
-  // --- Employee: their own records ---
-  // Resolved through the employee record: leave belongs to the employee, not
-  // the login account (#60).
+  // --- Employee ---
   const myEmployeeId = employees.find((e) => e.userId === user.id)?.id;
   const myLeave = leaveRequests.filter((r) => r.employeeId === myEmployeeId);
-  // The next approved leave that has not ended yet, by its real start date.
   const today = new Date().toISOString().slice(0, 10);
   const upcomingLeave = myLeave
     .filter((r) => r.status === 'Approved' && r.endDate >= today)
@@ -236,14 +258,9 @@ export default function DashboardView({
               highlight: true,
             },
             {
-              label: t('dashboard.metric.nextLeave'),
-              value: upcomingLeave ? upcomingLeave.startDate : t('dashboard.none'),
-              hint: upcomingLeave
-                ? t('dashboard.metric.nextLeaveHint', {
-                    type: labelOf(t, 'common.leaveType', upcomingLeave.type),
-                    count: upcomingLeave.duration,
-                  })
-                : t('dashboard.metric.nothingApproved'),
+              label: t('dashboard.balance'),
+              value: loadingBalances ? '...' : (annualBalance?.availableDays ?? 0),
+              hint: t('people.leave.daysLeft', { count: annualBalance?.availableDays ?? 0 }),
               to: 'leave-requests',
             },
             {
@@ -306,7 +323,6 @@ export default function DashboardView({
               ) : invoiceCount === 0 ? (
                 <p className="text-sm text-on-surface-variant">{t('dashboard.noInvoices')}</p>
               ) : (
-                // Each bar carries its label and its count, so no value relies on colour.
                 <ul className="space-y-3">
                   {processingCounts.map(({ state, count }) => (
                     <li key={state} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-3">
@@ -369,9 +385,17 @@ export default function DashboardView({
               <dl className="space-y-4 text-sm">
                 <div>
                   <dt className={EYEBROW}>{t('dashboard.balance')}</dt>
-                  {/* The balance used to be three invented figures. Until the
-                      server holds entitlements (#121), say so instead. */}
-                  <dd className="mt-1 text-on-surface-variant">{t('dashboard.balanceUnavailable')}</dd>
+                  <dd className="mt-1 text-on-surface-variant">
+                    {loadingBalances ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+                      </span>
+                    ) : (
+                      <span>
+                        <span className="font-semibold text-primary">{annualBalance?.availableDays ?? 0}</span> {t('people.leave.daysLeft', { count: annualBalance?.availableDays ?? 0 })} remaining.
+                      </span>
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className={EYEBROW}>{t('dashboard.nextApprovedLeave')}</dt>
