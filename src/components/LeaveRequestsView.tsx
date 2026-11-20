@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Calendar, Plus, Plane, HeartPulse, Info, Loader2 } from 'lucide-react';
-import { LeaveRequest, UserRole } from '../types';
+import { LeaveBalance, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
 import Dialog from './ui/Dialog';
@@ -10,6 +10,7 @@ import { useToast, ToastTone } from './ui/feedback';
 import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { FilterPills } from './ui/TableControls';
 import { useDataStatus } from '../dataStatus';
+import { useLeaveBalance } from '../useLeaveBalance';
 import { formatDate, formatDayMonth } from '../format';
 import { labelOf, useT, type MessageKey } from '../i18n';
 
@@ -27,21 +28,13 @@ const EMPTY_FILTERED: Record<StatusFilter, MessageKey> = {
   Approved: 'people.leave.empty.Approved',
   Rejected: 'people.leave.empty.Rejected',
 };
-// "Personal Day" has been removed as per decision on #121
 const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Unpaid Leave'] as const;
-
-interface LeaveBalance {
-  type: string;
-  entitlement: number;
-  approvedDays: number;
-  pendingDays: number;
-  availableDays: number;
-}
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
   onAddRequest: (newReq: Partial<LeaveRequest>) => void;
   userRole: UserRole;
+  /** The employee record id, used to filter the calendar to one person. */
   currentEmployeeId?: number;
 }
 
@@ -53,42 +46,18 @@ export default function LeaveRequestsView({
 }: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [leaveType, setLeaveType] = useState<'Annual Leave' | 'Sick Leave' | 'Unpaid Leave'>('Annual Leave');
+  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number]>('Annual Leave');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('All');
-
-  const [balances, setBalances] = useState<LeaveBalance[]>([]);
-  const [loadingBalances, setLoadingBalances] = useState(true);
-
   const status = useDataStatus();
   const t = useT();
+
   const isEmployee = userRole === 'employee';
+
   const toast = useToast();
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
-
-  // Fetch real balances (#121)
-  useEffect(() => {
-    const fetchBalances = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/leaves/balances', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setBalances(data.balances);
-        }
-      } catch (err) {
-        console.error('Failed to fetch leave balances', err);
-      } finally {
-        setLoadingBalances(false);
-      }
-    };
-    if (isEmployee) fetchBalances();
-    else setLoadingBalances(false);
-  }, [isEmployee]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +65,7 @@ export default function LeaveRequestsView({
       showToast(t('people.leave.enterDates'), 'error');
       return;
     }
+    // Local midnight: a bare YYYY-MM-DD would be read as UTC.
     const start = new Date(`${startDate}T00:00`);
     const end = new Date(`${endDate}T00:00`);
     const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -104,6 +74,8 @@ export default function LeaveRequestsView({
     const dateRangeStr = `${formatDayMonth(start)} - ${formatDate(end)}`;
     onAddRequest({
       type: leaveType,
+      // The API reads startDate / endDate; they were not passed, so the
+      // request reached the server without dates.
       startDate,
       endDate,
       dates: dateRangeStr,
@@ -120,6 +92,8 @@ export default function LeaveRequestsView({
     setLeaveType('Annual Leave');
   };
 
+  // A leave type is a category, not a state: one neutral colour, the icon
+  // tells them apart (sick leave was in the error red).
   const getLeaveIcon = (type: string) => {
     const icon = 'w-4 h-4 text-on-surface-variant';
     switch (type) {
@@ -132,8 +106,26 @@ export default function LeaveRequestsView({
     }
   };
 
-  // Helpers to get specific balances
-  const getBalance = (type: string) => balances.find(b => b.type === type);
+  // The signed-in person's own balance, computed by the server (#121): paid
+  // leave against the year's entitlement, sick and unpaid leave as days taken.
+  const balance = useLeaveBalance();
+  const ofType = (type: LeaveBalance['type']) => (balance.status === 'ready' ? balance.byType[type] : undefined);
+  const annual = ofType('paye');
+  const sick = ofType('maladie');
+  const unpaid = ofType('sans_solde');
+  // While loading, a spinner; without a balance (no employee record), a dash.
+  const figure = (value: number | undefined, unit: string, accent = false) => (
+    balance.status === 'loading' ? (
+      <Loader2 className="w-6 h-6 animate-spin text-on-surface-variant" role="status" aria-label={t('common.table.loading')} />
+    ) : value === undefined ? (
+      <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.balanceUnavailable')}</span>
+    ) : (
+      <>
+        <span className={`text-display font-black ${accent ? 'text-primary' : 'text-on-surface'}`}>{value}</span>
+        <span className="text-body-sm text-on-surface-variant font-medium">{unit}</span>
+      </>
+    )
+  );
 
   const filteredRequests = selectedStatus === 'All'
     ? leaveRequests
@@ -141,6 +133,7 @@ export default function LeaveRequestsView({
 
   return (
     <div className="flex-1 flex flex-col gap-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-h1 font-black text-on-surface tracking-tight md:text-display">{t('people.leave.title')}</h1>
@@ -154,67 +147,57 @@ export default function LeaveRequestsView({
         )}
       </div>
 
-      {/* Real Balance cards (#121) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* Balance cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Annual Leave')}</p>
           <div className="flex items-baseline gap-2">
-            {loadingBalances ? <Loader2 className="w-5 h-5 animate-spin text-primary" /> : (
-              <>
-                <span className="text-display font-black text-primary">{getBalance('paye')?.availableDays ?? 0}</span>
-                <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: getBalance('paye')?.availableDays ?? 0 })}</span>
-              </>
-            )}
+            {figure(annual?.availableDays, t('people.leave.daysLeft', { count: annual?.availableDays ?? 0 }), true)}
           </div>
+          {annual && annual.pendingDays > 0 && (
+            <p className="mt-1 text-body-sm text-on-surface-variant">{t('people.leave.pendingDays', { count: annual.pendingDays })}</p>
+          )}
         </div>
-
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-secondary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Sick Leave')}</p>
           <div className="flex items-baseline gap-2">
-            {loadingBalances ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-              <>
-                <span className="text-display font-black text-on-surface">{getBalance('maladie')?.approvedDays ?? 0}</span>
-                <span className="text-body-sm text-on-surface-variant font-medium">{t('people.days', { count: getBalance('maladie')?.approvedDays ?? 0 })}</span>
-              </>
-            )}
+            {figure(sick?.approvedDays, t('people.leave.daysTaken', { count: sick?.approvedDays ?? 0 }))}
           </div>
         </div>
-
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-tertiary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Unpaid Leave')}</p>
           <div className="flex items-baseline gap-2">
-            {loadingBalances ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-              <>
-                <span className="text-display font-black text-on-surface">{getBalance('sans_solde')?.approvedDays ?? 0}</span>
-                <span className="text-body-sm text-on-surface-variant font-medium">{t('people.days', { count: getBalance('sans_solde')?.approvedDays ?? 0 })}</span>
-              </>
-            )}
+            {figure(unpaid?.approvedDays, t('people.leave.daysTaken', { count: unpaid?.approvedDays ?? 0 }))}
           </div>
         </div>
+        {/* A button, not a clickable div: it was unreachable from the keyboard. */}
+        <button
+          type="button"
+          onClick={() => setShowCalendar(true)}
+          className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant flex flex-col justify-center items-center text-center cursor-pointer hover:bg-surface-container-low transition-colors"
+        >
+          <Calendar className="text-on-surface mb-2 w-7 h-7" aria-hidden="true" />
+          <span className="font-semibold text-body-sm text-on-surface">{t('people.viewCalendar')}</span>
+        </button>
       </div>
 
+      {/* Requests */}
       <section className="flex flex-col gap-3" aria-labelledby="recent-requests">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 id="recent-requests" className="text-lg font-bold tracking-[-0.02em] text-on-surface">
             {t('people.leave.recent')}
           </h2>
-          <div className="flex items-center gap-2">
-            <FilterPills
-              label={t('people.filterByStatus')}
-              options={STATUS_FILTERS}
-              value={selectedStatus}
-              onChange={setSelectedStatus}
-              renderOption={(option) => t(FILTER_LABEL[option])}
-            />
-            <Button variant="secondary" size="sm" onClick={() => setShowCalendar(true)}>
-              <Calendar className="w-4 h-4 mr-1" aria-hidden="true" /> {t('people.viewCalendar')}
-            </Button>
-          </div>
+          <FilterPills
+            label={t('people.filterByStatus')}
+            options={STATUS_FILTERS}
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+            renderOption={(option) => t(FILTER_LABEL[option])}
+          />
         </div>
-
         <Table caption={t('people.leave.caption')}>
           <THead>
             <Th>{t('people.col.type')}</Th>
@@ -276,6 +259,7 @@ export default function LeaveRequestsView({
         </Table>
       </section>
 
+      {/* Calendar Modal */}
       {showCalendar && (
         <CalendarView
           leaveRequests={leaveRequests}
@@ -285,6 +269,7 @@ export default function LeaveRequestsView({
         />
       )}
 
+      {/* New Request */}
       {isEmployee && (
         <Dialog
           open={isModalOpen}

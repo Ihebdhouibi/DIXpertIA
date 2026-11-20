@@ -11,7 +11,7 @@
  * the 401 path are written once rather than per call site.
  */
 import { getLocale, t, type Locale } from './i18n';
-import { Client, Employee, Invoice, LeaveRequest, Payslip, User } from './types';
+import { Client, Employee, Invoice, LeaveBalance, LeaveRequest, Payslip, User } from './types';
 
 const TOKEN_KEY = 'token';
 
@@ -394,6 +394,14 @@ export const leaveRequests = {
       method: 'POST',
       body: JSON.stringify({ reason: reason ?? '' }),
     }),
+};
+
+/** The caller's leave balance per type, in working days (#121). */
+export const leaveBalances = {
+  get: (year?: number) =>
+    request<{ year: number; balances: LeaveBalance[] }>(
+      `/api/leaves/balances${year ? `?year=${year}` : ''}`,
+    ),
 };
 
 export const payslips = {

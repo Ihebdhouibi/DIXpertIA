@@ -201,6 +201,15 @@ export default defineMessages('people', {
     fr: { one: 'jour restant', other: 'jours restants' },
     en: { one: 'day left', other: 'days left' },
   },
+  'people.leave.daysTaken': {
+    fr: { one: 'jour pris', other: 'jours pris' },
+    en: { one: 'day taken', other: 'days taken' },
+  },
+  'people.leave.pendingDays': {
+    fr: { one: '{count} jour en attente', other: '{count} jours en attente' },
+    en: { one: '{count} day pending', other: '{count} days pending' },
+  },
+  'people.leave.balanceUnavailable': { fr: 'Solde indisponible', en: 'Balance unavailable' },
   'people.leave.recent': { fr: 'Demandes récentes', en: 'Recent requests' },
   'people.leave.filter.All': { fr: 'Toutes', en: 'All' },
   'people.leave.filter.Pending': { fr: 'En attente', en: 'Pending' },
