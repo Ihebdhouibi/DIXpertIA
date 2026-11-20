@@ -54,8 +54,7 @@ def test_an_inactive_account_cannot_sign_in(client, database):
     make_account(database, f"gone@{DOMAIN}", active=False)
     response = sign_in(client, f"gone@{DOMAIN}")
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials", "the same answer as a wrong password"
-
+    assert response.json()["detail"] == "Incorrect e-mail address or password.", "the same answer as a wrong password"
 
 def test_deactivation_revokes_a_token_already_issued(client, admin, database):
     user_id = make_account(database, f"leaver@{DOMAIN}", role="accountant")
@@ -194,6 +193,43 @@ def test_an_inactive_account_gets_no_reset_link(client, database, mailbox):
     make_account(database, f"inactive@{DOMAIN}", active=False)
     assert client.post("/api/forgot-password", json={"email": f"inactive@{DOMAIN}"}).status_code == 200
     assert mailbox == []
+
+
+def test_reset_email_escapes_html_in_first_name(client, database, mailbox):
+    """Ensures the reset e-mail HTML escapes malicious first names (#211)."""
+    email = f"xss-reset@{DOMAIN}"
+    malicious_name = '"><img src=x onerror=alert(1)>'
+    make_account(database, email, first_name=malicious_name)
+
+    response = client.post("/api/forgot-password", json={"email": email})
+    assert response.status_code == 200
+
+    mails = [m for m in mailbox if m["to"] == email]
+    html_body = mails[0].get("html")
+
+    assert html_body is not None
+    assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_body
+    assert malicious_name not in html_body
+    assert "&amp;quot;" not in html_body
+
+
+def test_activation_email_escapes_html_in_first_name(client, admin, database, mailbox):
+    """Ensures the activation e-mail HTML escapes malicious first names (#211)."""
+    email = f"xss-activate@{DOMAIN}"
+    malicious_name = '"><img src=x onerror=alert(1)>'
+
+    created = client.post("/api/users", headers=admin, json={
+        "email": email, "firstName": malicious_name, "lastName": "Hacker", "role": "employee"
+    })
+    assert created.status_code == 201
+
+    mails = [m for m in mailbox if m["to"] == email]
+    html_body = mails[0].get("html")
+
+    assert html_body is not None
+    assert "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_body
+    assert malicious_name not in html_body
+    assert "&amp;quot;" not in html_body
 
 
 # --- New accounts: no password returned, activation first ----------------------

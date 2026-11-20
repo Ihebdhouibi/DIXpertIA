@@ -17,6 +17,7 @@ import InvoicesView from './components/InvoicesView';
 import DashboardView from './components/DashboardView';
 import NotificationsView from './components/NotificationsView';
 import EnquiriesView from './components/EnquiriesView';
+import DemosView from './components/DemosView';
 import ClientsView from './components/ClientsView';
 import SkipLink from './components/ui/SkipLink';
 import SettingsView from './components/SettingsView';
@@ -400,6 +401,9 @@ export default function App() {
 
       case 'enquiries':
         return currentUser.role === 'admin' ? <EnquiriesView /> : null;
+
+      case 'demos':
+        return currentUser.role === 'admin' ? <DemosView /> : null;
 
       case 'invoices':
         return <InvoicesView clients={clients} onInvoiceCreated={handleInvoiceCreated} userRole={currentUser.role} />;

@@ -7,6 +7,8 @@ from typing import List, Literal, Optional
 from fastapi import FastAPI, Depends, Query, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
@@ -50,11 +52,12 @@ from app.models.user import User
 from app.models.leaves import LeaveRequest, LeaveStatus, LeaveType, LeaveEntitlement
 from app.models.payroll import Payslip
 from app.models.employee import Employee
-from app.routers import accounting, audit, contact, dashboard, invoicing, mfa as mfa_router, notifications
+from app.routers import accounting, audit, contact, dashboard, demos, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
+from app.services.email_template import render_html_email, t_html
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -84,6 +87,10 @@ PUBLIC_PATHS = frozenset({
     "/api/mfa/enrol/setup",
     "/api/mfa/enrol/confirm",
 })
+# The website's own reads (#232, demo videos and their previews): every path
+# under this prefix is public. Each such route reads through a SECURITY
+# DEFINER function that returns published content only, and is rate limited.
+PUBLIC_PREFIX = "/api/public/"
 _optional_bearer = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 
@@ -106,7 +113,7 @@ async def require_authentication(request: Request, token: Optional[str] = Depend
     # The language of this request's messages (#135): what the UI sends in
     # Accept-Language, French without one. Set before anything can refuse.
     set_locale(request.headers.get("accept-language"))
-    if request.url.path in PUBLIC_PATHS:
+    if request.url.path in PUBLIC_PATHS or request.url.path.startswith(PUBLIC_PREFIX):
         return
     identity = await run_in_threadpool(_identity_for, token) if token else None
     if identity is None:
@@ -144,8 +151,6 @@ async def lifespan(_: FastAPI):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
-
-
 # The interactive API documentation (/docs, /redoc, /openapi.json) maps every
 # route and schema: useful in development and on staging, not something to hand
 # the internet in production (#185). Off unless API_DOCS is set.
@@ -165,7 +170,19 @@ async def _api_error(_request: Request, exc: ApiError) -> JSONResponse:
     key in `code`, so the UI and the tests recognise it without parsing text."""
     return JSONResponse(status_code=exc.status_code, headers=exc.headers,
                         content={"detail": exc.detail, "code": exc.code})
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Intercept Pydantic validation errors to return translated messages."""
+    for error in exc.errors():
+        # Catch the specific Pydantic error for reserved/invalid domains
+        if "email" in error.get("loc", []) and "value is not a valid email address" in error.get("msg", ""):
+            return JSONResponse(
+                status_code=422,
+                content={"detail": t("auth.invalid_email"), "code": "auth.invalid_email"},
+            )
 
+    # For ALL other validation errors, let FastAPI's default handler manage it
+    return await request_validation_exception_handler(request, exc)
 # NOTE: the payslip router is intentionally not mounted. `app/routers/payroll.py`
 # declares its routes as "/" and "/{payslip_id}", so mounting it under "/api"
 # registers GET /api/{payslip_id}, which shadows other GET /api/<name> routes. It also expects a
@@ -177,6 +194,8 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(contact.public, prefix="/api")
 app.include_router(contact.admin, prefix="/api")
+app.include_router(demos.public, prefix="/api")
+app.include_router(demos.admin, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(mfa_router.router, prefix="/api")
 app.include_router(mfa_router.public, prefix="/api")
@@ -401,9 +420,23 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 def _send_activation(user: User, token: str) -> bool:
     """In the new account's language (#135), which the admin chose at creation."""
-    body = t("email.activation.body", user.locale, name=user.firstName,
-             link=accounts.link(accounts.ACTIVATION, token))
-    return send_email(user.email, t("email.activation.subject", user.locale), body)
+    link = accounts.link(accounts.ACTIVATION, token)
+    plain_body = t("email.activation.body", user.locale, name=user.firstName, link=link)
+    html_msg = t_html("email.activation.html_message", user.locale, name=user.firstName)
+    html_body = render_html_email(
+        lang=user.locale,
+        title=t("email.activation.html_title", user.locale),
+        message_html=html_msg,
+        action_url=link,
+        action_text=t("email.activation.html_action", user.locale),
+        footer_text=t("email.activation.html_footer", user.locale)
+    )
+    return send_email(
+        to_email=user.email,
+        subject=t("email.activation.subject", user.locale),
+        body=plain_body,
+        html_text=html_body
+    )
 
 
 # require_admin as a dependency rather than a check inside the body: FastAPI
@@ -561,8 +594,18 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
     # In the account's language (#135), not the language of the page the
     # request came from: the account owner reads it.
-    body = t("email.reset.body", user.locale, name=user.firstName, link=accounts.link(accounts.RESET, token))
-    send_email(user.email, t("email.reset.subject", user.locale), body)
+    link = accounts.link(accounts.RESET, token)
+    plain_body = t("email.reset.body", user.locale, name=user.firstName, link=link)
+    html_msg = t_html("email.reset.html_message", user.locale, name=user.firstName)
+    html_body = render_html_email(
+        lang=user.locale,
+        title=t("email.reset.html_title", user.locale),
+        message_html=html_msg,
+        action_url=link,
+        action_text=t("email.reset.html_action", user.locale),
+        footer_text=t("email.reset.html_footer", user.locale)
+    )
+    send_email(user.email, t("email.reset.subject", user.locale), plain_body, html_text=html_body)
     return answer
 
 

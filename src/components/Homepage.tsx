@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import HomeHeader, { type HomeTarget } from './home/HomeHeader';
 import Hero from './home/Hero';
 import HowWeWorkConsole from './home/HowWeWorkConsole';
 import Services from './home/Services';
 import Engagement from './home/Engagement';
-import { ApiError, contact } from '../api';
+import DemoSection from './home/DemoSection';
+import { ApiError, contact, publicDemos, type PublicDemo } from '../api';
 import AboutCta from './home/AboutCta';
 import HomeFooter from './home/HomeFooter';
 import SkipLink from './ui/SkipLink';
@@ -52,6 +53,18 @@ const EYEBROW = 'font-mono text-xs font-medium uppercase tracking-[0.18em]';
 export default function Homepage({ onDashboardClick }: HomepageProps) {
   const t = useT();
   const [currentPage, setCurrentPage] = useState<Page>('home');
+  // The published demos (#234). Until they arrive, and when there are none or
+  // they cannot be read, the page has no Demo section, no Demo link, and the
+  // later sections keep their numbers: a visitor never sees an empty section.
+  const [demos, setDemos] = useState<PublicDemo[]>([]);
+  useEffect(() => {
+    let live = true;
+    publicDemos.list().then((rows) => live && setDemos(rows), () => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const hasDemos = demos.length > 0;
 
   // Contact form state
   const [name, setName] = useState('');
@@ -83,6 +96,9 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
     } else if (page === 'services') {
       setCurrentPage('home');
       setTimeout(() => scrollToSection('services'), 100);
+    } else if (page === 'demo') {
+      setCurrentPage('home');
+      setTimeout(() => scrollToSection('demo'), 100);
     } else if (page === 'about') {
       setCurrentPage('home');
       setTimeout(() => scrollToSection('about'), 100);
@@ -150,6 +166,7 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
       current={currentPage === 'contact' ? 'contact' : 'home'}
       onNavigate={handleNavClick}
       onDashboardClick={onDashboardClick}
+      showDemo={hasDemos}
     />
     </>
   );
@@ -382,9 +399,10 @@ export default function Homepage({ onDashboardClick }: HomepageProps) {
         />
 
         <Services onPick={() => handleNavClick('contact')} />
-        <Engagement />
+        {hasDemos && <DemoSection demos={demos} />}
+        <Engagement number={hasDemos ? '03' : '02'} />
 
-        <AboutCta onStart={() => handleNavClick('contact')} />
+        <AboutCta onStart={() => handleNavClick('contact')} number={hasDemos ? '04' : '03'} />
       </main>
 
       {footer}

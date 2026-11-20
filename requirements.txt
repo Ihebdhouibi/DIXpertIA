@@ -22,6 +22,10 @@ email-validator==2.3.0
 
 # PDF generation (app/services/invoice_generator.py)
 reportlab==4.2.2
+# Imported directly (invoice logo, demo previews #232); reportlab already pulls it in.
+# 13.0.0 or later: 12.x has critical heap overflows in its decoders, and the
+# demo previews decode images fetched from outside.
+pillow==13.0.0
 
 # Email
 mailtrap==2.0.0

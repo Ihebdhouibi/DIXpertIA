@@ -58,7 +58,15 @@ CATALOG: dict[str, dict[str, str]] = {
     "auth.not_authenticated": {"en": "Not authenticated", "fr": "Non authentifié"},
     "auth.forbidden": {"en": "Access denied", "fr": "Accès refusé"},
     "auth.admin_required": {"en": "Administrator role required", "fr": "Rôle administrateur requis"},
-    "auth.invalid_credentials": {"en": "Invalid credentials", "fr": "Identifiants incorrects"},
+    "auth.invalid_credentials": {
+        "en": "Incorrect e-mail address or password.",
+        "fr": "Adresse e-mail ou mot de passe incorrect."
+    },
+    "auth.invalid_email": {
+        "en": "Invalid e-mail address.",
+        "fr": "Adresse e-mail invalide."
+    },
+
     # #220: a lockout says it is one, and for how long. The same for any
     # e-mail, existing or not, so it reveals nothing.
     "auth.locked": {
@@ -499,6 +507,17 @@ CATALOG: dict[str, dict[str, str]] = {
         "fr": "Trop de messages reçus dans la dernière heure. Réessayez plus tard, "
               "ou appelez-nous au +216 28 814 729."},
     "contact.not_found": {"en": "Enquiry not found", "fr": "Demande introuvable"},
+    # Demo videos (#232)
+    "demo.not_found": {"en": "Demo not found", "fr": "Démo introuvable"},
+    "demo.link_unknown": {
+        "en": "This link is not recognised: use a Google Drive, YouTube or Vimeo video link.",
+        "fr": "Ce lien n'est pas reconnu : utilisez le lien d'une vidéo Google Drive, YouTube ou Vimeo."},
+    "demo.thumbnail_drive_only": {
+        "en": "The preview image must be a Google Drive link, for now.",
+        "fr": "L'image d'aperçu doit être un lien Google Drive, pour l'instant."},
+    "demo.order_mismatch": {
+        "en": "The new order must list every demo exactly once.",
+        "fr": "Le nouvel ordre doit contenir chaque démo une seule fois."},
     "contact.topic.security_audit": {
         "en": "Security audit / penetration testing", "fr": "Audit de sécurité / test d'intrusion"},
     "contact.topic.cloud_migration": {"en": "Hybrid cloud migration", "fr": "Migration vers le cloud hybride"},
@@ -520,6 +539,66 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.status.payee": {"en": "Paid", "fr": "Payée"},
     "pdf.status.en_retard": {"en": "Overdue", "fr": "En retard"},
     "pdf.status.annulee": {"en": "Cancelled", "fr": "Annulée"},
+    # HTML E-mail components (#211)
+    "email.activation.html_title": {
+        "en": "Activate your DI Xpertia account",
+        "fr": "Activez votre compte DI Xpertia"
+    },
+    "email.activation.html_message": {
+        "en": "<p>Hello {name},</p>"
+              "<p>An account has been created for you on DI Xpertia.</p>"
+              "<p>Choose your password using the button below (valid for 72 hours).</p>",
+        "fr": "<p>Bonjour {name},</p>"
+              "<p>Un compte a été créé pour vous sur DI Xpertia.</p>"
+              "<p>Choisissez votre mot de passe en utilisant le bouton ci-dessous "
+              "(valable 72 heures).</p>"
+    },
+    "email.activation.html_action": {"en": "Activate my account", "fr": "Activer mon compte"},
+    "email.activation.html_footer": {
+        "en": "You receive this email because an account was created for you.",
+        "fr": "Vous recevez cet e-mail car un compte a été créé pour vous."
+    },
+
+    "email.reset.html_title": {"en": "Password reset request", "fr": "Réinitialisation de votre mot de passe"},
+    "email.reset.html_message": {
+        "en": "<p>Hello {name},</p>"
+              "<p>You requested a password reset for your DI Xpertia account.</p>"
+              "<p>Click the button below to set a new password (valid for 1 hour, once).</p>"
+              "<p>If you did not request this, you can safely ignore this email.</p>",
+        "fr": "<p>Bonjour {name},</p>"
+              "<p>Vous avez demandé la réinitialisation du mot de passe de votre compte DI Xpertia.</p>"
+              "<p>Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe "
+              "(valable 1 heure, une seule fois).</p>"
+              "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>"
+    },
+    "email.reset.html_action": {"en": "Choose a new password", "fr": "Choisir un nouveau mot de passe"},
+    "email.reset.html_footer": {
+        "en": "You receive this email because a password reset was requested for your account.",
+        "fr": "Vous recevez cet e-mail car une réinitialisation de mot de passe a été demandée."
+    },
+
+    "email.reminder.html_title": {"en": "DI Xpertia - Invoice reminder", "fr": "DI Xpertia - Rappel de facture"},
+    "email.reminder.html_message": {"en": "<p>{message}</p>", "fr": "<p>{message}</p>"},
+    "email.reminder.html_action": {"en": "Open DI Xpertia", "fr": "Ouvrir DI Xpertia"},
+    "email.reminder.html_footer": {"en": "This is an automated reminder.", "fr": "Ceci est un rappel automatique."},
+
+    "email.contact.html_title": {"en": "New enquiry from the website", "fr": "Nouvelle demande depuis le site"},
+    "email.contact.html_message": {
+        "en": "<p><strong>Name:</strong> {name}<br/>"
+              "<strong>Email:</strong> {email}<br/>"
+              "<strong>Topic:</strong> {topic}</p>"
+              "<p><strong>Message:</strong><br/>{message}</p>"
+              "<p><a href=\"{link}\">View all enquiries</a></p>",
+        "fr": "<p><strong>Nom :</strong> {name}<br/>"
+              "<strong>E-mail :</strong> {email}<br/>"
+              "<strong>Sujet :</strong> {topic}</p>"
+              "<p><strong>Message :</strong><br/>{message}</p>"
+              "<p><a href=\"{link}\">Voir toutes les demandes</a></p>"
+    },
+    "email.contact.html_footer": {
+        "en": "You receive this email because you are an administrator.",
+        "fr": "Vous recevez cet e-mail car vous êtes administrateur."
+    },
 }
 
 

@@ -537,6 +537,90 @@ export const contactRequests = {
   handle: (id: string) => request<ContactRequest>(`/api/contact-requests/${id}/handle`, { method: 'POST' }),
 };
 
+/** A demo video as the admin manages it (#232, #233). */
+export type DemoService = 'cloud' | 'security' | 'software';
+export type DemoProvider = 'drive' | 'youtube' | 'vimeo';
+export interface Demo {
+  id: number;
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  video_url: string;
+  provider: DemoProvider;
+  video_id: string;
+  thumbnail_url: string | null;
+  service: DemoService | null;
+  position: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+  embed_url: string;
+  /** Our own API's route for the stored preview; null when none could be fetched. */
+  preview_image: string | null;
+}
+export interface DemoInput {
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  video_url: string;
+  /** "" removes the image. */
+  thumbnail_url: string;
+  service: DemoService | null;
+  published: boolean;
+}
+
+/** The demo videos shown on the website (#233): admin only. */
+export const demos = {
+  list: () => request<Demo[]>('/api/demos'),
+  create: (body: DemoInput) => request<Demo>('/api/demos', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: number, body: Partial<DemoInput>) =>
+    request<Demo>(`/api/demos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  remove: (id: number) => request<void>(`/api/demos/${id}`, { method: 'DELETE' }),
+  /** The full order, first shown first: every demo, each once. */
+  reorder: (ids: number[]) => request<Demo[]>('/api/demos/order', { method: 'PUT', body: JSON.stringify({ ids }) }),
+  /**
+   * The stored preview image, as a blob: the route needs the admin's token,
+   * which an <img src> cannot send, and the page never loads images from the
+   * video host (img-src 'self').
+   */
+  preview: async (path: string) => (await send(path)).blob(),
+};
+
+/** A published demo as the website shows it (#234): both languages, so FR/EN needs no reload. */
+export interface PublicDemo {
+  id: number;
+  title_fr: string;
+  title_en: string;
+  description_fr: string;
+  description_en: string;
+  provider: DemoProvider;
+  service: DemoService | null;
+  /** The player, loaded only when the visitor presses Play. */
+  embed_url: string;
+  /** On our own domain, or null: the card then shows its branded fallback. */
+  preview_image: string | null;
+}
+
+let publishedDemos: Promise<PublicDemo[]> | null = null;
+
+/**
+ * The website's published demos, fetched once per visit (#234): going back to
+ * the homepage does not ask again. The public routes share a rate limit with
+ * sign-in and the contact form (#246), so the page spends as little of it as
+ * it can. A failure is forgotten, so a later visit of the homepage retries.
+ */
+export const publicDemos = {
+  list: (): Promise<PublicDemo[]> => {
+    publishedDemos ??= request<PublicDemo[]>('/api/public/demos').catch((err) => {
+      publishedDemos = null;
+      throw err;
+    });
+    return publishedDemos;
+  },
+};
+
 export const notifications = {
   /** The caller's own notifications, unread first (#116). */
   list: async (limit = 50): Promise<NotificationPage> => {

@@ -1,4 +1,6 @@
-import { Bell, Building2, Calendar, FileText, Inbox, LayoutDashboard, Settings, UserCog, Users, Wallet } from 'lucide-react';
+import {
+  Bell, Building2, Calendar, FileText, Inbox, LayoutDashboard, Settings, SquarePlay, UserCog, Users, Wallet,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { UserRole } from './types';
 import type { MessageKey, Params } from './i18n';
@@ -33,6 +35,8 @@ const ITEMS: NavItem[] = [
   { id: 'users', label: 'common.nav.users', icon: UserCog, showFor: ['admin', 'accountant'] },
   // Enquiries from the website's contact form (#98): admin only.
   { id: 'enquiries', label: 'common.nav.enquiries', icon: Inbox, showFor: ['admin'] },
+  // The website's demo videos (#233): admin only.
+  { id: 'demos', label: 'common.nav.demos', icon: SquarePlay, showFor: ['admin'] },
   { id: 'notifications', label: 'common.nav.notifications', icon: Bell },
   { id: 'settings', label: 'common.nav.settings', icon: Settings },
 ];

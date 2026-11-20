@@ -49,7 +49,7 @@ alembic current           # show the applied revision
 
 | Variable | Role | Can |
 |---|---|---|
-| `DATABASE_URL` | `dixpertia_app` | SELECT / INSERT / UPDATE, DELETE on `services` and `invoice_items` only (draft lines, #125) |
+| `DATABASE_URL` | `dixpertia_app` | SELECT / INSERT / UPDATE, DELETE on `services`, `invoice_items` (draft lines, #125) and `demo_videos` / `demo_previews` (#232) only |
 | `SCHEMA_DATABASE_URL` | `dixpertia_owner` | CREATE / ALTER - used by Alembic only |
 
 The application role is deliberately `NOSUPERUSER NOBYPASSRLS`: a superuser
@@ -358,6 +358,24 @@ That distinction is load-bearing. **A superuser bypasses row-level security
 entirely**, so a suite that let the application connect as one would report
 every policy test as passing while proving nothing. The first version of this
 harness made that mistake and a policy test caught it.
+
+### Next to the development database
+
+Roles belong to the PostgreSQL server, not to a database, so provisioning
+`dixpertia_test` resets the passwords of the same `dixpertia_app` and
+`dixpertia_owner` that `dixpertia` uses. When the test database is on the same
+server as the one in `.env`, the suite therefore provisions the roles with the
+passwords already in `DATABASE_URL` and `SCHEMA_DATABASE_URL`, and the
+development database keeps working after a run (#150). A test database on
+another server (CI, a Docker container) gets fresh per-run passwords.
+
+If the development roles stopped working after an earlier run, set them back
+once, as a superuser, to the values in `.env`:
+
+```bash
+python db/setup_roles.py --superuser-url postgresql://postgres:PASS@localhost:5432/dixpertia \
+    --app-password=<from DATABASE_URL> --owner-password=<from SCHEMA_DATABASE_URL>
+```
 
 ### What it covers
 

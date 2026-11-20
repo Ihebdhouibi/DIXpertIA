@@ -21,17 +21,19 @@ def link_token(mailbox, to: str) -> str:
 
 
 def make_account(database, email: str, role: str = "employee", *, active=True, verified=True,
-                 password: str = PASSWORD) -> str:
+                 password: str = PASSWORD, first_name: str | None = None) -> str:
     """An account with a known password, inserted directly. Returns its id."""
     # Imported here, not at the top: app.core.config refuses to load before
     # the database fixture has set DATABASE_URL, and modules are collected first.
     from app.core.security import hash_password
 
+    fn = first_name if first_name is not None else email.split("@")[0]
+
     with database.connect() as c:
         return c.execute(text(
             'INSERT INTO users (email, "firstName", "lastName", role, "hashedPassword",'
             ' "isActive", "isVerified") VALUES (:e, :f, \'Test\', :r, :h, :a, :v) RETURNING id'),
-            {"e": email, "f": email.split("@")[0], "r": role, "h": hash_password(password),
+            {"e": email, "f": fn, "r": role, "h": hash_password(password),
              "a": active, "v": verified}).scalar_one()
 
 

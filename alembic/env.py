@@ -20,7 +20,10 @@ config = context.config
 # Migrations run as the schema OWNER role, not the application role: the
 # application role has no CREATE privilege by design (#70). Using
 # DATABASE_URL here would fail with "permission denied for schema public".
-config.set_main_option("sqlalchemy.url", settings.SCHEMA_DATABASE_URL)
+#
+# Doubled "%": set_main_option goes through configparser interpolation, so a
+# percent-encoded password (p%40ss) raised "invalid interpolation syntax".
+config.set_main_option("sqlalchemy.url", settings.SCHEMA_DATABASE_URL.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
