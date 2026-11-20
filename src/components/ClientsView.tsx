@@ -63,11 +63,16 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
 
   const set = (field: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
-  // Ticking export moves a TND client to a foreign currency: an export client
-  // pays in one for this release (#195). USD, which both current clients use.
+  // The currency follows export, both ways, for this release: an export
+  // client pays in a foreign currency (#195), USD by default as both current
+  // ones do; a client in Tunisia pays in TND, the currency of its stamp duty (#189).
   const setExport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;
-    setForm((f) => ({ ...f, export: checked, devise: checked && f.devise === 'TND' ? 'USD' : f.devise }));
+    setForm((f) => ({
+      ...f,
+      export: checked,
+      devise: checked ? (f.devise === 'TND' ? 'USD' : f.devise) : 'TND',
+    }));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -75,6 +80,7 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
     if (!form.nom.trim()) return setError(t('invoices.clients.form.nameRequired'));
     if (form.email.trim() && !EMAIL.test(form.email.trim())) return setError(t('invoices.clients.form.emailInvalid'));
     if (form.export && form.devise === 'TND') return setError(t('invoices.clients.form.exportNeedsCurrency'));
+    if (!form.export && form.devise !== 'TND') return setError(t('invoices.clients.form.domesticPaysInTnd'));
     if (taxIdRequired(form) && !form.identifiant_fiscal.trim()) return setError(t('invoices.clients.form.taxIdRequired'));
     setSaving(true);
     setError(null);
@@ -245,7 +251,7 @@ export default function ClientsView({ clients, onChanged }: { clients: Client[];
               {({ id, describedBy }) => (
                 <Select id={id} value={form.devise} onChange={set('devise')} aria-describedby={describedBy}>
                   {CURRENCIES.map((c) => (
-                    <option key={c} value={c} disabled={form.export && c === 'TND'}>{c}</option>
+                    <option key={c} value={c} disabled={form.export === (c === 'TND')}>{c}</option>
                   ))}
                 </Select>
               )}

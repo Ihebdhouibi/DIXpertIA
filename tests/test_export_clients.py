@@ -1,8 +1,9 @@
 """Export clients and the invoice currency (#195).
 
 A client abroad is billed for an export of services: no Tunisian VAT (Code de
-la TVA, art. 3-I and 11-I), in their own currency. For this release an export
-client always pays in a foreign currency.
+la TVA, art. 3-I and 11-I), in their own currency. For this release the rule
+holds both ways: an export client pays in a foreign currency, a client in
+Tunisia in TND, the currency of the stamp duty on its invoices (#189).
 """
 
 import pytest
@@ -51,6 +52,29 @@ def test_an_export_client_in_dinars_is_refused(client, admin):
     response = client.post("/api/clients", headers=admin, json={**ABROAD, "devise": "TND"})
     assert response.status_code == 422
     assert "foreign currency" in response.text
+
+
+def test_a_client_in_tunisia_in_euros_is_refused(client, admin):
+    """The stamp duty is an amount in dinars: it must never be added to a total in euros."""
+    response = client.post("/api/clients", headers=admin, json={**LOCAL, "devise": "EUR"})
+    assert response.status_code == 422
+    assert "in TND" in response.text
+
+
+def test_a_client_in_tunisia_cannot_move_to_euros(client, admin):
+    local = make_client(client, admin, **LOCAL)
+    response = client.patch(f"/api/clients/{local['id']}", headers=admin, json={"devise": "EUR"})
+    assert response.status_code == 422
+    assert response.json()["code"] == "client.domestic_pays_in_tnd"
+
+
+def test_a_client_back_from_abroad_pays_in_dinars(client, admin):
+    """No longer export, still in USD: refused until the currency is TND too."""
+    abroad = make_client(client, admin, **ABROAD)
+    refused = client.patch(f"/api/clients/{abroad['id']}", headers=admin, json={"export": False})
+    assert refused.status_code == 422 and refused.json()["code"] == "client.domestic_pays_in_tnd"
+    moved = client.patch(f"/api/clients/{abroad['id']}", headers=admin, json={"export": False, "devise": "TND"})
+    assert moved.status_code == 200 and (moved.json()["export"], moved.json()["devise"]) == (False, "TND")
 
 
 @pytest.mark.parametrize("changes", [{"devise": "CHF"}, {"identifiant_fiscal": "x" * 51}])
@@ -150,10 +174,13 @@ def test_the_database_fixes_the_invoice_currency(client, admin, database):
             c.execute(text("UPDATE invoices SET devise = 'EUR' WHERE id = :i"), {"i": invoice_id})
 
 
-def test_the_database_refuses_an_export_client_in_dinars(database):
-    with pytest.raises(DBAPIError, match="ck_clients_export_in_foreign_currency"):
+@pytest.mark.parametrize("export,devise", [(True, "TND"), (False, "EUR")],
+                         ids=["export-in-dinars", "domestic-in-euros"])
+def test_the_database_holds_the_currency_rule_both_ways(database, export, devise):
+    with pytest.raises(DBAPIError, match="ck_clients_currency_follows_export"):
         with database.begin() as c:
-            c.execute(text("INSERT INTO clients (nom, export, devise) VALUES ('Raw export', true, 'TND')"))
+            c.execute(text("INSERT INTO clients (nom, export, devise) VALUES ('Raw client', :x, :d)"),
+                      {"x": export, "d": devise})
 
 
 # --- The PDF ----------------------------------------------------------------------------

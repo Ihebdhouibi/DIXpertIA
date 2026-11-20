@@ -158,6 +158,9 @@ CATALOG: dict[str, dict[str, str]] = {
     "client.export_needs_foreign_currency": {
         "en": "An export client pays in a foreign currency (EUR, USD or GBP), not in TND.",
         "fr": "Un client export paie en devise (EUR, USD ou GBP), pas en TND."},
+    "client.domestic_pays_in_tnd": {
+        "en": "A client in Tunisia pays in TND: the stamp duty on its invoices is an amount in dinars.",
+        "fr": "Un client en Tunisie paie en TND : le droit de timbre de ses factures est un montant en dinars."},
     "client.tax_id_required": {
         "en": "A business in Tunisia needs its tax ID (matricule fiscal): it is a mandatory mention on its invoices.",
         "fr": "Une entreprise en Tunisie doit avoir son matricule fiscal : c'est une mention obligatoire "

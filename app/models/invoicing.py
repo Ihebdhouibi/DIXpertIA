@@ -187,9 +187,10 @@ class Client(Base):
         # Stops "Acme Corp" and "ACME CORP" becoming two customers.
         CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
         CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_clients_devise"),
-        # Decided for this release (#195): an export client always pays in a
-        # foreign currency. Lifting it is dropping this one constraint.
-        CheckConstraint("NOT export OR devise <> 'TND'", name="ck_clients_export_in_foreign_currency"),
+        # Decided for this release, both ways: an export client pays in a
+        # foreign currency (#195), a client in Tunisia in TND, the currency of
+        # its stamp duty (#189). Mirrors currency_problem().
+        CheckConstraint("(export) = (devise <> 'TND')", name="ck_clients_currency_follows_export"),
         Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
     )
 
@@ -232,7 +233,8 @@ class Invoice(Base):
     # settings when an outgoing draft is created or edited, then fixed with the
     # totals by invoice_draft_is_editable. Not part of montant_ttc, so
     # ttc - ht stays the VAT; the amount due is montant_ttc + droit_timbre.
-    # 0 on an export invoice (ck_invoices_stamp_duty) and on a supplier bill.
+    # 0 on an export invoice, on one in another currency than TND
+    # (ck_invoices_stamp_duty) and on a supplier bill.
     droit_timbre = Column(Numeric(10, 3), nullable=False, default=0, server_default=text("0"))
     # NOT NULL with a default: the status was nullable and never set, so every
     # invoice was created with statut = NULL. InvoiceOut requires it, so
@@ -313,7 +315,7 @@ class Invoice(Base):
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
-        CheckConstraint("droit_timbre >= 0 AND (NOT export OR droit_timbre = 0)",
+        CheckConstraint("droit_timbre >= 0 AND (droit_timbre = 0 OR (NOT export AND devise = 'TND'))",
                         name="ck_invoices_stamp_duty"),
         CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_invoices_devise"),
         # Approved, sent or paid means numbered; a draft, or one cancelled

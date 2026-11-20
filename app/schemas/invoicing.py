@@ -37,11 +37,19 @@ def tax_id_missing(entreprise: bool, export: bool, identifiant_fiscal: str | Non
     return bool(entreprise) and not export and not (identifiant_fiscal or "").strip()
 
 
-def export_currency_problem(export: bool, devise: str) -> bool:
-    """This release's rule (#195): an export client always pays in a foreign
-    currency. Mirrors ck_clients_export_in_foreign_currency; lifting the rule
-    is removing both."""
-    return bool(export) and devise == "TND"
+def currency_problem(export: bool, devise: str) -> str | None:
+    """This release's rule, both ways: an export client pays in a foreign
+    currency (#195), a client in Tunisia pays in TND (#189, whose stamp duty is
+    an amount in dinars). Returns the error code, or None. Mirrors
+    ck_clients_currency_follows_export.
+
+    Whether a client in Tunisia may pay in euros, and how its stamp duty would
+    then be shown, is an open question for the accountant (#195)."""
+    if export and devise == "TND":
+        return "client.export_needs_foreign_currency"
+    if not export and devise != "TND":
+        return "client.domestic_pays_in_tnd"
+    return None
 
 
 def _tax_id(value: str | None) -> str | None:
@@ -92,9 +100,12 @@ class ClientCreate(ClientBase):
         return value.strip()
 
     @model_validator(mode="after")
-    def _export_in_foreign_currency(self):
-        if export_currency_problem(self.export, self.devise):
+    def _currency_follows_export(self):
+        problem = currency_problem(self.export, self.devise)
+        if problem == "client.export_needs_foreign_currency":
             raise ValueError("an export client pays in a foreign currency (EUR, USD or GBP)")
+        if problem == "client.domestic_pays_in_tnd":
+            raise ValueError("a client in Tunisia pays in TND")
         return self
 
 

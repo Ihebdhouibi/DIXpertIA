@@ -46,7 +46,7 @@ from app.schemas.invoicing import (
     SupplierCreate,
     SupplierInvoiceCreate,
     SupplierOut,
-    export_currency_problem,
+    currency_problem,
     tax_id_missing,
 )
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
@@ -146,8 +146,9 @@ def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(g
     if changes.get("identifiant_fiscal") == "":
         changes["identifiant_fiscal"] = None  # cleared
     # The rule holds on the client as it will be, not only on the fields sent.
-    if export_currency_problem(changes.get("export", client.export), changes.get("devise", client.devise)):
-        raise ApiError(422, "client.export_needs_foreign_currency")
+    problem = currency_problem(changes.get("export", client.export), changes.get("devise", client.devise))
+    if problem:
+        raise ApiError(422, problem)
     # "identifiant_fiscal" in changes: None there means cleared, not unchanged.
     tax_id = changes["identifiant_fiscal"] if "identifiant_fiscal" in changes else client.identifiant_fiscal
     if tax_id_missing(changes.get("entreprise", client.entreprise), changes.get("export", client.export), tax_id):
@@ -273,10 +274,11 @@ def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
     return ht, ttc
 
 
-def _stamp_duty(export: bool) -> Decimal:
-    """The stamp duty an outgoing invoice carries (#189): the setting's amount
-    for a client in Tunisia, none for an export of services."""
-    return Decimal(0) if export else settings.STAMP_DUTY_AMOUNT
+def _stamp_duty(export: bool, devise: str) -> Decimal:
+    """The stamp duty an outgoing invoice carries (#189): the setting's amount,
+    in dinars, for a client in Tunisia; none for an export of services. Never
+    on an invoice in another currency: the amount is in TND (ck_invoices_stamp_duty)."""
+    return settings.STAMP_DUTY_AMOUNT if not export and devise == "TND" else Decimal(0)
 
 
 def _missing_legal_mentions(invoice: Invoice) -> list[str]:
@@ -413,7 +415,7 @@ def create_invoice(
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
-        droit_timbre=_stamp_duty(client.export),
+        droit_timbre=_stamp_duty(client.export, client.devise),
         statut=InvoiceStatus.BROUILLON,
         direction=InvoiceDirection.OUTGOING,
         cree_par_id=current_user.id,
@@ -601,7 +603,7 @@ def update_invoice(
     montant_ht, montant_ttc = _compute_totals(items_data)
     # Taken again from the settings: a draft carries the stamp duty in force
     # when it was last edited, and is fixed with its totals once submitted.
-    droit_timbre = _stamp_duty(invoice.export)
+    droit_timbre = _stamp_duty(invoice.export, invoice.devise)
     before = {"date_echeance": invoice.date_echeance, "montant_ht": invoice.montant_ht,
               "montant_ttc": invoice.montant_ttc, "droit_timbre": invoice.droit_timbre,
               "lines": len(invoice.items)}

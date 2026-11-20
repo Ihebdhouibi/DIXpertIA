@@ -361,8 +361,8 @@ export default defineMessages('invoices', {
   },
   'invoices.clients.form.currency': { fr: 'Devise des factures', en: 'Invoice currency' },
   'invoices.clients.form.currencyHint': {
-    fr: 'Fixée sur chaque facture à sa création. Un client export paie en devise.',
-    en: 'Fixed on each invoice when it is created. An export client pays in a foreign currency.',
+    fr: 'Fixée sur chaque facture à sa création. Un client export paie en devise, un client en Tunisie en dinars.',
+    en: 'Fixed on each invoice when it is created. An export client pays in a foreign currency, a client in Tunisia in dinars.',
   },
   'invoices.clients.form.taxId': { fr: 'N° TVA / identifiant fiscal', en: 'VAT No. / tax ID' },
   'invoices.clients.form.taxIdHint': {
@@ -380,6 +380,10 @@ export default defineMessages('invoices', {
   'invoices.clients.form.exportNeedsCurrency': {
     fr: 'Un client export paie en devise (EUR, USD ou GBP).',
     en: 'An export client pays in a foreign currency (EUR, USD or GBP).',
+  },
+  'invoices.clients.form.domesticPaysInTnd': {
+    fr: 'Un client en Tunisie paie en dinars (TND) : le droit de timbre est un montant en dinars.',
+    en: 'A client in Tunisia pays in dinars (TND): the stamp duty is an amount in dinars.',
   },
   'invoices.clients.export': { fr: 'Export', en: 'Export' },
   'invoices.clients.form.nameRequired': { fr: 'Le nom du client est obligatoire.', en: 'The client name is required.' },
