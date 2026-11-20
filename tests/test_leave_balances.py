@@ -19,6 +19,9 @@ from sqlalchemy.exc import DBAPIError
 URL = "/api/leaves/balances"
 YEAR = 2026
 ENTITLEMENT = 21  # conftest._seed_accounts
+# insufficient_privilege: what a row-level security refusal raises. The code,
+# not the message, which PostgreSQL translates (a French server says otherwise).
+RLS_REFUSED = "42501"
 
 
 def leave(database, employee_id, start, end, kind="PAYE", status="APPROUVE", validator="TEST-ADMIN"):
@@ -172,9 +175,10 @@ def test_an_employee_cannot_give_themselves_more_days(database, identities):
     who = identities["employee"]
     engine, conn = _as_app_role(who["user_id"], "employee")
     try:
-        with pytest.raises(DBAPIError, match="row-level security"):
+        with pytest.raises(DBAPIError) as refused:
             conn.execute(text("INSERT INTO leave_entitlements (employee_id, year, type_conge, days)"
                               " VALUES (:e, :y, 'PAYE', 99)"), {"e": who["employee_id"], "y": YEAR})
+        assert refused.value.orig.pgcode == RLS_REFUSED
         conn.rollback()
         # Their own year, with their own figure: allowed (that is what the first read does).
         conn.execute(text("INSERT INTO leave_entitlements (employee_id, year, type_conge, days)"
@@ -194,9 +198,10 @@ def test_an_employee_cannot_read_or_record_someone_elses_year(database, identiti
     try:
         assert conn.execute(text("SELECT count(*) FROM leave_entitlements WHERE employee_id = :e"),
                             {"e": other}).scalar() == 0
-        with pytest.raises(DBAPIError, match="row-level security"):
+        with pytest.raises(DBAPIError) as refused:
             conn.execute(text("INSERT INTO leave_entitlements (employee_id, year, type_conge, days)"
                               " VALUES (:e, :y, 'PAYE', 21)"), {"e": other, "y": YEAR + 1})
+        assert refused.value.orig.pgcode == RLS_REFUSED
         conn.rollback()
     finally:
         conn.close()
