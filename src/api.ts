@@ -13,25 +13,51 @@
 import { getLocale, t, type Locale } from './i18n';
 import { Client, Employee, Invoice, LeaveRequest, Payslip, User } from './types';
 
-const TOKEN_KEY = 'token';
+/** The localStorage key of the session token, shared by every tab of the browser. */
+export const TOKEN_KEY = 'token';
 
-export function getToken(): string | null {
+/**
+ * The token kept in the browser, or undefined when storage is blocked
+ * (private mode, blocked site data).
+ */
+export function storedToken(): string | null | undefined {
   try {
     return localStorage.getItem(TOKEN_KEY);
   } catch {
-    // Storage blocked (private mode, blocked site data). The session still
-    // works until the page is reloaded.
-    return null;
+    return undefined;
   }
 }
 
+// The token of the session THIS tab shows (#238). localStorage is shared by
+// every tab, but each tab's screen belongs to one user: when another tab
+// signs out or signs in as someone else, the stored token changes under this
+// tab. Requests carry this tab's own token, never another tab's.
+let tabToken: string | null = storedToken() ?? null;
+
+export function getToken(): string | null {
+  return tabToken;
+}
+
 export function setToken(token: string | null) {
+  tabToken = token;
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
   } catch {
-    // Nothing to do: the caller keeps the token in memory for this session.
+    // Storage blocked: the session lives in this tab's memory until a reload.
   }
+}
+
+/** Make the token another tab stored this tab's own, before asking who it belongs to. */
+export function adoptStoredToken() {
+  const stored = storedToken();
+  if (stored !== undefined) tabToken = stored;
+}
+
+/** Called when another tab changed the session, so the app can follow it (#238). */
+let onSessionChanged: () => void = () => {};
+export function setSessionChangedHandler(handler: () => void) {
+  onSessionChanged = handler;
 }
 
 /** Thrown for any non-2xx response, carrying what the API said went wrong. */
@@ -53,6 +79,14 @@ export function setUnauthorizedHandler(handler: () => void) {
 /** Sends an authenticated request and turns a refusal into an ApiError. */
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getToken();
+  // Another tab signed out, or in as someone else, and this tab has not
+  // caught up yet (#238): sending would act for a user this screen does not
+  // show, or with no session at all. The app follows the change instead.
+  const stored = storedToken();
+  if (token && stored !== undefined && stored !== token) {
+    onSessionChanged();
+    throw new ApiError(401, t('common.sessionChangedElsewhere'));
+  }
   const res = await fetch(path, {
     ...init,
     headers: {
@@ -70,11 +104,18 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   // without one is a refusal of its own, e.g. a wrong password at sign-in,
   // which used to read "Your session has expired" (#116).
   if (res.status === 401 && token) {
-    // The token is gone or expired. Clearing it here stops every subsequent
-    // call retrying with a credential the server has already refused.
-    setToken(null);
+    // The token is gone or expired. Clearing it stops every subsequent call
+    // retrying with a credential the server has already refused - but only
+    // this tab's (#238): if another tab stored a newer token while this
+    // request was in flight (a password change revokes the older sessions),
+    // removing the shared one would sign that tab out. The app then follows
+    // the newer session instead of ending it.
+    const stored = storedToken();
+    const replaced = !!stored && stored !== token;
+    if (replaced) tabToken = null;
+    else setToken(null);
     onUnauthorized();
-    throw new ApiError(401, t('common.sessionExpired'));
+    throw new ApiError(401, t(replaced ? 'common.sessionChangedElsewhere' : 'common.sessionExpired'));
   }
 
   if (!res.ok) {
