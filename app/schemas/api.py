@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.i18n import format_date, format_date_range as _format_date_range, format_month
 from app.models.leaves import LeaveStatus, LeaveType
+from app.services.leave_balance import leave_days
 
 # --- Vocabulary -------------------------------------------------------------
 # The database stores French enum values; the frontend's union types are
@@ -98,6 +99,7 @@ class LeaveRequestOut(BaseModel):
     dates: str
     startDate: date
     endDate: date
+    # Working days, counted like the balance (#121): the two never disagree.
     duration: int
     status: str
     reason: Optional[str] = None
@@ -115,7 +117,7 @@ class LeaveRequestOut(BaseModel):
             dates=format_date_range(row.date_debut, row.date_fin),
             startDate=row.date_debut,
             endDate=row.date_fin,
-            duration=(row.date_fin - row.date_debut).days + 1,
+            duration=leave_days(row.date_debut, row.date_fin),
             status=LEAVE_STATUS_TO_API.get(row.statut, "Pending"),
             reason=row.motif or None,
             rejectionReason=row.commentaire_validation or None,

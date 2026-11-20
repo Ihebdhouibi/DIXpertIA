@@ -69,6 +69,14 @@ def test_weekends_are_not_counted(client, database, employee):
 
 
 @pytest.mark.identity("employee")
+def test_the_listed_duration_counts_like_the_balance(client, database, employee):
+    leave(database, employee["employee_id"], "2025-12-26", "2026-01-05")   # Fri 26 - Mon 5: 7 working days
+    listed = client.get("/api/leave-requests", headers=employee["headers"]).json()
+    assert [r["duration"] for r in listed] == [7]
+    assert balance(client, employee, year=2025)["approvedDays"] + balance(client, employee)["approvedDays"] == 7
+
+
+@pytest.mark.identity("employee")
 def test_a_request_spanning_two_years_counts_in_each(client, database, employee):
     leave(database, employee["employee_id"], "2025-12-29", "2026-01-09")
     assert balance(client, employee, year=2025)["approvedDays"] == 3   # Mon 29 - Wed 31
