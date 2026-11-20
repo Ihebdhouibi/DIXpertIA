@@ -88,6 +88,8 @@ export interface Client {
   devise?: 'TND' | 'EUR' | 'USD' | 'GBP';
   /** A foreign VAT number or a matricule fiscal, printed on invoices when filled. */
   identifiant_fiscal?: string | null;
+  /** A business rather than a private person: in Tunisia, its tax ID is mandatory (#189). */
+  entreprise?: boolean;
 }
 
 export interface InvoiceItem {
@@ -128,6 +130,9 @@ export interface Invoice {
   supplierReference?: string | null;
   amountHT: number;
   amountTTC: number;
+  /** The stamp duty (#189), and what the client pays: amountTTC + stampDuty. */
+  stampDuty?: number;
+  amountDue?: number;
   /** The invoice's currency, fixed when it was created, and whether it is an export (#195). */
   currency?: string;
   export?: boolean;

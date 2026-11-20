@@ -15,10 +15,11 @@ Every word comes from app.i18n, in invoice_data["locale"] - the client's
 (#135). One generator for a draft (#118: provisional BR- reference, a note
 and a watermark) and for an issued invoice.
 
-The PDF computes nothing the books do not have: the amount due is the stored
-montant_ttc, and the VAT rows add up to it exactly (see _vat_rows). A seller
-detail left empty in the settings is not printed at all, so no placeholder
-ever reaches a real invoice (#189 fills them).
+The PDF computes nothing the books do not have: the VAT rows add up exactly to
+the stored montant_ttc (see _vat_rows), and the amount due is that total plus
+the stamp duty stored on the invoice (#189). A seller detail left empty in the
+settings is not printed at all, so no placeholder ever reaches a real invoice;
+an invoice cannot be approved without the mandatory ones (#189).
 
 The accountant's processing_status is deliberately NOT printed: it is an
 internal bookkeeping state, and the client has no business seeing whether
@@ -502,11 +503,13 @@ def _lines_table(rows, header: bool) -> Table:
     return table
 
 
-def _totals(items, subtotal, total, locale, currency, decimals, export_mention=None) -> list:
-    """§3.5 Total HT, VAT per rate, the lime bar, the amount due.
+def _totals(items, subtotal, total, locale, currency, decimals, export_mention=None,
+            stamp_duty=Decimal(0)) -> list:
+    """§3.5 Total HT, VAT per rate, the stamp duty, the lime bar, the amount due.
 
     An export of services (§3.8, #195) has one VAT row at zero instead, with
-    the exemption mention under it, and no stamp duty.
+    the exemption mention under it, and no stamp duty. The amount due is the
+    total including VAT plus the stamp duty (#189).
     """
     rows = [[Paragraph(_text(t("pdf.total_ht", locale)), TOTAL_LABEL_HT),
              Paragraph(_number(subtotal, locale, decimals), TOTAL_AMT_HT)]]
@@ -520,13 +523,16 @@ def _totals(items, subtotal, total, locale, currency, decimals, export_mention=N
                  f"<font name='{MONO}' size='7' color='{SECONDARY.hexval()}'>"
                  f"{_text(t('pdf.vat_base', locale, base=_number(base, locale, decimals)))}</font>")
         rows.append([Paragraph(label, TOTAL_LABEL), Paragraph(_number(vat, locale, decimals), TOTAL_AMT)])
+    if stamp_duty:
+        rows.append([Paragraph(_text(t("pdf.stamp_duty", locale)), TOTAL_LABEL),
+                     Paragraph(_number(stamp_duty, locale, decimals), TOTAL_AMT)])
     block = Table(rows, colWidths=[50 * mm, 36 * mm], hAlign="RIGHT")
     block.setStyle(TableStyle([*_FLAT, ("VALIGN", (0, 0), (-1, -1), "TOP"),
                                ("TOPPADDING", (0, 0), (-1, -1), 1.6 * mm),
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.6 * mm),
                                ("LINEBELOW", (0, 0), (-1, -1), 0.25, HAIRLINE)]))
     net = Table([[Tracked(t("pdf.net", locale).upper(), MONO_MEDIUM, 7.5, PAPER, tracking=1.05, leading=9),
-                  Paragraph(f"{_number(total, locale, decimals)} {_text(currency)}", NET_AMT)]],
+                  Paragraph(f"{_number(total + stamp_duty, locale, decimals)} {_text(currency)}", NET_AMT)]],
                 colWidths=[36 * mm, 50 * mm], hAlign="RIGHT")
     net.setStyle(TableStyle([*_FLAT, ("BACKGROUND", (0, 0), (-1, -1), INK), ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
                              ("TOPPADDING", (0, 0), (-1, -1), 3.5 * mm),
@@ -591,6 +597,7 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     items = invoice_data.get("items") or []
     subtotal = Decimal(str(invoice_data.get("subtotal") or 0))
     total = Decimal(str(invoice_data.get("total") or 0))
+    stamp_duty = Decimal(str(invoice_data.get("stamp_duty") or 0))
     raw_status = str(invoice_data.get("status") or "").lower()
 
     target = BytesIO() if output_path is None else output_path
@@ -646,8 +653,9 @@ def generate_invoice_pdf(invoice_data: dict, output_path: str = None):
     story.append(KeepTogether([
         tail, Spacer(1, 5 * mm),
         *_totals(items, subtotal, total, locale, currency, decimals,
-                 export_mention=_export_mention(invoice_data, locale) if export else None),
-        Spacer(1, 4 * mm), _in_words(total, currency, locale),
+                 export_mention=_export_mention(invoice_data, locale) if export else None,
+                 stamp_duty=stamp_duty),
+        Spacer(1, 4 * mm), _in_words(total + stamp_duty, currency, locale),
         Spacer(1, 7 * mm), _payment(seller, invoice_data.get("due_date"), locale),
     ]))
 

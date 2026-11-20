@@ -410,6 +410,7 @@ export interface ClientInput {
   export: boolean;
   devise: 'TND' | 'EUR' | 'USD' | 'GBP';
   identifiant_fiscal: string;
+  entreprise: boolean;
 }
 
 export const clients = {

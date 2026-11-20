@@ -1,5 +1,6 @@
 import enum
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -174,6 +175,11 @@ class Client(Base):
     # A foreign VAT number, or a Tunisian client's matricule fiscal (#189);
     # printed on the invoice only when filled.
     identifiant_fiscal = Column(String(50), nullable=True)
+    # A business rather than a private person (#189). A business in Tunisia
+    # must have its matricule fiscal: the API refuses to save one without it,
+    # and an invoice to it cannot be approved without it. Not a CHECK, so that
+    # a client recorded before the rule can still be opened and completed.
+    entreprise = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     invoices = relationship("Invoice", back_populates="client")
 
@@ -181,9 +187,10 @@ class Client(Base):
         # Stops "Acme Corp" and "ACME CORP" becoming two customers.
         CheckConstraint("locale IN ('fr', 'en')", name="ck_clients_locale"),
         CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_clients_devise"),
-        # Decided for this release (#195): an export client always pays in a
-        # foreign currency. Lifting it is dropping this one constraint.
-        CheckConstraint("NOT export OR devise <> 'TND'", name="ck_clients_export_in_foreign_currency"),
+        # Decided for this release, both ways: an export client pays in a
+        # foreign currency (#195), a client in Tunisia in TND, the currency of
+        # its stamp duty (#189). Mirrors currency_problem().
+        CheckConstraint("(export) = (devise <> 'TND')", name="ck_clients_currency_follows_export"),
         Index("ux_clients_nom_ci", text("lower(nom)"), unique=True),
     )
 
@@ -222,6 +229,13 @@ class Invoice(Base):
     # the client received it (#195).
     devise = Column(String(3), nullable=False, default="TND", server_default=text("'TND'"))
     export = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # The stamp duty (droit de timbre, #189), in TND with millimes: set from the
+    # settings when an outgoing draft is created or edited, then fixed with the
+    # totals by invoice_draft_is_editable. Not part of montant_ttc, so
+    # ttc - ht stays the VAT; the amount due is montant_ttc + droit_timbre.
+    # 0 on an export invoice, on one in another currency than TND
+    # (ck_invoices_stamp_duty) and on a supplier bill.
+    droit_timbre = Column(Numeric(10, 3), nullable=False, default=0, server_default=text("0"))
     # NOT NULL with a default: the status was nullable and never set, so every
     # invoice was created with statut = NULL. InvoiceOut requires it, so
     # serialising the response failed *after* the commit - the invoice was
@@ -292,10 +306,17 @@ class Invoice(Base):
         """
         return self.numero or f"BR-{self.id:04d}"
 
+    @property
+    def amount_due(self) -> Decimal:
+        """What the client pays: the total including VAT, plus the stamp duty (#189)."""
+        return Decimal(self.montant_ttc or 0) + Decimal(self.droit_timbre or 0)
+
     __table_args__ = (
         CheckConstraint("montant_ht >= 0 AND montant_ttc >= montant_ht",
                         name="ck_invoices_amounts"),
         CheckConstraint("date_echeance >= date_emission", name="ck_invoices_dates"),
+        CheckConstraint("droit_timbre >= 0 AND (droit_timbre = 0 OR (NOT export AND devise = 'TND'))",
+                        name="ck_invoices_stamp_duty"),
         CheckConstraint("devise IN ('TND', 'EUR', 'USD', 'GBP')", name="ck_invoices_devise"),
         # Approved, sent or paid means numbered; a draft, or one cancelled
         # before approval, may have no number (#118).
