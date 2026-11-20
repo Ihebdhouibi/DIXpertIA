@@ -86,12 +86,13 @@ ROUTES = [
     ("GET", "/api/payslips", EMPLOYEE_SELF),
     ("GET", "/api/leave-requests", EMPLOYEE_SELF),
     ("POST", "/api/leave-requests", EMPLOYEE_SELF),
+    # Someone else's balance (?employee_id=) is the admin's: test_leave_balances.py.
+    ("GET", "/api/leaves/balances", EMPLOYEE_SELF),
     ("GET", "/api/employees", EMPLOYEE_SELF),
 
     # --- leave decisions: admin only ---------------------------------------
     ("POST", "/api/leave-requests/1/approve", ADMIN_ONLY),
     ("POST", "/api/leave-requests/1/reject", ADMIN_ONLY),
-    ("GET", "/api/leaves/balances", EMPLOYEE_SELF),
 
     # --- accounts ----------------------------------------------------------
     ("GET", "/api/users", ADMIN_ONLY),
@@ -145,7 +146,7 @@ ALLOWED_THROUGH = {200, 201, 204, 400, 404, 409, 422, 503}
 REFUSED = {401, 403}
 
 
-def _may_reach(rule, role: str) -> bool:
+def _may_reach(rule: str, role: str) -> bool:
     if rule == PUBLIC:
         return True
     if role == "anonymous":

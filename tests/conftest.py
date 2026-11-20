@@ -126,6 +126,7 @@ TRUNCATED_BETWEEN_TESTS = (
     "clients",
     "suppliers",
     "payslips",
+    "leave_entitlements",
     "leave_requests",
 )
 
