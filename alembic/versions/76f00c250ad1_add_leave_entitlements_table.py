@@ -1,16 +1,17 @@
 """add leave_entitlements table
 
 Revision ID: 76f00c250ad1
-Revises: c5e8a2d4f716
+Revises: e9c3a1f7b204
 Create Date: 2026-11-19 08:32:35.902953
 
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+import sqlalchemy.dialects.postgresql as postgresql
 
+# revision identifiers, used by Alembic.
 revision = '76f00c250ad1'
-down_revision = 'c5e8a2d4f716'
+down_revision = 'e9c3a1f7b204'
 branch_labels = None
 depends_on = None
 
@@ -36,10 +37,13 @@ def upgrade():
     op.execute("""
         CREATE POLICY leave_entitlements_app_select ON leave_entitlements
         FOR SELECT TO dixpertia_app
-        USING (
-            employee_id = (SELECT id FROM employees WHERE user_id = current_setting('app.user_id', true))
-            OR current_setting('app.role', true) IN ('admin', 'accountant')
-        )
+        USING(
+            NULLIF(current_setting('app.user_role', true), '') IN ('admin', 'accountant')
+            OR employee_id IN (
+               SELECT id FROM employees
+               WHERE user_id = NULLIF(current_setting('app.user_id', true), '')
+            )
+    );
     """)
 
 def downgrade():

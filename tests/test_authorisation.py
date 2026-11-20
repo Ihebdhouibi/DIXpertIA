@@ -82,7 +82,7 @@ ROUTES = [
     # --- leave decisions: admin only ---------------------------------------
     ("POST", "/api/leave-requests/1/approve", ADMIN_ONLY),
     ("POST", "/api/leave-requests/1/reject", ADMIN_ONLY),
-    ("GET", "/api/leaves/balances", {"admin", "employee", "accountant"}),
+    ("GET", "/api/leaves/balances", EMPLOYEE_SELF),
 
     # --- accounts ----------------------------------------------------------
     ("GET", "/api/users", ADMIN_ONLY),
@@ -136,7 +136,7 @@ ALLOWED_THROUGH = {200, 201, 204, 400, 404, 409, 422, 503}
 REFUSED = {401, 403}
 
 
-def _may_reach(rule: str, role: str) -> bool:
+def _may_reach(rule, role: str) -> bool:
     if rule == PUBLIC:
         return True
     if role == "anonymous":
