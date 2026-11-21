@@ -78,5 +78,9 @@ db.json
 !/design/invoice-pdf/invoice-sample-en-draft.pdf
 !/design/invoice-pdf/invoice-sample-two-page.pdf
 
+# DMARC aggregate reports (#186), read with scripts/dmarc_report.py: they name
+# the servers that sent our mail, so they stay local.
+dmarc-reports/
+
 # Env backups
 .env.backup

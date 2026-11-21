@@ -97,7 +97,7 @@ First connect GitHub: **Settings → Git → GitHub** → install the Dokploy Gi
 
   - **Never set `FORWARDED_ALLOW_IPS` to `*`.** A visitor could then fake their IP address and bypass the rate limits.
   - `API_DOCS=true` is for this test environment only.
-  - E-mail (#186), through Oxahost's mail server, which hands mail to MailChannels. The domain's SPF, DKIM and DMARC records must be in place (they are for dixpertia.tn), or Gmail refuses or bins the mail:
+  - E-mail (#186), through Oxahost's mail server, which hands mail to MailChannels. The domain's SPF, DKIM and DMARC records must be in place (they are for dixpertia.tn; see *E-mail DNS records* below), or Gmail refuses or bins the mail:
     ```
     SMTP_HOST=mailpro2.tn.oxa.host
     SMTP_PORT=465
@@ -237,7 +237,33 @@ UptimeRobot only sends alerts to `contact@dixpertia.tn`, so it keeps working. It
 
 Never write the password in a ticket, a commit, a chat or a screenshot. The password manager is the only place it is written down.
 
-**Known weakness.** The app sends with the team's own `contact@` mailbox, because the plan has one mailbox. A dedicated `no-reply@dixpertia.tn` account, used by the app only, would let us change the app's password without touching anyone's mailbox, and would keep replies out of the app's way. Worth creating if the plan allows a second mailbox.
+**Known weakness.** The app sends with the team's own `contact@` mailbox, because the plan has one mailbox. A dedicated `no-reply@dixpertia.tn` account, used by the app only, would let us change the app's password without touching anyone's mailbox, and would keep replies out of the app's way. Worth creating if the plan allows a second mailbox (#259).
+
+## E-mail DNS records (#186)
+
+Without these records in the `dixpertia.tn` zone, Gmail refuses our mail or puts it in spam, and anyone can send mail that claims to come from us. The zone is managed outside this repository; this is the reference of what it must contain.
+
+| Record | Type | Value | Purpose |
+|---|---|---|---|
+| `dixpertia.tn` | MX | `mailpro2.tn.oxa.host` | where mail to `@dixpertia.tn` is delivered |
+| `dixpertia.tn` | TXT | `v=spf1 a:mailpro2.tn.oxa.host include:relay.mailchannels.net ~all` | **SPF:** the servers allowed to send as us. Oxahost hands outbound mail to MailChannels, hence the `include` |
+| `default._domainkey.dixpertia.tn` | TXT | the public key, provided by Oxahost | **DKIM:** the signature that proves a message is ours and unchanged |
+| `_dmarc.dixpertia.tn` | TXT | `v=DMARC1; p=quarantine; rua=mailto:contact@dixpertia.tn` | **DMARC:** mail that claims to be from us but fails both SPF and DKIM goes to spam; receivers send a daily report to `contact@` |
+| `_mailchannels.dixpertia.tn` | TXT | `v=mc1 auth=<Oxahost's MailChannels account id>` | **Domain Lockdown, not set yet:** only Oxahost's MailChannels account may send as us. Without it, any MailChannels customer passes our SPF |
+
+**DMARC policy.**
+- `p=none` from October 2026 to November 2026, while the reports were collected.
+- `p=quarantine` once the reports for 10–20 November showed all of our mail passing (38 of 38 messages).
+- Do not move to `p=reject` while DKIM fails on part of our mail (#261): a forwarded message, which fails SPF by design, would then be refused instead of filed as spam.
+
+**Before any change to these records, read the DMARC reports.**
+1. Download the report attachments that arrived at `contact@` (`.zip` or `.gz`, from Gmail and others) into `dmarc-reports/` at the root of the repository. It is git-ignored: the reports name the servers that sent our mail.
+2. Run `python scripts/dmarc_report.py dmarc-reports`. It lists each sending server with its DMARC, DKIM and SPF results, and DKIM per day. Its exit status is 1 if any message sent as `dixpertia.tn` failed DMARC.
+3. Every sender should be MailChannels (`23.83.208.0/20` so far) passing DMARC. An unknown server that fails is either someone impersonating us, which is what the policy is for, or a service of ours that is not set up yet. Find out which before tightening the policy.
+
+**The Domain Lockdown record.** Ask Oxahost support for "the MailChannels account id (`auth=`) for the Domain Lockdown record". A wrong id makes MailChannels refuse **all** our mail, so send yourself an invitation right after adding it, and remove the record if it does not arrive.
+
+**After any change**, invite a test user at your own address from production. The activation e-mail must arrive in the inbox, not in spam. To undo a DMARC change, set its previous `p=` value again.
 
 ## Decisions
 
