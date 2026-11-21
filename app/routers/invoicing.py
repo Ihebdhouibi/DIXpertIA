@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError, IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_roles
 from app.models.invoicing import (
@@ -45,7 +46,8 @@ from app.schemas.invoicing import (
     SupplierCreate,
     SupplierInvoiceCreate,
     SupplierOut,
-    export_currency_problem,
+    currency_problem,
+    tax_id_missing,
 )
 from app.services.invoice_generator import generate_invoice_pdf   # <-- new import
 
@@ -66,11 +68,13 @@ MAX_PAGE_SIZE = 200
 # The orders GET /api/invoices accepts. A closed list rather than a column name
 # taken from the query string, so the client cannot sort on arbitrary columns.
 InvoiceSort = Literal["date", "-date", "amount", "-amount"]
+# The amount the list shows: what the client pays, stamp duty included (#189).
+_AMOUNT_DUE = Invoice.montant_ttc + Invoice.droit_timbre
 SORT_COLUMNS = {
     "date": (Invoice.date_emission, False),
     "-date": (Invoice.date_emission, True),
-    "amount": (Invoice.montant_ttc, False),
-    "-amount": (Invoice.montant_ttc, True),
+    "amount": (_AMOUNT_DUE, False),
+    "-amount": (_AMOUNT_DUE, True),
 }
 
 
@@ -112,6 +116,8 @@ def _commit_client(db: Session, name: str) -> None:
 
 @router.post("/clients", response_model=ClientOut)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db)):
+    if tax_id_missing(payload.entreprise, payload.export, payload.identifiant_fiscal):
+        raise ApiError(422, "client.tax_id_required")
     client = Client(**payload.model_dump())
     db.add(client)
     try:
@@ -140,8 +146,13 @@ def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(g
     if changes.get("identifiant_fiscal") == "":
         changes["identifiant_fiscal"] = None  # cleared
     # The rule holds on the client as it will be, not only on the fields sent.
-    if export_currency_problem(changes.get("export", client.export), changes.get("devise", client.devise)):
-        raise ApiError(422, "client.export_needs_foreign_currency")
+    problem = currency_problem(changes.get("export", client.export), changes.get("devise", client.devise))
+    if problem:
+        raise ApiError(422, problem)
+    # "identifiant_fiscal" in changes: None there means cleared, not unchanged.
+    tax_id = changes["identifiant_fiscal"] if "identifiant_fiscal" in changes else client.identifiant_fiscal
+    if tax_id_missing(changes.get("entreprise", client.entreprise), changes.get("export", client.export), tax_id):
+        raise ApiError(422, "client.tax_id_required")
     before = {k: getattr(client, k) for k in changes if getattr(client, k) != changes[k]}
     after = {k: changes[k] for k in before}
     if after:
@@ -263,6 +274,31 @@ def _compute_totals(items: list[dict]) -> tuple[Decimal, Decimal]:
     return ht, ttc
 
 
+def _stamp_duty(export: bool, devise: str) -> Decimal:
+    """The stamp duty an outgoing invoice carries (#189): the setting's amount,
+    in dinars, for a client in Tunisia; none for an export of services. Never
+    on an invoice in another currency: the amount is in TND (ck_invoices_stamp_duty)."""
+    return settings.STAMP_DUTY_AMOUNT if not export and devise == "TND" else Decimal(0)
+
+
+def _missing_legal_mentions(invoice: Invoice) -> list[str]:
+    """The mandatory mentions an invoice would be issued without (#189).
+
+    Checked when the accountant approves it, since that is when it gets its
+    legal number and becomes the document the client receives. Message keys,
+    in the order they are printed.
+    """
+    missing = []
+    if not settings.SELLER_TAX_ID:
+        missing.append("legal.seller_tax_id")
+    if not settings.SELLER_RNE:
+        missing.append("legal.seller_rne")
+    customer = invoice.client
+    if customer is not None and tax_id_missing(customer.entreprise, invoice.export, customer.identifiant_fiscal):
+        missing.append("legal.client_tax_id")
+    return missing
+
+
 @router.get("/invoices", response_model=list[InvoiceOut])
 def list_invoices(
     response: Response,
@@ -379,6 +415,7 @@ def create_invoice(
         date_echeance=payload.date_echeance,
         montant_ht=montant_ht,
         montant_ttc=montant_ttc,
+        droit_timbre=_stamp_duty(client.export, client.devise),
         statut=InvoiceStatus.BROUILLON,
         direction=InvoiceDirection.OUTGOING,
         cree_par_id=current_user.id,
@@ -399,7 +436,7 @@ def create_invoice(
     # creates nothing, so it records nothing.
     record_event(db, "invoice.created", "invoice", invoice.id, after={
         "direction": invoice.direction, "client_id": invoice.client_id,
-        "montant_ht": montant_ht, "montant_ttc": montant_ttc,
+        "montant_ht": montant_ht, "montant_ttc": montant_ttc, "droit_timbre": invoice.droit_timbre,
         "date_echeance": invoice.date_echeance, "lines": len(items_data),
         "devise": invoice.devise, "export": invoice.export,
     })
@@ -564,8 +601,12 @@ def update_invoice(
     _check_export_lines(invoice.export, payload.items)
     items_data = [item.model_dump() for item in payload.items]
     montant_ht, montant_ttc = _compute_totals(items_data)
+    # Taken again from the settings: a draft carries the stamp duty in force
+    # when it was last edited, and is fixed with its totals once submitted.
+    droit_timbre = _stamp_duty(invoice.export, invoice.devise)
     before = {"date_echeance": invoice.date_echeance, "montant_ht": invoice.montant_ht,
-              "montant_ttc": invoice.montant_ttc, "lines": len(invoice.items)}
+              "montant_ttc": invoice.montant_ttc, "droit_timbre": invoice.droit_timbre,
+              "lines": len(invoice.items)}
     try:
         # Lines first, totals after: both are guarded, and the order keeps the
         # invoice and its lines consistent at every statement.
@@ -576,11 +617,12 @@ def update_invoice(
         invoice.date_echeance = payload.date_echeance
         invoice.montant_ht = montant_ht
         invoice.montant_ttc = montant_ttc
+        invoice.droit_timbre = droit_timbre
         db.flush()
         db.refresh(invoice)
         record_event(db, "invoice.updated", "invoice", invoice.id, before=before, after={
             "date_echeance": payload.date_echeance, "montant_ht": montant_ht,
-            "montant_ttc": montant_ttc, "lines": len(items_data),
+            "montant_ttc": montant_ttc, "droit_timbre": droit_timbre, "lines": len(items_data),
         })
         # Built before the commit, for the reason set out on create_invoice.
         response = InvoiceOut.from_orm_row(invoice)
@@ -692,6 +734,12 @@ def approve_invoice(
         raise ApiError(409, "invoice.not_awaiting_review", ref=invoice.reference)
     if invoice.cree_par_id == current_user.id:
         raise ApiError(403, "invoice.no_self_approval")
+    # An invoice without its mandatory mentions is not valid for the client's
+    # books (#189): say what to complete instead of numbering it.
+    missing = _missing_legal_mentions(invoice)
+    if missing:
+        raise ApiError(409, "invoice.missing_legal_mentions", ref=invoice.reference,
+                       missing=", ".join(t(key) for key in missing))
     issued_on = date.today()
     # ck_invoices_dates would refuse it at the database; say what to do instead.
     if invoice.date_echeance < issued_on:
@@ -983,6 +1031,8 @@ def _pdf_data(invoice: Invoice) -> dict:
         # The amounts the books hold: the PDF never computes a total of its own.
         "subtotal": invoice.montant_ht,
         "total": invoice.montant_ttc,
+        # Printed under the VAT and added to the amount due (#189).
+        "stamp_duty": invoice.droit_timbre,
         # Fixed on the invoice when it was created (#195): it reprints as issued.
         "currency": invoice.devise or "TND",
         "export": bool(invoice.export),

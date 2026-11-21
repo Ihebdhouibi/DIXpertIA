@@ -7,6 +7,23 @@ export default defineMessages('common', {
     fr: 'Votre session a expiré. Veuillez vous reconnecter.',
     en: 'Your session has expired. Please sign in again.',
   },
+  // A session changed in another tab of the same browser (#238).
+  'common.signedOutElsewhere': {
+    fr: 'Vous avez été déconnecté dans un autre onglet.',
+    en: 'You were signed out in another tab.',
+  },
+  'common.switchedAccount': {
+    fr: 'Un autre compte s’est connecté dans un autre onglet. Vous êtes maintenant connecté en tant que {name}.',
+    en: 'Another account signed in from another tab. You are now signed in as {name}.',
+  },
+  'common.signedInElsewhere': {
+    fr: 'Connexion effectuée dans un autre onglet. Vous êtes connecté en tant que {name}.',
+    en: 'You signed in from another tab. You are signed in as {name}.',
+  },
+  'common.sessionChangedElsewhere': {
+    fr: 'La session a changé dans un autre onglet. Cet onglet vient de se mettre à jour.',
+    en: 'The session changed in another tab. This tab has just been updated.',
+  },
   'common.requestFailed': { fr: 'La requête a échoué ({status})', en: 'Request failed ({status})' },
   'common.couldNotLoad': { fr: 'Impossible de charger les données', en: 'Could not load data' },
   'common.couldNotUpdateNotifications': {

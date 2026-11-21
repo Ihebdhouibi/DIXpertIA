@@ -137,6 +137,8 @@ export default defineMessages('invoices', {
   'invoices.exclVat': { fr: 'Total HT', en: 'Excl. VAT' },
   'invoices.vat': { fr: 'TVA', en: 'VAT' },
   'invoices.inclVat': { fr: 'Total TTC', en: 'Total incl. VAT' },
+  'invoices.stampDuty': { fr: 'Droit de timbre', en: 'Stamp duty' },
+  'invoices.amountDue': { fr: 'Net à payer', en: 'Total due' },
   'invoices.issued': { fr: 'Émission', en: 'Issued' },
   'invoices.dueLabel': { fr: 'Échéance', en: 'Due' },
   'invoices.paid': { fr: 'Payée le', en: 'Paid' },
@@ -341,6 +343,14 @@ export default defineMessages('invoices', {
     fr: "Les factures de ce client sont imprimées dans cette langue, quel que soit l'utilisateur qui les télécharge.",
     en: 'Invoices for this client print in this language, whoever downloads them.',
   },
+  'invoices.clients.form.business': {
+    fr: 'Entreprise (et non un particulier)',
+    en: 'Business (not a private person)',
+  },
+  'invoices.clients.form.businessHint': {
+    fr: 'Une entreprise en Tunisie doit avoir son matricule fiscal : il figure obligatoirement sur ses factures.',
+    en: 'A business in Tunisia must have its tax ID: it is a mandatory mention on its invoices.',
+  },
   'invoices.clients.form.export': {
     fr: "Client à l'export (exportation de services, sans TVA)",
     en: 'Client abroad (export of services, no VAT)',
@@ -351,17 +361,29 @@ export default defineMessages('invoices', {
   },
   'invoices.clients.form.currency': { fr: 'Devise des factures', en: 'Invoice currency' },
   'invoices.clients.form.currencyHint': {
-    fr: 'Fixée sur chaque facture à sa création. Un client export paie en devise.',
-    en: 'Fixed on each invoice when it is created. An export client pays in a foreign currency.',
+    fr: 'Fixée sur chaque facture à sa création. Un client export paie en devise, un client en Tunisie en dinars.',
+    en: 'Fixed on each invoice when it is created. An export client pays in a foreign currency, a client in Tunisia in dinars.',
   },
   'invoices.clients.form.taxId': { fr: 'N° TVA / identifiant fiscal', en: 'VAT No. / tax ID' },
   'invoices.clients.form.taxIdHint': {
     fr: 'Facultatif. Imprimé sur les factures quand il est rempli.',
     en: 'Optional. Printed on invoices when filled.',
   },
+  'invoices.clients.form.taxIdRequiredHint': {
+    fr: "Obligatoire pour une entreprise en Tunisie : c'est son matricule fiscal.",
+    en: 'Required for a business in Tunisia: its matricule fiscal.',
+  },
+  'invoices.clients.form.taxIdRequired': {
+    fr: 'Le matricule fiscal est obligatoire pour une entreprise en Tunisie.',
+    en: 'The tax ID is required for a business in Tunisia.',
+  },
   'invoices.clients.form.exportNeedsCurrency': {
     fr: 'Un client export paie en devise (EUR, USD ou GBP).',
     en: 'An export client pays in a foreign currency (EUR, USD or GBP).',
+  },
+  'invoices.clients.form.domesticPaysInTnd': {
+    fr: 'Un client en Tunisie paie en dinars (TND) : le droit de timbre est un montant en dinars.',
+    en: 'A client in Tunisia pays in dinars (TND): the stamp duty is an amount in dinars.',
   },
   'invoices.clients.export': { fr: 'Export', en: 'Export' },
   'invoices.clients.form.nameRequired': { fr: 'Le nom du client est obligatoire.', en: 'The client name is required.' },

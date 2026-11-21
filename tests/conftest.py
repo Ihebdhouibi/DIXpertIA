@@ -266,6 +266,20 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False, headers={"Accept-Language": "en"})
 
 
+@pytest.fixture(autouse=True)
+def seller_legal_details(database, monkeypatch):
+    """Our matricule fiscal and RNE, fictitious, for every test.
+
+    An invoice cannot be approved while either setting is empty (#189), and a
+    developer's .env may well leave them empty. The tests about a missing one
+    clear it themselves.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "SELLER_TAX_ID", "0000000X/A/M/000")
+    monkeypatch.setattr(settings, "SELLER_RNE", "0000000X")
+
+
 @pytest.fixture
 def mailbox(app, monkeypatch):
     """The e-mails the API sends, captured instead of sent: dicts of to, subject, body and html.

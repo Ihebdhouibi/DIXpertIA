@@ -255,6 +255,11 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Logic tested without a browser (vitest), e.g. how a request treats the
+      # token another tab shares (#238). The browser behaviour is in ui-checks.
+      - name: Unit tests
+        run: npm test
+
       # Runtime dependencies only: build tools are not shipped to users. The
       # baseline was cleaned in #142; a new high or critical finding fails the
       # job instead of piling up unnoticed.
@@ -289,6 +294,10 @@ jobs:
       SUPERUSER_URL: postgresql://postgres:ci-postgres-password@localhost:5432/dixpertia
       SECRET_KEY: ci-secret-key-at-least-32-characters-long
       REMINDERS_ENABLED: 'false'
+      # Fictitious: an invoice cannot be approved without our matricule fiscal
+      # and RNE (#189), and the seeded screens include approved invoices.
+      SELLER_TAX_ID: 0000000X/A/M/000
+      SELLER_RNE: 0000000X
 
     steps:
       - uses: actions/checkout@v4
@@ -375,6 +384,13 @@ jobs:
         if: success() || failure()
         run: |
           python scripts/check_mobile_overflow.py --browser chromium --screenshots ui-failures --locale fr             --account "admin@ci.dixpertia.tn:$ADMIN_PASSWORD"             --account "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"             --account "employee@ci.dixpertia.tn:$EMPLOYEE_PASSWORD"
+
+      - name: A tab follows the session changed in another tab (#238)
+        if: success() || failure()
+        run: |
+          python scripts/check_session_tabs.py --browser chromium --screenshots ui-failures \
+            --admin "admin@ci.dixpertia.tn:$ADMIN_PASSWORD" \
+            --accountant "accountant@ci.dixpertia.tn:$ACCOUNTANT_PASSWORD"
 
       - name: Keep the screenshots and logs of a failure
         if: failure()
