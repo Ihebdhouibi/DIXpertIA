@@ -22,7 +22,9 @@ RUN npm run build
 
 # --- Serve ----------------------------------------------------------------------
 # nginx-unprivileged runs as uid 101 and listens on 8080: never root.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24
+# nginx now publishes it as nginx/nginx-unprivileged; the old nginxinc/ name
+# stopped at 1.30.6, whose image carries critical CVEs (#253).
+FROM nginx/nginx-unprivileged:1.30.7-alpine3.24
 # Security fixes released since the base image was built.
 USER root
 RUN apk upgrade --no-cache
