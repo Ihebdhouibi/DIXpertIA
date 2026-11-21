@@ -80,7 +80,7 @@ If the test mail does not come:
 - check the spam folder;
 - run `sudo /usr/local/sbin/dixpertia-check` and read its last line.
 
-When the contact@ password changes (the rotation in #186), update it in this file too, as well as in Dokploy and in UptimeRobot's account.
+When the contact@ password changes, update it in this file too, then run `install.sh` again for a test mail. The full list of places is in [Rotating the mailbox password](../dokploy/README.md#rotating-the-mailbox-password-186).
 
 ## 4. Check it runs
 
