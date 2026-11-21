@@ -1,7 +1,7 @@
 """leave entitlements: the paid leave an employee has for a year
 
 Revision ID: 76f00c250ad1
-Revises: c5e8a2d4f716
+Revises: 113ec5516048
 Create Date: 2026-11-19 08:32:35.902953
 
 #121: real leave balances. A balance is the year's entitlement minus the
@@ -35,7 +35,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = '76f00c250ad1'
-down_revision = 'c5e8a2d4f716'
+down_revision = '113ec5516048'
 branch_labels = None
 depends_on = None
 
