@@ -58,12 +58,21 @@ export interface Payslip {
   pdfUrl?: string;
 }
 
+/** One leave type's balance for a year (#121). Only `paye` has an entitlement. */
+export interface LeaveBalance {
+  type: 'paye' | 'maladie' | 'sans_solde';
+  entitlement: number;
+  approvedDays: number;
+  pendingDays: number;
+  availableDays: number;
+}
+
 export interface LeaveRequest {
   id: string;
   employeeId?: number;
   employeeName: string;
   jobTitle?: string;
-  type: 'Annual Leave' | 'Sick Leave' | 'Personal Day' | 'Unpaid Leave';
+  type: 'Annual Leave' | 'Sick Leave'  | 'Unpaid Leave';
   /** A formatted range for display; startDate/endDate are the real values. */
   dates: string;
   startDate: string;

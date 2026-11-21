@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Employee, LeaveRequest, Payslip, User } from '../types';
 import type { DashboardSummary } from '../api';
 import { useDataStatus } from '../dataStatus';
+import { useLeaveBalance } from '../useLeaveBalance';
 import { formatAmounts, formatDateTime, formatMoney, formatTND } from '../format';
 import { labelOf, useT, type MessageKey } from '../i18n';
 import StatusBadge, { TONE_CLASSES, statusTone } from './StatusBadge';
@@ -369,9 +370,10 @@ export default function DashboardView({
               <dl className="space-y-4 text-sm">
                 <div>
                   <dt className={EYEBROW}>{t('dashboard.balance')}</dt>
-                  {/* The balance used to be three invented figures. Until the
-                      server holds entitlements (#121), say so instead. */}
-                  <dd className="mt-1 text-on-surface-variant">{t('dashboard.balanceUnavailable')}</dd>
+                  {/* Paid leave left this year, computed by the server (#121). */}
+                  <dd className="mt-1 text-on-surface">
+                    <LeaveBalanceLine />
+                  </dd>
                 </div>
                 <div>
                   <dt className={EYEBROW}>{t('dashboard.nextApprovedLeave')}</dt>
@@ -467,5 +469,25 @@ function LoadingRow() {
     <p className="flex items-center gap-2 text-sm text-on-surface-variant" role="status">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('dashboard.loading')}
     </p>
+  );
+}
+
+/** The paid leave left this year, with the days still pending (#121). */
+function LeaveBalanceLine() {
+  const t = useT();
+  const balance = useLeaveBalance();
+  if (balance.status === 'loading') {
+    return <Loader2 className="h-4 w-4 animate-spin text-on-surface-variant" role="status" aria-label={t('common.table.loading')} />;
+  }
+  const paid = balance.status === 'ready' ? balance.byType.paye : undefined;
+  if (!paid) return <span className="text-on-surface-variant">{t('dashboard.balanceUnavailable')}</span>;
+  return (
+    <>
+      <span className="font-semibold tabular-nums">{paid.availableDays}</span>{' '}
+      {t('people.leave.daysLeft', { count: paid.availableDays })}
+      {paid.pendingDays > 0 && (
+        <span className="block text-on-surface-variant">{t('people.leave.pendingDays', { count: paid.pendingDays })}</span>
+      )}
+    </>
   );
 }

@@ -77,8 +77,8 @@ export default defineMessages('dashboard', {
   'dashboard.yourLeave': { fr: 'Vos congés', en: 'Your leave' },
   'dashboard.balance': { fr: 'Solde', en: 'Balance' },
   'dashboard.balanceUnavailable': {
-    fr: 'Les soldes de congés ne sont pas encore disponibles.',
-    en: 'Leave balances are not available yet.',
+    fr: "Votre solde de congés n'est pas disponible.",
+    en: 'Your leave balance is not available.',
   },
   'dashboard.nextApprovedLeave': { fr: 'Prochain congé approuvé', en: 'Next approved leave' },
   'dashboard.noneScheduled': { fr: 'Aucun de prévu.', en: 'None scheduled.' },

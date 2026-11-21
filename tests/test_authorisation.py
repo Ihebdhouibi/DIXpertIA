@@ -86,6 +86,8 @@ ROUTES = [
     ("GET", "/api/payslips", EMPLOYEE_SELF),
     ("GET", "/api/leave-requests", EMPLOYEE_SELF),
     ("POST", "/api/leave-requests", EMPLOYEE_SELF),
+    # Someone else's balance (?employee_id=) is the admin's: test_leave_balances.py.
+    ("GET", "/api/leaves/balances", EMPLOYEE_SELF),
     ("GET", "/api/employees", EMPLOYEE_SELF),
 
     # --- leave decisions: admin only ---------------------------------------

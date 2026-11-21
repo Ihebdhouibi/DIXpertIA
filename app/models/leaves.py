@@ -8,8 +8,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -66,4 +68,33 @@ class LeaveRequest(Base):
         # Not for reads: makes the RESTRICT check on deleting a user an index
         # lookup instead of a full scan.
         Index("ix_leave_requests_valide_par_id", "valide_par_id"),
+    )
+
+
+class LeaveEntitlement(Base):
+    """The paid leave an employee has for one year (#121).
+
+    Only `paye` has an entitlement: sick and unpaid leave are counted, not
+    capped. The row of a year is created from `Employee.annual_entitlement_days`
+    the first time that year's balance is read, then fixed, so a later change
+    of `annual_entitlement_days` never rewrites a year already recorded. An
+    admin corrects a year by editing its row. See migration 76f00c250ad1.
+    """
+    __tablename__ = "leave_entitlements"
+
+    id = Column(Integer, primary_key=True)
+    # RESTRICT, like leave_requests: leave history outlives the person's deletion.
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="RESTRICT"), nullable=False)
+    year = Column(Integer, nullable=False)
+    type_conge = Column(Enum(LeaveType), nullable=False, default=LeaveType.PAYE)
+    # Numeric, for the half days of #254 and a corrected figure such as 10.5.
+    days = Column(Numeric(5, 2), nullable=False)
+
+    employee = relationship("Employee")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "year", "type_conge", name="uq_employee_year_type"),
+        CheckConstraint("type_conge = 'PAYE'", name="ck_leave_entitlements_paid_only"),
+        CheckConstraint("days >= 0 AND days <= 365", name="ck_leave_entitlements_days"),
+        Index("ix_leave_entitlements_employee_id", "employee_id"),
     )

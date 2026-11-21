@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Calendar, Plus, Plane, HeartPulse, Info } from 'lucide-react';
-import { LeaveRequest, UserRole } from '../types';
+import { Calendar, Plus, Plane, HeartPulse, Info, Loader2 } from 'lucide-react';
+import { LeaveBalance, LeaveRequest, UserRole } from '../types';
 import CalendarView from './CalendarView';
 import StatusBadge from './StatusBadge';
 import Dialog from './ui/Dialog';
@@ -10,6 +10,7 @@ import { useToast, ToastTone } from './ui/feedback';
 import { Table, THead, Th, TBody, Tr, Td, TableState } from './ui/Table';
 import { FilterPills } from './ui/TableControls';
 import { useDataStatus } from '../dataStatus';
+import { useLeaveBalance } from '../useLeaveBalance';
 import { formatDate, formatDayMonth } from '../format';
 import { labelOf, useT, type MessageKey } from '../i18n';
 
@@ -27,7 +28,7 @@ const EMPTY_FILTERED: Record<StatusFilter, MessageKey> = {
   Approved: 'people.leave.empty.Approved',
   Rejected: 'people.leave.empty.Rejected',
 };
-const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Personal Day', 'Unpaid Leave'] as const;
+const LEAVE_TYPES = ['Annual Leave', 'Sick Leave', 'Unpaid Leave'] as const;
 
 interface LeaveRequestsViewProps {
   leaveRequests: LeaveRequest[];
@@ -45,7 +46,7 @@ export default function LeaveRequestsView({
 }: LeaveRequestsViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [leaveType, setLeaveType] = useState<'Annual Leave' | 'Sick Leave' | 'Personal Day' | 'Unpaid Leave'>('Annual Leave');
+  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number]>('Annual Leave');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
@@ -105,10 +106,26 @@ export default function LeaveRequestsView({
     }
   };
 
-  // Mock balances
-  const annualLeft = 14;
-  const sickLeft = 5;
-  const personalLeft = 2;
+  // The signed-in person's own balance, computed by the server (#121): paid
+  // leave against the year's entitlement, sick and unpaid leave as days taken.
+  const balance = useLeaveBalance();
+  const ofType = (type: LeaveBalance['type']) => (balance.status === 'ready' ? balance.byType[type] : undefined);
+  const annual = ofType('paye');
+  const sick = ofType('maladie');
+  const unpaid = ofType('sans_solde');
+  // While loading, a spinner; without a balance (no employee record), a dash.
+  const figure = (value: number | undefined, unit: string, accent = false) => (
+    balance.status === 'loading' ? (
+      <Loader2 className="w-6 h-6 animate-spin text-on-surface-variant" role="status" aria-label={t('common.table.loading')} />
+    ) : value === undefined ? (
+      <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.balanceUnavailable')}</span>
+    ) : (
+      <>
+        <span className={`text-display font-black ${accent ? 'text-primary' : 'text-on-surface'}`}>{value}</span>
+        <span className="text-body-sm text-on-surface-variant font-medium">{unit}</span>
+      </>
+    )
+  );
 
   const filteredRequests = selectedStatus === 'All'
     ? leaveRequests
@@ -136,24 +153,24 @@ export default function LeaveRequestsView({
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Annual Leave')}</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-display font-black text-primary">{annualLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: annualLeft })}</span>
+            {figure(annual?.availableDays, t('people.leave.daysLeft', { count: annual?.availableDays ?? 0 }), true)}
           </div>
+          {annual && annual.pendingDays > 0 && (
+            <p className="mt-1 text-body-sm text-on-surface-variant">{t('people.leave.pendingDays', { count: annual.pendingDays })}</p>
+          )}
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-secondary/5 rounded-full transition-transform group-hover:scale-110"></div>
           <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Sick Leave')}</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-display font-black text-on-surface">{sickLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: sickLeft })}</span>
+            {figure(sick?.approvedDays, t('people.leave.daysTaken', { count: sick?.approvedDays ?? 0 }))}
           </div>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-20 h-20 bg-tertiary/5 rounded-full transition-transform group-hover:scale-110"></div>
-          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{t('people.leave.personalDays')}</p>
+          <p className="text-[11px] text-on-surface-variant font-bold uppercase tracking-wider mb-1">{labelOf(t, 'common.leaveType', 'Unpaid Leave')}</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-display font-black text-on-surface">{personalLeft}</span>
-            <span className="text-body-sm text-on-surface-variant font-medium">{t('people.leave.daysLeft', { count: personalLeft })}</span>
+            {figure(unpaid?.approvedDays, t('people.leave.daysTaken', { count: unpaid?.approvedDays ?? 0 }))}
           </div>
         </div>
         {/* A button, not a clickable div: it was unreachable from the keyboard. */}

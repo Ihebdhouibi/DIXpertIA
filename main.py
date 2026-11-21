@@ -29,6 +29,8 @@ from app.schemas.api import (
     LeaveRequestOut,
     PayslipOut,
     UserOut,
+    LeaveBalancesOut,
+    LeaveBalanceOut,
 )
 from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user, session_identity
@@ -52,7 +54,7 @@ from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, contact, dashboard, demos, invoicing, mfa as mfa_router, notifications
 from app.i18n import ApiError, set_locale, t
-from app.services import accounts, mfa, throttle
+from app.services import accounts, leave_balance, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.email_template import render_html_email, t_html
@@ -804,6 +806,34 @@ def list_users(
     )
     return [UserOut.from_orm_row(r) for r in rows]
 
+@app.get('/api/leaves/balances', response_model=LeaveBalancesOut)
+def get_leave_balances(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    year: int = Query(default_factory=lambda: datetime.now().year, ge=2000, le=2100),
+    employee_id: Optional[int] = Query(None),
+):
+    """The caller's leave balance for a year, or an employee's for an admin (#121).
+
+    The rules (working days, paid leave only capped, the year's entitlement
+    recorded on first read) are in app/services/leave_balance.py. Row-level
+    security on leave_requests and leave_entitlements holds the same line as
+    the 403 below: someone else's balance is the admin's only.
+    """
+    if employee_id is None:
+        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        if not employee:
+            raise ApiError(404, "leave.no_employee_record")
+    else:
+        employee = db.query(Employee).filter(Employee.id == employee_id).first()
+        # Asking for one's own record by id is fine; anyone else's is the admin's.
+        if current_user.role != 'admin' and (employee is None or employee.user_id != current_user.id):
+            raise ApiError(403, "auth.admin_required")
+        if not employee:
+            raise ApiError(404, "user.not_found")
+
+    rows = leave_balance.balances(db, employee, year)
+    return LeaveBalancesOut(year=year, balances=[LeaveBalanceOut(**b) for b in rows])
 
 @app.post('/api/leave-requests', status_code=201, response_model=LeaveRequestOut)
 def create_leave_request(
