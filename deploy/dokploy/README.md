@@ -128,7 +128,7 @@ Re-run the role setup with **the same two passwords**, so that the grants that n
 
 ## 8. The first administrator
 
-E-mail is not set up yet (#186), so activation links cannot be sent. Create the first admin directly in the API container:
+There is no admin yet to send an invitation, so create the first one directly in the API container:
 
 ```bash
 # Dokploy names containers <project>-<app without dashes>-<random>: production's
@@ -177,7 +177,7 @@ Staging is a second pair of applications, `api-staging` and `web-staging`, at **
    - **Domain:** `staging.dixpertia.tn`, path `/`, port `8080`, HTTPS with Let's Encrypt.
    - **Advanced → Security → Basic Auth:** a user name and password, so that only the team can open staging, and search engines can't index it.
    - Put basic auth on `web-staging` **only, never on `api-staging`**: the app sends its own `Authorization: Bearer` header to the API, which basic auth would replace. The API is protected anyway: it requires sign-in, and its public routes are rate-limited.
-5. **E-mail:** the SMTP lines of step 6, with `SMTP_FROM=DI Xpertia (staging) <contact@dixpertia.tn>`. Staging only e-mails the team, and its links lead to staging only, because of its `FRONTEND_URL`. If the mailbox password changes, update it in **both** `api` and `api-staging`.
+5. **E-mail:** the SMTP lines of step 6, with `SMTP_FROM=DI Xpertia (staging) <contact@dixpertia.tn>`. Staging only e-mails the team, and its links lead to staging only, because of its `FRONTEND_URL`. If the mailbox password changes, follow *Rotating the mailbox password* below: it is used in `api`, `api-staging` and the alerts.
 6. **Table grants and first admin:** steps 7 and 8, with `&port=5433` in the URL, the staging passwords, and `name=dixpertia-apistaging-` in the `docker ps` filter.
 
 **The release flow:**
@@ -195,6 +195,49 @@ Staging is a second pair of applications, `api-staging` and `web-staging`, at **
   sudo apt-get update && sudo apt-get install --only-upgrade docker-ce docker-ce-cli docker-ce-rootless-extras
   sudo apt-mark hold docker-ce docker-ce-cli docker-ce-rootless-extras
   ```
+
+## Rotating the mailbox password (#186)
+
+The app sends its e-mail as `contact@dixpertia.tn`, and that mailbox's password is used in several places. When it changes, update **every** place on the same day, or that place stops sending without anyone noticing.
+
+**When:**
+- on every departure of someone who knew the password or had access to Dokploy or the server;
+- at once if it may have leaked (pasted in a chat, a ticket, a screenshot, a commit);
+- otherwise once a year.
+
+**Where the password is used:**
+
+| Where | What uses it |
+|---|---|
+| Oxahost, the mailbox itself | the source of truth: change it here first |
+| Dokploy, application `api`, Environment, `SMTP_PASSWORD` | production's e-mails |
+| Dokploy, application `api-staging`, Environment, `SMTP_PASSWORD` | staging's e-mails |
+| Dokploy, **Settings → Notifications**, the Email notification | failed build and deploy alerts |
+| Server, `/etc/dixpertia/monitoring.env` | the server checks' alerts (`deploy/monitoring/`) |
+| Your password manager | the only copy kept by a person |
+
+UptimeRobot only sends alerts to `contact@dixpertia.tn`, so it keeps working. Its own sign-in password is separate: change it too when someone who knew it leaves.
+
+**How (about 15 minutes, at a quiet time).** The app sends each e-mail once and does not retry. Between the change at Oxahost and the redeploys, an invitation or a reset link would be lost: keep that window short.
+
+1. Generate a new password in the password manager (long, random, unique), and save it there as the new entry.
+2. **Oxahost:** change the password of `contact@dixpertia.tn`. Check that webmail accepts the new one.
+3. **Dokploy, `api`:** set `SMTP_PASSWORD` to the new password, save, then **Deploy**. Do the same for **`api-staging`**. Without the redeploy, the running container keeps the old password.
+4. **Dokploy, Settings → Notifications:** edit the Email notification, set the new password, click **Test**.
+5. **Server**, over SSH:
+   ```bash
+   sudo nano /etc/dixpertia/monitoring.env                  # replace the password, keep the quotes
+   sudo bash /opt/dixpertia/deploy/monitoring/install.sh    # ends with a test mail
+   ```
+   The test mail, titled `[DIXpertIA] ... TEST - install of #188, ignore`, arrives within a minute.
+6. **Verify the app**, on production and on staging:
+   - As an admin, invite a test user at your own address. The activation e-mail arrives, in the inbox and not in spam. Then deactivate the test user.
+   - The API's log has no `Email error` line: Dokploy, `api` (then `api-staging`), **Logs**.
+7. If someone was invited during the window, use **Resend activation link** on the Users screen. Someone who asked for a password reset then just asks again.
+
+Never write the password in a ticket, a commit, a chat or a screenshot. The password manager is the only place it is written down.
+
+**Known weakness.** The app sends with the team's own `contact@` mailbox, because the plan has one mailbox. A dedicated `no-reply@dixpertia.tn` account, used by the app only, would let us change the app's password without touching anyone's mailbox, and would keep replies out of the app's way. Worth creating if the plan allows a second mailbox.
 
 ## Decisions
 
