@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
@@ -780,6 +780,62 @@ def list_employees(
     )
     return [EmployeeOut.from_orm_row(r) for r in rows]
 
+
+@app.get('/api/payslips/{payslip_id}/pdf')
+def download_payslip(
+    payslip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The payslip as a PDF, generated on each request (#22).
+
+    No role check: row-level security decides what this session can see. A
+    payslip it may not see comes back as None, exactly like an unknown id, so
+    the route never reveals that it exists.
+    """
+    import re
+    import unicodedata
+
+    from app.i18n import DEFAULT_LOCALE, format_date
+    from app.services.payslip_generator import generate_payslip_pdf, month_label
+
+    payslip = db.get(Payslip, payslip_id,
+                     options=[joinedload(Payslip.employee).joinedload(Employee.user)])
+    if payslip is None:
+        raise ApiError(404, "payslip.not_found")
+
+    employee = payslip.employee
+    user = employee.user
+    locale = user.locale or DEFAULT_LOCALE      # the employee's language, not the caller's
+
+    # Same employee, same calendar year, up to and including this period.
+    ytd_gross, ytd_net = db.query(
+        func.coalesce(func.sum(Payslip.montant_brut), 0),
+        func.coalesce(func.sum(Payslip.montant_net), 0),
+    ).filter(
+        Payslip.employee_id == payslip.employee_id,
+        Payslip.periode >= date(payslip.periode.year, 1, 1),
+        Payslip.periode <= payslip.periode,
+    ).one()
+
+    issued = payslip.date_emission
+    pdf = generate_payslip_pdf({
+        "locale": locale,
+        "employee_name": f"{user.firstName} {user.lastName}",
+        "job_title": employee.job_title,
+        "hired_on": format_date(employee.hired_on, locale),
+        "period_label": month_label(payslip.periode, locale),
+        "issued_on": format_date(issued.date(), locale) if issued else "",
+        "gross": payslip.montant_brut, "net": payslip.montant_net,
+        "ytd_gross": ytd_gross, "ytd_net": ytd_net,
+    })
+
+    # ASCII-safe: an accent, a quote or a space in a name must not break the header.
+    safe = unicodedata.normalize("NFKD", f"{user.firstName}_{user.lastName}").encode("ascii", "ignore").decode()
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", safe).strip("_") or "employee"
+    filename = f"Payslip_{payslip.periode:%Y-%m}_{safe}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 @app.get('/api/users', response_model=List[UserOut])
 def list_users(
