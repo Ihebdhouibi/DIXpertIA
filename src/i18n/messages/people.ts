@@ -305,6 +305,7 @@ export default defineMessages('people', {
   'people.payslips.unknownEmployee': { fr: 'Employé inconnu', en: 'Unknown employee' },
   'people.payslips.loading': { fr: 'Chargement des bulletins…', en: 'Loading payslips...' },
   'people.payslips.noneIn': { fr: 'Aucun bulletin en {year}', en: 'No payslips in {year}' },
+  'people.payslips.downloadFailed': {fr: 'Impossible de télécharger le bulletin de paie.',en: 'Could not download the payslip.',},
 
   // Website enquiries
   'people.enquiries.topic.security_audit': {

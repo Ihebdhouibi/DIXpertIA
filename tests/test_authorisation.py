@@ -84,6 +84,7 @@ ROUTES = [
 
     # --- payroll and leave: scoped by row-level security, not by role -------
     ("GET", "/api/payslips", EMPLOYEE_SELF),
+    ("GET", "/api/payslips/1/pdf", EMPLOYEE_SELF),
     ("GET", "/api/leave-requests", EMPLOYEE_SELF),
     ("POST", "/api/leave-requests", EMPLOYEE_SELF),
     ("GET", "/api/employees", EMPLOYEE_SELF),
@@ -212,6 +213,7 @@ def test_every_route_is_covered(app):
                       .replace("/api/invoices/1/processing-status",
                                "/api/invoices/{invoice_id}/processing-status")
                       .replace("/api/invoices/1", "/api/invoices/{invoice_id}")
+                      .replace("/api/payslips/1/pdf", "/api/payslips/{payslip_id}/pdf")
                       .replace("/api/periods/2026-01/close", "/api/periods/{month}/close")
                       .replace("/api/periods/2026-01", "/api/periods/{month}")
                       .replace("/api/users/USR-999", "/api/users/{user_id}"))
