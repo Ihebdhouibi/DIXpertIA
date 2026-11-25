@@ -93,9 +93,8 @@ def test_the_pdf_says_who_when_and_how_much(client, database):
     body = _text(_get(client, pid, emp["headers"]))
     assert "Amel Trabelsi" in body
     assert "March 2026" in body
-    assert "3,000.000" in body and "2,400.000" in body       # gross, net
-    assert "Gross pay" in body and "Year to date" in body.title().replace("To Date", "to date") or "Year" in body
-
+    assert "3,000.000" in body and "2,400.000" in body
+    assert "Gross pay" in body and "NET PAY" in body and "YEAR TO DATE" in body
 
 def test_the_pdf_is_in_the_employees_language_not_the_callers(client, database, identities):
     emp = _employee(database, locale="fr")

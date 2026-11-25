@@ -1,3 +1,5 @@
+import re
+import unicodedata
 import asyncio
 import contextlib
 import logging
@@ -15,7 +17,8 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
-
+from app.i18n import DEFAULT_LOCALE, format_date
+from app.services.payslip_generator import generate_payslip_pdf, month_label
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
 from app.schemas.api import (
@@ -793,11 +796,6 @@ def download_payslip(
     payslip it may not see comes back as None, exactly like an unknown id, so
     the route never reveals that it exists.
     """
-    import re
-    import unicodedata
-
-    from app.i18n import DEFAULT_LOCALE, format_date
-    from app.services.payslip_generator import generate_payslip_pdf, month_label
 
     payslip = db.get(Payslip, payslip_id,
                      options=[joinedload(Payslip.employee).joinedload(Employee.user)])
@@ -836,6 +834,7 @@ def download_payslip(
     filename = f"Payslip_{payslip.periode:%Y-%m}_{safe}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
 
 @app.get('/api/users', response_model=List[UserOut])
 def list_users(
