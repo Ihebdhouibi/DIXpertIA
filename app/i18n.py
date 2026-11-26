@@ -158,6 +158,23 @@ CATALOG: dict[str, dict[str, str]] = {
     "client.export_needs_foreign_currency": {
         "en": "An export client pays in a foreign currency (EUR, USD or GBP), not in TND.",
         "fr": "Un client export paie en devise (EUR, USD ou GBP), pas en TND."},
+    "client.domestic_pays_in_tnd": {
+        "en": "A client in Tunisia pays in TND: the stamp duty on its invoices is an amount in dinars.",
+        "fr": "Un client en Tunisie paie en TND : le droit de timbre de ses factures est un montant en dinars."},
+    "client.tax_id_required": {
+        "en": "A business in Tunisia needs its tax ID (matricule fiscal): it is a mandatory mention on its invoices.",
+        "fr": "Une entreprise en Tunisie doit avoir son matricule fiscal : c'est une mention obligatoire "
+              "sur ses factures."},
+    "invoice.missing_legal_mentions": {
+        "en": "Invoice {ref} cannot be approved without its mandatory mentions. Missing: {missing}.",
+        "fr": "La facture {ref} ne peut pas être approuvée sans ses mentions obligatoires. "
+              "Manquant : {missing}."},
+    "legal.seller_tax_id": {
+        "en": "our tax ID (SELLER_TAX_ID setting)", "fr": "notre matricule fiscal (réglage SELLER_TAX_ID)"},
+    "legal.seller_rne": {
+        "en": "our trade register number (SELLER_RNE setting)", "fr": "notre numéro RNE (réglage SELLER_RNE)"},
+    "legal.client_tax_id": {
+        "en": "the client's tax ID, on the client's record", "fr": "le matricule fiscal du client, sur sa fiche"},
     "invoice.export_line_vat": {
         "en": "Line {n}: an export of services carries no VAT; set its rate to 0%.",
         "fr": "Ligne {n} : une exportation de services ne porte pas de TVA ; mettez son taux à 0 %."},
@@ -483,6 +500,7 @@ CATALOG: dict[str, dict[str, str]] = {
     "pdf.col.vat": {"en": "VAT", "fr": "TVA"},
     "pdf.col.total": {"en": "Total excl. VAT", "fr": "Total HT"},
     "pdf.no_items": {"en": "No items.", "fr": "Aucune ligne."},
+    "pdf.stamp_duty": {"en": "Stamp duty", "fr": "Droit de timbre"},
     "pdf.total_ht": {"en": "Total excl. VAT", "fr": "Total HT"},
     "pdf.vat_row": {"en": "VAT {rate}", "fr": "TVA {rate}"},
     "pdf.vat_base": {"en": "on {base}", "fr": "sur {base}"},

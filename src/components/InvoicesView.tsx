@@ -39,7 +39,7 @@ import { InvoiceReviewPanel, RejectInvoiceDialog } from './InvoiceReview';
 import { CancelInvoiceDialog, PayInvoiceDialog } from './InvoiceStatusDialogs';
 import InvoiceHistory from './InvoiceHistory';
 import Button from './ui/Button';
-import { Field, Input, Select } from './ui/Field';
+import { Field, FormAlert, Input, Select } from './ui/Field';
 import { useConfirm, useToast, ToastTone } from './ui/feedback';
 import { formatMoney } from '../format';
 import { labelOf, useLocale, useT, type MessageKey } from '../i18n';
@@ -78,6 +78,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [cancelling, setCancelling] = useState<Invoice | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  // A refused verification step, shown inside the invoice detail: a toast
+  // would sit under the dialog's backdrop, unreadable. The approval says
+  // which mandatory mentions are missing (#189), so it has to be read.
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  useEffect(() => setReviewError(null), [selectedInvoice?.id]);
   const showToast = (message: string, tone: ToastTone = 'success') => toast(message, tone);
 
   // By internal id: the route takes the id, which exists before an invoice has
@@ -264,10 +269,13 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
         // An accessor is what makes a TanStack column sortable; the value itself
         // is never compared here (manualSorting), the server orders by it.
         id: 'amount',
-        accessorFn: (inv) => inv.amountTTC,
+        accessorFn: (inv) => inv.amountDue ?? inv.amountTTC,
         header: t('invoices.col.amount'),
         meta: { numeric: true },
-        cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amountTTC, row.original)}</span>,
+        // What the client pays: the total including VAT plus the stamp duty (#189).
+        cell: ({ row }) => (
+          <span className="font-semibold">{formatCurrency(row.original.amountDue ?? row.original.amountTTC, row.original)}</span>
+        ),
       },
       {
         id: 'date',
@@ -392,6 +400,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
   /** Run a verification step (#118), then show the invoice as the server returned it. */
   const runReview = async (done: MessageKey, step: () => Promise<Invoice>) => {
     setReviewing(true);
+    setReviewError(null);
     try {
       const updated = await step();
       setSelectedInvoice(updated);
@@ -400,7 +409,7 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
       reload();
       onInvoiceCreated();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t('invoices.refused'), 'error');
+      setReviewError(err instanceof Error ? err.message : t('invoices.refused'));
     } finally {
       setReviewing(false);
     }
@@ -688,6 +697,11 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
           </>
         }
       >
+        {selectedInvoice && reviewError && (
+          <div className="mb-6">
+            <FormAlert>{reviewError}</FormAlert>
+          </div>
+        )}
         {selectedInvoice && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-6">
@@ -700,10 +714,33 @@ export default function InvoicesView({ clients, onInvoiceCreated, userRole }: In
                   <dd className="text-right font-mono tabular-nums text-on-surface">
                     {formatCurrency(selectedInvoice.amountTTC - selectedInvoice.amountHT, selectedInvoice)}
                   </dd>
-                  <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>{t('invoices.inclVat')}</dt>
-                  <dd className="border-t border-outline-variant pt-3 text-right font-mono text-base font-semibold tabular-nums text-on-surface">
-                    {formatCurrency(selectedInvoice.amountTTC, selectedInvoice)}
-                  </dd>
+                  {selectedInvoice.stampDuty ? (
+                    // The stamp duty (#189) comes after the total including VAT,
+                    // and the amount due closes the summary, as on the PDF.
+                    <>
+                      <dt className={DETAIL_LABEL}>{t('invoices.inclVat')}</dt>
+                      <dd className="text-right font-mono tabular-nums text-on-surface">
+                        {formatCurrency(selectedInvoice.amountTTC, selectedInvoice)}
+                      </dd>
+                      <dt className={DETAIL_LABEL}>{t('invoices.stampDuty')}</dt>
+                      <dd className="text-right font-mono tabular-nums text-on-surface">
+                        {formatCurrency(selectedInvoice.stampDuty, selectedInvoice)}
+                      </dd>
+                      {/* On a row of its own: beside the longer "stamp duty"
+                          label, the larger amount would not fit the card. */}
+                      <dt className={`${DETAIL_LABEL} col-span-2 border-t border-outline-variant pt-3`}>{t('invoices.amountDue')}</dt>
+                      <dd className="col-span-2 -mt-2 whitespace-nowrap text-right font-mono text-base font-semibold tabular-nums text-on-surface">
+                        {formatCurrency(selectedInvoice.amountDue ?? selectedInvoice.amountTTC, selectedInvoice)}
+                      </dd>
+                    </>
+                  ) : (
+                    <>
+                      <dt className={`${DETAIL_LABEL} border-t border-outline-variant pt-3`}>{t('invoices.inclVat')}</dt>
+                      <dd className="border-t border-outline-variant pt-3 text-right font-mono text-base font-semibold tabular-nums text-on-surface">
+                        {formatCurrency(selectedInvoice.amountTTC, selectedInvoice)}
+                      </dd>
+                    </>
+                  )}
                   <dt className={DETAIL_LABEL}>{t('invoices.issued')}</dt>
                   <dd className="whitespace-nowrap text-right font-mono tabular-nums text-on-surface">{selectedInvoice.dateIssued}</dd>
                   <dt className={DETAIL_LABEL}>{t('invoices.dueLabel')}</dt>

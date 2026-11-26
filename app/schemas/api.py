@@ -240,6 +240,9 @@ class InvoiceOut(BaseModel):
     supplierReference: Optional[str] = None
     amountHT: float
     amountTTC: float
+    # The stamp duty (#189), and what the client pays: amountTTC + stampDuty.
+    stampDuty: float = 0
+    amountDue: float = 0
     # The invoice's currency, and whether it is an export of services (#195).
     currency: str = "TND"
     export: bool = False
@@ -299,6 +302,8 @@ class InvoiceOut(BaseModel):
             supplierReference=row.supplier_reference,
             amountHT=float(row.montant_ht or Decimal(0)),
             amountTTC=float(row.montant_ttc or Decimal(0)),
+            stampDuty=float(getattr(row, "droit_timbre", None) or Decimal(0)),
+            amountDue=float((row.montant_ttc or Decimal(0)) + (getattr(row, "droit_timbre", None) or Decimal(0))),
             currency=getattr(row, "devise", None) or "TND",
             export=bool(getattr(row, "export", False)),
             # In the request's language (#135); the ISO forms below are for inputs.
