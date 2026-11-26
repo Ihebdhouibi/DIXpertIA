@@ -30,6 +30,7 @@ NOT_JSON = {
     ("GET", "/api/invoices/{invoice_id}/download"),
     ("GET", "/api/demos/{demo_id}/preview"),
     ("GET", "/api/public/demos/{demo_id}/preview"),
+    ("GET", "/api/payslips/{payslip_id}/pdf"),
 }
 
 # A secret, or the name of a column that holds one. None may appear in any

@@ -254,22 +254,7 @@ export default defineMessages('people', {
   },
 
   // Payslips
-  'people.payslips.allowPopups': {
-    fr: 'Autorisez les fenêtres pop-up pour télécharger le bulletin de paie.',
-    en: 'Please allow pop-ups to download the payslip.',
-  },
-  'people.payslips.docTitle': { fr: 'Bulletin de paie {period} - {employee}', en: 'Payslip {period} - {employee}' },
-  'people.payslips.docHeading': { fr: 'Bulletin de paie DI Xpertia', en: 'DI Xpertia payslip' },
-  'people.payslips.docEmployee': { fr: 'Employé :', en: 'Employee:' },
-  'people.payslips.docPeriod': { fr: 'Période :', en: 'Period:' },
-  'people.payslips.docGross': { fr: 'Salaire brut :', en: 'Gross pay:' },
-  'people.payslips.docNet': { fr: 'Salaire net :', en: 'Net pay:' },
-  'people.payslips.docIssued': { fr: 'Émis le :', en: 'Issued on:' },
-  'people.payslips.docGenerated': { fr: 'Généré depuis DI Xpertia', en: 'Generated from DI Xpertia' },
-  'people.payslips.opened': {
-    fr: 'Bulletin {period} ouvert pour impression.',
-    en: 'Payslip {period} opened for printing.',
-  },
+
   'people.payslips.none': { fr: 'Aucun bulletin pour le moment', en: 'No payslips yet' },
   'people.payslips.count': {
     fr: { one: '{count} bulletin', other: '{count} bulletins' },
@@ -302,6 +287,7 @@ export default defineMessages('people', {
   'people.payslips.colIssued': { fr: 'Émis le', en: 'Issued' },
   'people.payslips.download': { fr: 'Télécharger', en: 'Download' },
   'people.payslips.downloadOne': { fr: 'Télécharger le bulletin {period}', en: 'Download payslip {period}' },
+  'people.payslips.downloadFailed': { fr: 'Impossible de télécharger le bulletin de paie.', en: 'Could not download the payslip.' },
   'people.payslips.unknownEmployee': { fr: 'Employé inconnu', en: 'Unknown employee' },
   'people.payslips.loading': { fr: 'Chargement des bulletins…', en: 'Loading payslips...' },
   'people.payslips.noneIn': { fr: 'Aucun bulletin en {year}', en: 'No payslips in {year}' },

@@ -440,6 +440,15 @@ export const leaveRequests = {
 
 export const payslips = {
   list: () => request<Payslip[]>('/api/payslips'),
+  /**
+   * The payslip PDF the server generates (#22), as a Blob, with the file name
+   * the server chose (Payslip_<YYYY-MM>_<name>.pdf).
+   */
+  pdf: async (id: string | number) => {
+    const res = await send(`/api/payslips/${encodeURIComponent(String(id))}/pdf`);
+    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1];
+    return { blob: await res.blob(), filename: name ?? `Payslip_${id}.pdf` };
+  },
 };
 
 /** One status on the dashboard: how many invoices, and for how much (TTC). */

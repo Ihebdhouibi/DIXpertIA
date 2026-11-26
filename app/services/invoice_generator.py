@@ -432,12 +432,16 @@ def _on_page(locale: str, seller: dict, number: str, draft: bool, later: bool):
 
 # --- The document ---------------------------------------------------------------------
 
+def _header_logo():
+    """The lockup for the top of page 1, or the plain name if the file is missing."""
+    if _LOGO:
+        return Image(BytesIO(_LOGO[0]), width=52 * mm, height=52 * mm * _LOGO[1], hAlign="LEFT")
+    return Paragraph("DI Xpertia", PARTY_NAME)
+
+
 def _header(locale, number, draft) -> list:
     """§3.1 and §3.2: the lockup, the title block, the header rule."""
-    if _LOGO:
-        logo = Image(BytesIO(_LOGO[0]), width=52 * mm, height=52 * mm * _LOGO[1], hAlign="LEFT")
-    else:
-        logo = Paragraph("DI Xpertia", PARTY_NAME)
+    logo = _header_logo()
     title = [TitleMark(t("pdf.invoice", locale)), Spacer(1, 2 * mm), Paragraph(_text(number), DOC_NO)]
     if draft:
         # A draft says its legal number comes on approval - never a predicted
