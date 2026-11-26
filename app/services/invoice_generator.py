@@ -452,6 +452,7 @@ def _header(locale, number, draft) -> list:
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), *_FLAT]))
     return [header, Spacer(1, 7 * mm), Rule(WIDTH, 0.75, INK), Spacer(1, 6 * mm)]
 
+
 _FLAT = [("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
          ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
          ("FONTNAME", (0, 0), (-1, -1), SANS)]

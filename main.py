@@ -1,8 +1,8 @@
-import re
-import unicodedata
 import asyncio
 import contextlib
 import logging
+import re
+import unicodedata
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import List, Literal, Optional
@@ -17,8 +17,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
-from app.i18n import DEFAULT_LOCALE, format_date
-from app.services.payslip_generator import generate_payslip_pdf, month_label
+
 from app.core.config import settings
 from app.core.identity import clear_identity, set_identity
 from app.schemas.api import (
@@ -54,11 +53,12 @@ from app.models.leaves import LeaveRequest, LeaveStatus
 from app.models.payroll import Payslip
 from app.models.employee import Employee
 from app.routers import accounting, audit, contact, dashboard, demos, invoicing, mfa as mfa_router, notifications
-from app.i18n import ApiError, set_locale, t
+from app.i18n import DEFAULT_LOCALE, ApiError, format_date, set_locale, t
 from app.services import accounts, mfa, throttle
 from app.services.audit import record_event
 from app.services.email import send_email
 from app.services.email_template import render_html_email, t_html
+from app.services.payslip_generator import generate_payslip_pdf, month_label
 from app.services.reminders import reminder_loop
 
 load_dotenv()
@@ -796,7 +796,6 @@ def download_payslip(
     payslip it may not see comes back as None, exactly like an unknown id, so
     the route never reveals that it exists.
     """
-
     payslip = db.get(Payslip, payslip_id,
                      options=[joinedload(Payslip.employee).joinedload(Employee.user)])
     if payslip is None:

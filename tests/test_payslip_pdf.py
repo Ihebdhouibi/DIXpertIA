@@ -96,6 +96,7 @@ def test_the_pdf_says_who_when_and_how_much(client, database):
     assert "3,000.000" in body and "2,400.000" in body
     assert "Gross pay" in body and "NET PAY" in body and "YEAR TO DATE" in body
 
+
 def test_the_pdf_is_in_the_employees_language_not_the_callers(client, database, identities):
     emp = _employee(database, locale="fr")
     pid = _payslip(database, emp["employee_id"], "2026-03-01", 3000, 2400)
