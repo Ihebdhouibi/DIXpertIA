@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 import { ThemeClass } from '../../theme';
 import Button from './Button';
@@ -67,6 +67,7 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const t = useT();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
+  const toastRegionRef = useRef<HTMLDivElement>(null);
 
   const dismiss = useCallback((id: number) => {
     setToasts((current) => current.filter((t) => t.id !== id));
@@ -92,6 +93,55 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     pending?.resolve(ok);
     setPending(null);
   };
+  // Keep the toast region in the browser's top layer, above any <dialog>
+  // opened with showModal() (#251). showModal() pushes the dialog onto the
+  // top layer; we re-show the popover on every dialog open so the toasts
+  // render above the dialog and its backdrop.
+  useEffect(() => {
+    const el = toastRegionRef.current;
+    if (!el) return;
+
+    const show = () => {
+      try {
+        if (!el.matches(':popover-open')) el.showPopover();
+      } catch {
+        /* popover unsupported: fall back to the z-[200] stacking */
+      }
+    };
+
+    const restack = () => {
+      try {
+        if (el.matches(':popover-open')) el.hidePopover();
+        el.showPopover();
+      } catch {
+        /* no-op on browsers without the Popover API */
+      }
+    };
+
+    show();
+
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (
+          record.type === 'attributes' &&
+          record.attributeName === 'open' &&
+          record.target instanceof HTMLDialogElement &&
+          record.target.open
+        ) {
+          restack();
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
 
   return (
     <ToastContext.Provider value={toast}>
@@ -116,7 +166,13 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             }
           />
           <div
-            className="pointer-events-none fixed bottom-4 right-4 z-[200] flex w-[min(24rem,calc(100%-2rem))] flex-col gap-2"
+            ref={toastRegionRef}
+            popover="manual"
+            className="
+              pointer-events-none fixed bottom-4 right-4 top-auto left-auto
+              z-[200] m-0 border-0 p-0 bg-transparent overflow-visible
+              flex w-[min(24rem,calc(100%-2rem))] flex-col gap-2
+            "
             aria-live="polite"
           >
             {toasts.map(({ id, message, tone }) => {
