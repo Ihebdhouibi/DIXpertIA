@@ -10,6 +10,23 @@ from tests.account_flow import make_account
 
 # --- helpers ---------------------------------------------------------------
 
+# The employees these tests create. The TRUNCATE between tests keeps `employees`
+# on purpose, since the fixture accounts live there, so the extra ones are
+# removed here. Otherwise they reach later test files:
+# test_row_level_security.py gives every employee a payslip and counts them.
+_MADE: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def _remove_test_employees(database):
+    yield
+    if _MADE:
+        with database.begin() as c:
+            c.execute(text("DELETE FROM payslips WHERE employee_id = ANY(:ids)"), {"ids": _MADE})
+            c.execute(text("DELETE FROM employees WHERE id = ANY(:ids)"), {"ids": _MADE})
+        _MADE.clear()
+
+
 def _auth(user_id: str) -> dict:
     # Imported here: app.core.config reads the environment at import time.
     from app.core.security import create_access_token
@@ -26,6 +43,7 @@ def _employee(database, first="Amel", last="Trabelsi", locale="en") -> dict:
         employee_id = c.execute(text(
             "INSERT INTO employees (user_id, job_title, hired_on, annual_entitlement_days) "
             "VALUES (:u, 'Developer', '2024-01-15', 20) RETURNING id"), {"u": user_id}).scalar_one()
+    _MADE.append(employee_id)
     return {"user_id": user_id, "employee_id": employee_id, "headers": _auth(user_id)}
 
 
